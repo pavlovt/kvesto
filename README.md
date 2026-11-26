@@ -1,6 +1,8 @@
+<p align="center"><img src="docs/assets/kvesto-banner.svg" alt="Kvesto: open source surveys, anywhere. Surveys from JSON." width="100%"></p>
+
 # Kvesto
 
-Kvesto is a fully open source alternative to SurveyJS. Define surveys as JSON and render them anywhere with a
+Kvesto is a fully open source survey library. Define surveys as JSON and render them anywhere with a
 lightweight JavaScript core. Build surveys visually in the editor and explore responses in the dashboard.
 
 Storage is just a setting. Keep responses in the browser, plug in your own backend, or use the included Hono server
