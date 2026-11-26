@@ -1,6 +1,6 @@
 {
   "name": "@kvesto/server",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Kvesto REST API: Hono + Drizzle, SQLite by default, documented with OpenAPI.",
   "license": "MIT",
   "keywords": [
@@ -42,6 +42,7 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "prepack": "pnpm run build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev": "tsx watch src/serve.ts",
     "start": "node dist/serve.js",

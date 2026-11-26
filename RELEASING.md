@@ -26,8 +26,12 @@ published by hand.
    pnpm -r --filter "./packages/*" publish --access public
    ```
 
-   pnpm publishes in dependency order and replaces `workspace:*` with real versions. npm will ask for your
-   2FA code.
+   pnpm publishes in dependency order and replaces `workspace:^` with real versions. Each package's `prepack`
+   script builds it first, so a tarball can never go out without `dist`. npm will ask you to authenticate in
+   the browser.
+
+   npm uses staged publishing: each version first appears as a `0.0.0-stage` placeholder and goes live only after
+   you approve it on npmjs.com. Check the tarball contents before approving.
 
 3. For each of the four packages on npmjs.com: **Settings > Trusted publishing > GitHub Actions**, owner
    `pavlovt`, repository `kvesto`, workflow `release.yml`. Then, under **Publishing access**, you can choose to

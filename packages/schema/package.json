@@ -1,6 +1,6 @@
 {
   "name": "@kvesto/schema",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Versioned survey JSON format and shared Zod schemas for Kvesto.",
   "license": "MIT",
   "keywords": [
@@ -38,6 +38,7 @@
   "sideEffects": false,
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "prepack": "pnpm run build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },

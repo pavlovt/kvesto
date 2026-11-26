@@ -1,6 +1,6 @@
 {
   "name": "kvesto",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Open source survey library: define surveys as JSON and render them anywhere. One install for the Kvesto core, plus a ready-made <script> bundle.",
   "license": "MIT",
   "keywords": [
@@ -46,6 +46,7 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/bundle.mjs",
+    "prepack": "pnpm run build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --passWithNoTests"
   },
