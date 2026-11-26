@@ -1,6 +1,6 @@
 {
   "name": "@kvesto/server",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Kvesto REST API: Hono + Drizzle, SQLite by default, documented with OpenAPI.",
   "license": "MIT",
   "keywords": [
