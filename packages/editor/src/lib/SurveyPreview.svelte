@@ -23,6 +23,10 @@
   div bind:this={target}
   if result {
     h3 'Response (preview only, not saved)'
-    pre '{result}'
+    pre.kv-preview-result '{result}'
   }
 </template>
+
+<style>
+  .kv-preview-result { overflow: auto; }
+</style>

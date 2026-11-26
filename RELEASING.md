@@ -8,8 +8,10 @@ Published packages (all in `packages/`, always released together with the same v
 | `@kvesto/core` | `packages/core` |
 | `@kvesto/schema` | `packages/schema` |
 | `@kvesto/server` | `packages/server` (also the `kvesto-server` CLI) |
+| `@kvesto/editor` | `packages/editor`: Svelte component plus a `standalone` bundle |
+| `@kvesto/dashboard` | `packages/dashboard`: Svelte components plus a `standalone` bundle |
 
-The SvelteKit apps in `apps/` are private and are not published.
+The SvelteKit apps in `apps/` are demos around the editor and dashboard packages; they are private and not published.
 
 ## First release (once, from your machine)
 
@@ -33,7 +35,7 @@ published by hand.
    npm uses staged publishing: each version first appears as a `0.0.0-stage` placeholder and goes live only after
    you approve it on npmjs.com. Check the tarball contents before approving.
 
-3. For each of the four packages on npmjs.com: **Settings > Trusted publishing > GitHub Actions**, owner
+3. For each of the six packages on npmjs.com: **Settings > Trusted publishing > GitHub Actions**, owner
    `pavlovt`, repository `kvesto`, workflow `release.yml`. Then, under **Publishing access**, you can choose to
    disallow tokens.
 

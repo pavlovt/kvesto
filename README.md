@@ -22,7 +22,8 @@ with SQLite and documented OpenAPI endpoints. Everything is MIT, including the e
       ├── localStorageStorage()    responses stay in the browser
       └── httpStorage({ baseUrl }) ──REST + OpenAPI──▶ @kvesto/server (Hono + Drizzle, SQLite by default)
 
-apps/editor, apps/dashboard (SvelteKit) use the core with whichever adapter is configured.
+@kvesto/editor, @kvesto/dashboard (Svelte components) use the core with whichever adapter is configured;
+apps/editor and apps/dashboard are SvelteKit demos around them.
 ```
 
 | Package | What it is |
@@ -31,8 +32,10 @@ apps/editor, apps/dashboard (SvelteKit) use the core with whichever adapter is c
 | [`packages/schema`](packages/schema) | The survey JSON format (`schemaVersion: 1`) as Zod schemas, plus `migrateSurvey` for future format upgrades. |
 | [`packages/core`](packages/core) | `createSurvey`, validation, paging, a plain-DOM renderer, `summarizeResponses`, and the `SurveyStorage` interface with three adapters. |
 | [`packages/server`](packages/server) | REST API built with Hono, `@hono/zod-openapi` and Drizzle ORM on SQLite. Interactive docs at `/docs`. |
-| [`apps/editor`](apps/editor) | SvelteKit visual builder (placeholder: JSON editor, question palette, live preview). |
-| [`apps/dashboard`](apps/dashboard) | SvelteKit results dashboard (placeholder: survey list and per-question charts). |
+| [`packages/editor`](packages/editor) | `@kvesto/editor`: the embeddable survey editor (JSON editor, question palette, live preview) as a Svelte 5 component and a standalone bundle. |
+| [`packages/dashboard`](packages/dashboard) | `@kvesto/dashboard`: the embeddable results dashboard as Svelte 5 components and a standalone bundle. |
+| [`apps/editor`](apps/editor) | SvelteKit demo app around `@kvesto/editor`. |
+| [`apps/dashboard`](apps/dashboard) | SvelteKit demo app around `@kvesto/dashboard`. |
 
 ### Storage is configuration
 
@@ -57,6 +60,8 @@ Bundled adapters: `memoryStorage()`, `localStorageStorage()`, and `httpStorage({
 ```sh
 npm install kvesto            # core + survey format, plus a <script> bundle
 npm install @kvesto/server    # optional REST backend
+npm install @kvesto/editor    # embeddable survey editor (Svelte component or standalone)
+npm install @kvesto/dashboard # embeddable results dashboard (Svelte component or standalone)
 ```
 
 Or without a build step:

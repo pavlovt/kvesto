@@ -15,7 +15,7 @@ rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
 
 for (const entry of readdirSync(app)) {
-  if ([".svelte-kit", "node_modules", "build"].includes(entry)) continue;
+  if ([".svelte-kit", "node_modules", "build", "dist"].includes(entry)) continue;
   cpSync(join(app, entry), join(out, entry), { recursive: true });
 }
 symlinkSync(join(app, "node_modules"), join(out, "node_modules"), "dir");
@@ -36,6 +36,7 @@ await walk(join(out, "src"));
 
 const bin = (name) => join(app, "node_modules", ".bin", process.platform === "win32" ? `${name}.cmd` : name);
 const run = (cmd, args) => spawnSync(bin(cmd), args, { cwd: out, stdio: "inherit", shell: process.platform === "win32" });
-if (existsSync(join(out, "svelte.config.js"))) run("svelte-kit", ["sync"]);
+// SvelteKit apps need their generated types; plain component packages have no svelte-kit.
+if (existsSync(bin("svelte-kit"))) run("svelte-kit", ["sync"]);
 const res = run("svelte-check", ["--tsconfig", "./tsconfig.json", "--threshold", "error", "--output", "human"]);
 process.exit(res.status ?? 1);

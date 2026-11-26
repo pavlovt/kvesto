@@ -1,0 +1,80 @@
+{
+  "name": "@kvesto/dashboard",
+  "version": "0.1.1",
+  "description": "Embeddable survey results dashboard for Kvesto: a Svelte 5 component, plus a prebuilt bundle for any framework.",
+  "license": "MIT",
+  "keywords": [
+    "survey",
+    "dashboard",
+    "analytics",
+    "svelte",
+    "kvesto"
+  ],
+  "homepage": "https://github.com/pavlovt/kvesto/tree/main/packages/dashboard#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pavlovt/kvesto.git",
+    "directory": "packages/dashboard"
+  },
+  "bugs": {
+    "url": "https://github.com/pavlovt/kvesto/issues"
+  },
+  "type": "module",
+  "svelte": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "svelte": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./standalone": {
+      "types": "./dist/standalone/index.d.ts",
+      "default": "./dist/standalone/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": [
+    "**/*.css",
+    "**/*.svelte"
+  ],
+  "scripts": {
+    "build": "node ../../scripts/svelte-package-braceml.mjs && vite build -c vite.standalone.config.ts && node ../../scripts/standalone-types.mjs",
+    "prepack": "pnpm run build",
+    "typecheck": "node ../../scripts/svelte-check-braceml.mjs",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "svelte": "^5.20.0"
+  },
+  "peerDependenciesMeta": {
+    "svelte": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "@kvesto/core": "workspace:^"
+  },
+  "devDependencies": {
+    "@braceml/svelte": "^0.4.0",
+    "@sveltejs/package": "^2.5.8",
+    "@sveltejs/vite-plugin-svelte": "^6.2.4",
+    "svelte": "^5.59.2",
+    "svelte-check": "^4.7.8",
+    "typescript": "5.9.3",
+    "vite": "^7.3.8",
+    "vitest": "3.2.7",
+    "happy-dom": "21.0.4"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
