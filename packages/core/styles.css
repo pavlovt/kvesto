@@ -1,0 +1,20 @@
+/* Minimal default theme for @kvesto/core. Override the custom properties to brand it. */
+.kv-survey {
+  --kv-accent: #2563eb;
+  --kv-error: #b91c1c;
+  --kv-gap: 1rem;
+  display: grid;
+  gap: var(--kv-gap);
+  max-width: 40rem;
+  font: inherit;
+}
+.kv-question { border: 0; margin: 0; padding: 0; display: grid; gap: 0.4rem; }
+.kv-question-title { font-weight: 600; padding: 0; }
+.kv-required { color: var(--kv-error); }
+.kv-question input[type="text"], .kv-question input[type="email"], .kv-question input[type="number"],
+.kv-question textarea, .kv-question select { font: inherit; padding: 0.45rem 0.6rem; }
+.kv-rating { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+.kv-error, .kv-submit-error { color: var(--kv-error); margin: 0; font-size: 0.9em; }
+.kv-nav { display: flex; gap: 0.5rem; }
+.kv-nav button { font: inherit; padding: 0.5rem 1rem; cursor: pointer; }
+.kv-next { background: var(--kv-accent); color: white; border: 0; border-radius: 0.375rem; }

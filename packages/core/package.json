@@ -1,0 +1,31 @@
+{
+  "name": "@kvesto/core",
+  "version": "0.0.1",
+  "description": "Framework-agnostic survey runtime: reads Kvesto survey JSON, renders it, and saves responses through a pluggable storage adapter.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./styles.css": "./styles.css"
+  },
+  "files": ["dist", "styles.css"],
+  "sideEffects": ["*.css"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@kvesto/schema": "workspace:*"
+  },
+  "devDependencies": {
+    "happy-dom": "21.0.4",
+    "typescript": "5.9.3",
+    "vitest": "3.2.7"
+  }
+}
