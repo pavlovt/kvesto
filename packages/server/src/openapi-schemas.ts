@@ -1,5 +1,5 @@
 import { z } from "@hono/zod-openapi";
-import { ResponseInputSchema, SurveyResponseSchema, SurveySchema } from "@kvesto/schema";
+import { FileAnswerSchema, ResponseInputSchema, SurveyResponseSchema, SurveySchema } from "@kvesto/schema";
 
 // The same Zod schemas the core uses, registered as named OpenAPI components.
 export const Survey = SurveySchema.openapi("Survey", {
@@ -9,6 +9,23 @@ export const ResponseInput = ResponseInputSchema.openapi("ResponseInput", {
   description: "Answers submitted by a respondent, keyed by question id.",
 });
 export const SurveyResponse = SurveyResponseSchema.openapi("SurveyResponse");
+export const FileAnswer = FileAnswerSchema.openapi("FileAnswer", {
+  description: "An uploaded file as it appears in an answer. Put it in the file question's answer array.",
+});
+
+export const FileUpload = z
+  .object({
+    questionId: z.string().min(1).openapi({ description: "Id of the file question", example: "attachment" }),
+    file: z
+      .custom<File>((v) => typeof File !== "undefined" && v instanceof File, { message: "Expected a file" })
+      .openapi({ type: "string", format: "binary", description: "The file" }),
+  })
+  .openapi("FileUpload");
+
+export const FileParams = z.object({
+  id: z.string().openapi({ param: { name: "id", in: "path" }, example: "customer-feedback" }),
+  fileId: z.string().openapi({ param: { name: "fileId", in: "path" } }),
+});
 
 export const SurveySummary = z
   .object({

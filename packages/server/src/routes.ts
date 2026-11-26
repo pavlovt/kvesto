@@ -1,6 +1,9 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import {
   ErrorBody,
+  FileAnswer,
+  FileParams,
+  FileUpload,
   Pagination,
   ResponseInput,
   ResponseList,
@@ -96,4 +99,39 @@ export const listResponses = createRoute({
   summary: "List responses",
   request: { params: SurveyIdParam, query: Pagination },
   responses: { 200: json(ResponseList, "Responses, newest first"), 404: error("Survey not found") },
+});
+
+export const uploadFile = createRoute({
+  method: "post",
+  path: "/surveys/{id}/files",
+  tags: ["Files"],
+  summary: "Upload a file for a file question",
+  description:
+    "Checks the file against the question's `accept` and `maxSize` and the server's own size limit, stores it, " +
+    "and returns the entry to put in the question's answer.",
+  request: {
+    params: SurveyIdParam,
+    body: { content: { "multipart/form-data": { schema: FileUpload } }, required: true },
+  },
+  responses: {
+    201: json(FileAnswer, "Stored file"),
+    400: error("Not a file question, or the file breaks the question's rules"),
+    404: error("Survey not found"),
+    413: error("File larger than the server allows"),
+  },
+});
+
+export const getFile = createRoute({
+  method: "get",
+  path: "/surveys/{id}/files/{fileId}",
+  tags: ["Files"],
+  summary: "Download an uploaded file",
+  request: { params: FileParams },
+  responses: {
+    200: {
+      content: { "application/octet-stream": { schema: z.string().openapi({ type: "string", format: "binary" }) } },
+      description: "The file's bytes, with its original content type",
+    },
+    404: error("Not found"),
+  },
 });

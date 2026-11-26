@@ -1,4 +1,20 @@
-import type { Question, Survey, SurveyResponse } from "@kvesto/schema";
+import type { FileAnswer, Question, Survey, SurveyResponse } from "@kvesto/schema";
+
+export interface MatrixRowSummary {
+  value: string;
+  label: string;
+  answered: number;
+  counts: { value: string; label: string; count: number }[];
+}
+
+export interface RankingSummary {
+  value: string;
+  label: string;
+  /** Mean position, 1 = ranked first. */
+  averageRank: number;
+  /** How many respondents put this item first. */
+  firstPlace: number;
+}
 
 export interface QuestionSummary {
   question: Question;
@@ -9,6 +25,13 @@ export interface QuestionSummary {
   average?: number;
   /** For text and comment questions: the most recent answers. */
   samples?: string[];
+  /** For matrix questions: column counts per row. */
+  matrix?: MatrixRowSummary[];
+  /** For ranking questions: items ordered by average rank, best first. */
+  ranking?: RankingSummary[];
+  /** For file questions: the most recent files, and how many were uploaded in total. */
+  files?: FileAnswer[];
+  fileCount?: number;
 }
 
 /** Aggregate responses per question. Used by the dashboard; handy for custom reports too. */
@@ -51,6 +74,44 @@ export function summarizeResponses(survey: Survey, responses: SurveyResponse[], 
         case "comment":
           summary.samples = values.slice(-sampleSize).reverse().map(String);
           break;
+        case "matrix":
+          summary.matrix = question.rows.map((row) => {
+            const cells = values
+              .map((v) => (v && typeof v === "object" && !Array.isArray(v) ? v[row.value] : undefined))
+              .filter((c) => c !== undefined);
+            const counts = new Map(question.columns.map((c) => [c.value, 0]));
+            for (const cell of cells) {
+              for (const c of Array.isArray(cell) ? cell : [cell]) if (counts.has(c)) counts.set(c, counts.get(c)! + 1);
+            }
+            return {
+              value: row.value,
+              label: row.label,
+              answered: cells.length,
+              counts: question.columns.map((c) => ({ value: c.value, label: c.label, count: counts.get(c.value)! })),
+            };
+          });
+          break;
+        case "ranking": {
+          const orders = values.filter((v): v is string[] => Array.isArray(v) && v.every((x) => typeof x === "string"));
+          summary.ranking = question.choices
+            .map((c) => {
+              const positions = orders.map((o) => o.indexOf(c.value)).filter((i) => i >= 0);
+              return {
+                value: c.value,
+                label: c.label,
+                averageRank: positions.length ? positions.reduce((a, b) => a + b + 1, 0) / positions.length : 0,
+                firstPlace: positions.filter((i) => i === 0).length,
+              };
+            })
+            .sort((a, b) => a.averageRank - b.averageRank);
+          break;
+        }
+        case "file": {
+          const all = values.flatMap((v) => (Array.isArray(v) ? (v as FileAnswer[]).filter((f) => typeof f === "object") : []));
+          summary.fileCount = all.length;
+          summary.files = all.slice(-sampleSize).reverse();
+          break;
+        }
       }
       return summary;
     });

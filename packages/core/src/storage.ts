@@ -1,4 +1,4 @@
-import type { ResponseInput, Survey, SurveyResponse } from "@kvesto/schema";
+import type { FileAnswer, ResponseInput, Survey, SurveyResponse } from "@kvesto/schema";
 
 export interface SurveySummary {
   id: string;
@@ -16,6 +16,9 @@ export interface SurveySummary {
  *
  * `listSurveys` and `listResponses` are optional: a runner only needs
  * `loadSurvey` and `saveResponse`; the editor and dashboard use the rest.
+ *
+ * `uploadFile` is optional too. Without it, files attached to file questions
+ * are embedded in the answer as base64 `data:` URLs.
  */
 export interface SurveyStorage {
   loadSurvey(id: string): Promise<Survey | null>;
@@ -24,6 +27,11 @@ export interface SurveyStorage {
   listSurveys?(): Promise<SurveySummary[]>;
   listResponses?(surveyId: string): Promise<SurveyResponse[]>;
   deleteSurvey?(id: string): Promise<void>;
+  /**
+   * Store a file attached to a file question and return the answer entry for it
+   * (usually with a URL to fetch it). Called as soon as the respondent picks a file.
+   */
+  uploadFile?(surveyId: string, questionId: string, file: File): Promise<FileAnswer>;
 }
 
 export function newId(): string {

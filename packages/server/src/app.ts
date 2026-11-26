@@ -1,8 +1,8 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { Scalar } from "@scalar/hono-api-reference";
+import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
-import { validateAnswer } from "@kvesto/core";
-import type { Answers, Survey } from "@kvesto/schema";
+import { formatBytes, validateAnswers, validateFile } from "@kvesto/core";
 import type { SurveyRepository } from "./repository.js";
 import * as routes from "./routes.js";
 
@@ -12,22 +12,12 @@ export interface CreateAppOptions {
   cors?: string | string[] | false;
   /** Serve /openapi.json and the /docs UI. Default true. */
   docs?: boolean;
+  /** Largest accepted upload in bytes, whatever a question allows. Default 10 MB. */
+  maxFileSize?: number;
 }
 
-type Issue = { path: (string | number)[]; message: string };
-
-function answerIssues(survey: Survey, answers: Answers): Issue[] {
-  const questions = survey.pages.flatMap((p) => p.elements);
-  const known = new Set(questions.map((q) => q.id));
-  const issues: Issue[] = Object.keys(answers)
-    .filter((k) => !known.has(k))
-    .map((k) => ({ path: ["answers", k], message: "Unknown question" }));
-  for (const q of questions) {
-    const msg = validateAnswer(q, answers[q.id]);
-    if (msg) issues.push({ path: ["answers", q.id], message: msg });
-  }
-  return issues;
-}
+/** Types a browser may show inline. Anything else is served as a download, so an uploaded page can't run as this origin. */
+const INLINE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp", "application/pdf", "text/plain"]);
 
 /**
  * Build the Kvesto REST API as a Hono app. Mount it anywhere:
@@ -37,6 +27,7 @@ function answerIssues(survey: Survey, answers: Answers): Issue[] {
  */
 export function createApp(options: CreateAppOptions) {
   const repo = options.repository;
+  const maxFileSize = options.maxFileSize ?? 10 * 1024 * 1024;
   const app = new OpenAPIHono({
     defaultHook: (result, c) => {
       if (!result.success) {
@@ -94,9 +85,65 @@ export function createApp(options: CreateAppOptions) {
     const input = c.req.valid("json");
     const survey = await repo.loadSurvey(id);
     if (!survey) return c.json({ error: "Survey not found" }, 404);
-    const issues = answerIssues(survey, input.answers);
-    if (issues.length) return c.json({ error: "Answers do not match the survey", issues }, 400);
-    return c.json(await repo.saveResponse(id, input), 201);
+    const { issues, answers } = validateAnswers(survey, input.answers);
+    if (issues.length) {
+      return c.json(
+        {
+          error: "Answers do not match the survey",
+          issues: issues.map((i) => ({ path: ["answers", i.questionId], message: i.message })),
+        },
+        400,
+      );
+    }
+    // Answers to questions hidden by conditional logic are dropped, as the core runtime does.
+    return c.json(await repo.saveResponse(id, { ...input, answers }), 201);
+  });
+
+  app.use(
+    "/surveys/:id/files",
+    bodyLimit({
+      // Room for the multipart envelope around the file.
+      maxSize: maxFileSize + 64 * 1024,
+      onError: (c) => c.json({ error: `Files are limited to ${formatBytes(maxFileSize)}` }, 413),
+    }),
+  );
+
+  app.openapi(routes.uploadFile, async (c) => {
+    const { id } = c.req.valid("param");
+    const { questionId, file } = c.req.valid("form");
+    const survey = await repo.loadSurvey(id);
+    if (!survey) return c.json({ error: "Survey not found" }, 404);
+    const question = survey.pages.flatMap((p) => p.elements).find((q) => q.id === questionId);
+    if (!question || question.type !== "file") {
+      return c.json({ error: "Not a file question", issues: [{ path: ["questionId"], message: `No file question "${questionId}"` }] }, 400);
+    }
+    if (file.size > maxFileSize) return c.json({ error: `Files are limited to ${formatBytes(maxFileSize)}` }, 413);
+    const message = validateFile(question, file);
+    if (message) return c.json({ error: message, issues: [{ path: ["file"], message }] }, 400);
+
+    const stored = await repo.saveFile(
+      { surveyId: id, questionId, name: file.name || "file", type: file.type, size: file.size },
+      new Uint8Array(await file.arrayBuffer()),
+    );
+    const base = c.req.url.split("?")[0]!.replace(/\/+$/, "");
+    return c.json({ name: stored.name, type: stored.type, size: stored.size, url: `${base}/${stored.id}` }, 201);
+  });
+
+  app.openapi(routes.getFile, async (c) => {
+    const { id, fileId } = c.req.valid("param");
+    const found = await repo.loadFile(id, fileId);
+    if (!found) return c.json({ error: "File not found" }, 404);
+    const { file, data } = found;
+    const type = file.type || "application/octet-stream";
+    const disposition = INLINE_TYPES.has(type) ? "inline" : "attachment";
+    return c.body(data as Uint8Array<ArrayBuffer>, 200, {
+      "content-type": type,
+      "content-length": String(data.byteLength),
+      "content-disposition": `${disposition}; filename*=UTF-8''${encodeURIComponent(file.name)}`,
+      "x-content-type-options": "nosniff",
+      "content-security-policy": "default-src 'none'; sandbox",
+      "cache-control": "private, max-age=3600",
+    });
   });
 
   app.openapi(routes.listResponses, async (c) => {

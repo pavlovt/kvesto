@@ -1,4 +1,5 @@
 import type { Survey, SurveyResponse } from "@kvesto/schema";
+import { fileToDataUrl } from "../files.js";
 import { newId, type SurveyStorage } from "../storage.js";
 
 export interface LocalStorageOptions {
@@ -54,5 +55,8 @@ export function localStorageStorage(options: LocalStorageOptions = {}): Required
     async listResponses(surveyId) {
       return read<SurveyResponse[]>(`responses:${surveyId}`, []);
     },
+    // Files live inside the answer as data URLs. Browsers cap localStorage at
+    // a few MB, so set `maxSize` on file questions.
+    uploadFile: (_surveyId, _questionId, file) => fileToDataUrl(file),
   };
 }

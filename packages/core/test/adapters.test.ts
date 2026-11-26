@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { httpStorage, HttpStorageError, localStorageStorage, SurveySchema } from "../src/index.js";
+import { httpStorage, HttpStorageError, localStorageStorage, memoryStorage, SurveySchema } from "../src/index.js";
 import { feedbackSurvey } from "./fixtures.js";
 
 class MemoryWebStorage implements Storage {
@@ -64,5 +64,36 @@ describe("httpStorage", () => {
       "POST https://api.test/v1/surveys/feedback/responses",
       "PUT https://api.test/v1/surveys/feedback",
     ]);
+  });
+});
+
+describe("file uploads through adapters", () => {
+  const file = new File(["hi"], "note.txt", { type: "text/plain" });
+
+  it("memoryStorage and localStorageStorage embed files as data URLs", async () => {
+    for (const storage of [memoryStorage(), localStorageStorage({ storage: new MemoryWebStorage() })]) {
+      expect(await storage.uploadFile("s", "q", file)).toEqual({
+        name: "note.txt",
+        type: "text/plain",
+        size: 2,
+        url: "data:text/plain;base64,aGk=",
+      });
+    }
+  });
+
+  it("httpStorage posts multipart form data", async () => {
+    let seen: { url: string; body: unknown; headers: Record<string, string> } | undefined;
+    const fakeFetch = (async (url: string, init: RequestInit) => {
+      seen = { url, body: init.body, headers: init.headers as Record<string, string> };
+      return Response.json({ name: "note.txt", type: "text/plain", size: 2, url: "https://api.test/f/1" }, { status: 201 });
+    }) as typeof fetch;
+    const storage = httpStorage({ baseUrl: "https://api.test", fetch: fakeFetch });
+    const result = await storage.uploadFile("feedback", "attachment", file);
+    expect(result.url).toBe("https://api.test/f/1");
+    expect(seen!.url).toBe("https://api.test/surveys/feedback/files");
+    expect(seen!.headers["content-type"]).toBeUndefined();
+    const form = seen!.body as FormData;
+    expect(form.get("questionId")).toBe("attachment");
+    expect((form.get("file") as File).name).toBe("note.txt");
   });
 });

@@ -93,7 +93,40 @@ React, Vue or Svelte instead of using the bundled renderer.
 }
 ```
 
-Question types: `text`, `comment`, `single-choice`, `multiple-choice`, `dropdown`, `rating`, `boolean`.
+| Type | Answer | Notes |
+| --- | --- | --- |
+| `text`, `comment` | string | `text` takes `inputType`: email, number, date, url, tel |
+| `single-choice`, `dropdown` | choice value | |
+| `multiple-choice` | choice values | |
+| `rating` | number | `min` (default 1) to `max` (default 5) |
+| `boolean` | true / false | optional `labelTrue`, `labelFalse` |
+| `matrix` | `{ row: column }` | `rows` × `columns` grid; `multiple: true` allows several columns per row (`{ row: [columns] }`); `required` means every row |
+| `ranking` | choice values, best first | |
+| `file` | `[{ name, type, size, url }]` | `accept`, `maxSize` (bytes), `maxFiles` (default 1) |
+
+#### Conditional logic
+
+Any question takes `visibleIf` and `requiredIf`; a page takes `visibleIf`. A condition is plain JSON, never code:
+
+```json
+{ "id": "why", "type": "comment", "title": "What went wrong?",
+  "visibleIf": { "any": [
+    { "question": "nps", "op": "lte", "value": 6 },
+    { "question": "quality", "row": "support", "op": "eq", "value": "poor" }
+  ] } }
+```
+
+Operators: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `contains`, `notContains`, `in`, `notIn`, `empty`, `notEmpty`.
+Combine them with `all`, `any` and `not`. Use `row` to test one row of a matrix. A condition can only refer to
+questions that come earlier in the survey (a page condition: questions on earlier pages), which rules out cycles.
+Hidden questions are skipped by validation, hidden pages by navigation, and answers to hidden questions are left
+out of the response.
+
+#### File uploads
+
+Files are stored by the storage adapter's optional `uploadFile` as soon as the respondent picks them. `httpStorage`
+sends them to the server; `memoryStorage`, `localStorageStorage` and runs without storage embed them in the answer
+as base64 `data:` URLs (set `maxSize`: browsers cap localStorage at a few MB).
 
 ## The server
 
@@ -108,9 +141,14 @@ KVESTO_DB=./data/kvesto.db PORT=8080 pnpm --filter @kvesto/server start
 | GET, POST | `/surveys` | List / create surveys |
 | GET, PUT, DELETE | `/surveys/{id}` | Read / create-or-replace / delete a survey |
 | GET, POST | `/surveys/{id}/responses` | List (paginated) / submit responses |
+| POST | `/surveys/{id}/files` | Upload a file for a file question (multipart: `questionId`, `file`) |
+| GET | `/surveys/{id}/files/{fileId}` | Download an uploaded file |
 | GET | `/openapi.json`, `/docs` | OpenAPI 3.1 document and Scalar API reference |
 
-Responses are validated against the survey with the same rules the core uses. To mount the API inside an existing
+Responses are validated against the survey with the same rules the core uses, including conditional logic.
+Uploads are checked against the question's `accept` and `maxSize` and a server-wide cap (`createApp({ maxFileSize })`,
+10 MB by default), stored in the database, and served back as downloads unless they are images, PDF or plain text.
+To mount the API inside an existing
 Hono app (and add your own auth middleware in front of it):
 
 ```ts

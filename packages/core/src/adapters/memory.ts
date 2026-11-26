@@ -1,4 +1,5 @@
 import type { ResponseInput, Survey, SurveyResponse } from "@kvesto/schema";
+import { fileToDataUrl } from "../files.js";
 import { newId, type SurveyStorage, type SurveySummary } from "../storage.js";
 
 /** Keeps everything in memory. Handy for tests, demos and previews. */
@@ -41,5 +42,7 @@ export function memoryStorage(seed: Survey[] = []): Required<SurveyStorage> {
     async listResponses(surveyId) {
       return structuredClone(responses.get(surveyId) ?? []);
     },
+    // Files live inside the answer as data URLs.
+    uploadFile: (_surveyId, _questionId, file) => fileToDataUrl(file),
   };
 }

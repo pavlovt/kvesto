@@ -1,4 +1,4 @@
-import type { Survey, SurveyResponse } from "@kvesto/schema";
+import type { FileAnswer, Survey, SurveyResponse } from "@kvesto/schema";
 import type { SurveyStorage, SurveySummary } from "../storage.js";
 
 export interface HttpStorageOptions {
@@ -27,10 +27,16 @@ export function httpStorage(options: HttpStorageOptions): Required<SurveyStorage
 
   async function request<T>(method: string, path: string, body?: unknown, allow404 = false): Promise<T | null> {
     const extra = typeof options.headers === "function" ? await options.headers() : (options.headers ?? {});
+    // FormData sets its own multipart content type (with the boundary).
+    const isForm = typeof FormData !== "undefined" && body instanceof FormData;
     const res = await doFetch(`${base}${path}`, {
       method,
-      headers: { accept: "application/json", ...(body !== undefined ? { "content-type": "application/json" } : {}), ...extra },
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      headers: {
+        accept: "application/json",
+        ...(body !== undefined && !isForm ? { "content-type": "application/json" } : {}),
+        ...extra,
+      },
+      body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
     });
     if (allow404 && res.status === 404) return null;
     if (!res.ok) {
@@ -59,5 +65,11 @@ export function httpStorage(options: HttpStorageOptions): Required<SurveyStorage
       (await request<SurveyResponse>("POST", `/surveys/${enc(surveyId)}/responses`, response))!,
     listResponses: async (surveyId) =>
       (await request<{ items: SurveyResponse[] }>("GET", `/surveys/${enc(surveyId)}/responses`))!.items,
+    uploadFile: async (surveyId, questionId, file) => {
+      const form = new FormData();
+      form.set("questionId", questionId);
+      form.set("file", file, file.name);
+      return (await request<FileAnswer>("POST", `/surveys/${enc(surveyId)}/files`, form))!;
+    },
   };
 }

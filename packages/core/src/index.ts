@@ -1,8 +1,18 @@
 export * from "@kvesto/schema";
 export { SurveyModel, createSurvey, loadSurvey } from "./model.js";
 export type { CompletionResult, CreateSurveyOptions, Listener, SurveyState } from "./model.js";
-export { validateAnswer } from "./validate.js";
-export { summarizeResponses, type QuestionSummary } from "./summary.js";
+export {
+  validateAnswer,
+  validateAnswers,
+  validateFile,
+  fileMatchesAccept,
+  formatBytes,
+  type AnswerIssue,
+  type ValidateOptions,
+} from "./validate.js";
+export { evaluateCondition, resolveLogic, isEmptyAnswer, type SurveyLogic } from "./logic.js";
+export { fileToDataUrl } from "./files.js";
+export { summarizeResponses, type QuestionSummary, type MatrixRowSummary, type RankingSummary } from "./summary.js";
 export type { SurveyStorage, SurveySummary } from "./storage.js";
 export { memoryStorage } from "./adapters/memory.js";
 export { localStorageStorage, type LocalStorageOptions } from "./adapters/local-storage.js";

@@ -12,6 +12,9 @@
     "dropdown",
     "rating",
     "boolean",
+    "matrix",
+    "ranking",
+    "file",
   ];
 
   let source = $state(JSON.stringify(starterSurvey, null, 2));
@@ -45,11 +48,27 @@
       { value: "b", label: "Option B" },
     ];
     page.elements.push(
-      type === "single-choice" || type === "multiple-choice" || type === "dropdown"
+      type === "single-choice" || type === "multiple-choice" || type === "dropdown" || type === "ranking"
         ? { ...base, type, choices }
         : type === "rating"
           ? { ...base, type, min: 1, max: 5 }
-          : { ...base, type },
+          : type === "matrix"
+            ? {
+                ...base,
+                type,
+                rows: [
+                  { value: "row1", label: "Statement 1" },
+                  { value: "row2", label: "Statement 2" },
+                ],
+                columns: [
+                  { value: "disagree", label: "Disagree" },
+                  { value: "neutral", label: "Neutral" },
+                  { value: "agree", label: "Agree" },
+                ],
+              }
+            : type === "file"
+              ? { ...base, type, maxFiles: 1, maxSize: 5 * 1024 * 1024 }
+              : { ...base, type },
     );
     source = JSON.stringify(doc, null, 2);
   }

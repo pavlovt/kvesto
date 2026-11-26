@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { count, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq } from "drizzle-orm";
 import type { SurveyStorage, SurveySummary } from "@kvesto/core";
 import type { ResponseInput, Survey, SurveyResponse } from "@kvesto/schema";
-import { responses, surveys } from "./db/schema.js";
+import { files, responses, surveys } from "./db/schema.js";
 import type { KvestoDb } from "./db/sqlite.js";
 
 /**
@@ -10,11 +10,24 @@ import type { KvestoDb } from "./db/sqlite.js";
  * contract as the core adapters, plus a few server-only queries, so you can
  * swap it for your own implementation (another database, an existing system).
  */
-export interface SurveyRepository extends Required<SurveyStorage> {
+export interface StoredFile {
+  id: string;
+  surveyId: string;
+  questionId: string;
+  name: string;
+  type: string;
+  size: number;
+  createdAt: string;
+}
+
+export interface SurveyRepository extends Required<Omit<SurveyStorage, "uploadFile">> {
   surveyExists(id: string): Promise<boolean>;
   createSurvey(survey: Survey): Promise<Survey>;
   countResponses(surveyId: string): Promise<number>;
   listResponsesPage(surveyId: string, opts: { limit: number; offset: number }): Promise<SurveyResponse[]>;
+  /** Store an uploaded file's bytes (limits are already checked by the API). */
+  saveFile(file: Omit<StoredFile, "id" | "createdAt">, data: Uint8Array): Promise<StoredFile>;
+  loadFile(surveyId: string, fileId: string): Promise<{ file: StoredFile; data: Uint8Array } | null>;
 }
 
 function toResponse(row: typeof responses.$inferSelect): SurveyResponse {
@@ -100,6 +113,21 @@ export function drizzleRepository(db: KvestoDb): SurveyRepository {
     async listResponses(surveyId) {
       const rows = await db.select().from(responses).where(eq(responses.surveyId, surveyId)).all();
       return rows.map(toResponse);
+    },
+    async saveFile(input, data) {
+      const file: StoredFile = { ...input, id: randomUUID(), createdAt: now() };
+      await db.insert(files).values({ ...file, data }).run();
+      return file;
+    },
+    async loadFile(surveyId, fileId) {
+      const row = await db
+        .select()
+        .from(files)
+        .where(and(eq(files.surveyId, surveyId), eq(files.id, fileId)))
+        .get();
+      if (!row) return null;
+      const { data, ...file } = row;
+      return { file, data: new Uint8Array(data) };
     },
   };
   return repo;
