@@ -59,7 +59,7 @@ import "@kvesto/core/styles.css"; // optional default theme
 
 // 1. No backend: handle the answers yourself.
 mountSurvey(document.getElementById("survey")!, {
-  survey: surveyJson,
+  survey: mySurvey, // survey JSON object
   onComplete: ({ response }) => console.log(response.answers),
 });
 
