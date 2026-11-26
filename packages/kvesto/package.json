@@ -1,0 +1,66 @@
+{
+  "name": "kvesto",
+  "version": "0.1.0",
+  "description": "Open source survey library: define surveys as JSON and render them anywhere. One install for the Kvesto core, plus a ready-made <script> bundle.",
+  "license": "MIT",
+  "keywords": [
+    "survey",
+    "form",
+    "questionnaire",
+    "form-builder",
+    "json",
+    "kvesto"
+  ],
+  "homepage": "https://github.com/pavlovt/kvesto#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pavlovt/kvesto.git",
+    "directory": "packages/kvesto"
+  },
+  "bugs": {
+    "url": "https://github.com/pavlovt/kvesto/issues"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "unpkg": "./dist/kvesto.min.js",
+  "jsdelivr": "./dist/kvesto.min.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./styles.css": "./styles.css",
+    "./browser": "./dist/kvesto.min.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "styles.css",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": [
+    "*.css"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/bundle.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@kvesto/core": "workspace:^"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.12",
+    "typescript": "5.9.3",
+    "vitest": "3.2.7"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

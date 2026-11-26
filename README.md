@@ -27,6 +27,7 @@ apps/editor, apps/dashboard (SvelteKit) use the core with whichever adapter is c
 
 | Package | What it is |
 | --- | --- |
+| [`packages/kvesto`](packages/kvesto) | The `kvesto` npm package: one install that re-exports the core, plus a `<script>` bundle (`window.Kvesto`). |
 | [`packages/schema`](packages/schema) | The survey JSON format (`schemaVersion: 1`) as Zod schemas, plus `migrateSurvey` for future format upgrades. |
 | [`packages/core`](packages/core) | `createSurvey`, validation, paging, a plain-DOM renderer, `summarizeResponses`, and the `SurveyStorage` interface with three adapters. |
 | [`packages/server`](packages/server) | REST API built with Hono, `@hono/zod-openapi` and Drizzle ORM on SQLite. Interactive docs at `/docs`. |
@@ -50,6 +51,24 @@ interface SurveyStorage {
 
 Bundled adapters: `memoryStorage()`, `localStorageStorage()`, and `httpStorage({ baseUrl })` for the Kvesto server
 (or any backend that speaks the same OpenAPI contract). Pass no storage at all and you get the response in `onComplete`.
+
+## Install
+
+```sh
+npm install kvesto            # core + survey format, plus a <script> bundle
+npm install @kvesto/server    # optional REST backend
+```
+
+Or without a build step:
+
+```html
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/kvesto@0.1/styles.css" />
+<script src="https://cdn.jsdelivr.net/npm/kvesto@0.1/dist/kvesto.min.js"></script>
+<script>Kvesto.mountSurvey(document.getElementById("survey"), { survey, onComplete: console.log });</script>
+```
+
+`kvesto` re-exports `@kvesto/core`, so the examples below work with either import. Releases are described in
+[RELEASING.md](RELEASING.md).
 
 ## Embedding a survey
 

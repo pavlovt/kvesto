@@ -13,7 +13,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@kvesto/core": "workspace:*"
+    "@kvesto/core": "workspace:^"
   },
   "devDependencies": {
     "@braceml/svelte": "^0.4.0",

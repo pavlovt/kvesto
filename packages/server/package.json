@@ -1,8 +1,25 @@
 {
   "name": "@kvesto/server",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Kvesto REST API: Hono + Drizzle, SQLite by default, documented with OpenAPI.",
   "license": "MIT",
+  "keywords": [
+    "survey",
+    "rest",
+    "openapi",
+    "hono",
+    "sqlite",
+    "kvesto"
+  ],
+  "homepage": "https://github.com/pavlovt/kvesto/tree/main/packages/server#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pavlovt/kvesto.git",
+    "directory": "packages/server"
+  },
+  "bugs": {
+    "url": "https://github.com/pavlovt/kvesto/issues"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -13,9 +30,16 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
-  "files": ["dist", "drizzle"],
+  "files": [
+    "dist",
+    "drizzle",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -28,8 +52,8 @@
   "dependencies": {
     "@hono/node-server": "^1.19.0",
     "@hono/zod-openapi": "^1.6.0",
-    "@kvesto/core": "workspace:*",
-    "@kvesto/schema": "workspace:*",
+    "@kvesto/core": "workspace:^",
+    "@kvesto/schema": "workspace:^",
     "@scalar/hono-api-reference": "^0.12.0",
     "better-sqlite3": "^12.10.0",
     "drizzle-orm": "^0.45.0",
@@ -43,5 +67,11 @@
     "tsx": "^4.21.0",
     "typescript": "5.9.3",
     "vitest": "3.2.7"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

@@ -14,7 +14,9 @@
     "typecheck": "pnpm -r run typecheck",
     "dev:server": "pnpm --filter @kvesto/server dev",
     "dev:editor": "pnpm --filter @kvesto/editor dev",
-    "dev:dashboard": "pnpm --filter @kvesto/dashboard dev"
+    "dev:dashboard": "pnpm --filter @kvesto/dashboard dev",
+    "release:version": "node scripts/set-version.mjs",
+    "release:check": "pnpm build && pnpm -r --filter \"./packages/*\" exec pnpm pack --dry-run"
   },
   "devDependencies": {
     "@braceml/svelte": "^0.4.0",

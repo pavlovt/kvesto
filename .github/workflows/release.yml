@@ -1,0 +1,60 @@
+name: Release
+
+# Publishes every package in packages/* to npm when a version tag (v1.2.3) is pushed.
+# Uses npm trusted publishing (OIDC): no NPM_TOKEN secret, and npm adds provenance automatically.
+# One-time setup per package on npmjs.com: Settings > Trusted publishing > GitHub Actions,
+# repository pavlovt/kvesto, workflow release.yml.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - run: npm install -g npm@latest # trusted publishing needs npm 11.5.1 or newer
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm typecheck
+      - run: pnpm test
+
+      - name: Check the tag matches the package versions
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          for f in packages/*/package.json; do
+            v=$(node -p "require('./$f').version")
+            if [ "v$v" != "$GITHUB_REF_NAME" ]; then echo "::error::$f is $v, tag is $GITHUB_REF_NAME"; exit 1; fi
+          done
+
+      # pnpm pack swaps workspace:* for real versions; npm publish then uses OIDC.
+      - name: Pack
+        run: |
+          mkdir -p .release
+          for d in schema core server kvesto; do (cd packages/$d && pnpm pack --pack-destination ../../.release); done
+          ls -l .release
+
+      - name: Publish (skips versions already on npm)
+        run: |
+          for d in schema core server kvesto; do
+            name=$(node -p "require('./packages/$d/package.json').name")
+            version=$(node -p "require('./packages/$d/package.json').version")
+            if npm view "$name@$version" version >/dev/null 2>&1; then
+              echo "$name@$version is already published, skipping"; continue
+            fi
+            tag=latest; case "$version" in *-*) tag=next;; esac
+            tarball=$(ls .release/$(echo "$name" | sed 's/^@//; s/\//-/')-$version.tgz)
+            npm publish "$tarball" --access public --tag "$tag"
+          done

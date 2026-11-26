@@ -1,8 +1,25 @@
 {
   "name": "@kvesto/core",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Framework-agnostic survey runtime: reads Kvesto survey JSON, renders it, and saves responses through a pluggable storage adapter.",
   "license": "MIT",
+  "keywords": [
+    "survey",
+    "form",
+    "questionnaire",
+    "form-builder",
+    "json",
+    "kvesto"
+  ],
+  "homepage": "https://github.com/pavlovt/kvesto/tree/main/packages/core#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pavlovt/kvesto.git",
+    "directory": "packages/core"
+  },
+  "bugs": {
+    "url": "https://github.com/pavlovt/kvesto/issues"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -11,21 +28,36 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./styles.css": "./styles.css"
+    "./styles.css": "./styles.css",
+    "./package.json": "./package.json"
   },
-  "files": ["dist", "styles.css"],
-  "sideEffects": ["*.css"],
+  "files": [
+    "dist",
+    "styles.css",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": [
+    "*.css"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
-    "@kvesto/schema": "workspace:*"
+    "@kvesto/schema": "workspace:^"
   },
   "devDependencies": {
     "happy-dom": "21.0.4",
     "typescript": "5.9.3",
     "vitest": "3.2.7"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
