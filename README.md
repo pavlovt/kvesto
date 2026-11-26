@@ -8,7 +8,8 @@ lightweight JavaScript core. Build surveys visually in the editor and explore re
 Storage is just a setting. Keep responses in the browser, plug in your own backend, or use the included Hono server
 with SQLite and documented OpenAPI endpoints. Everything is MIT, including the editor and the dashboard.
 
-> **Status:** early skeleton. The architecture, contracts and tests are in place; features are minimal.
+> **Status:** early skeleton. The architecture, contracts and tests are in place; features are minimal. See
+> [ROADMAP.md](ROADMAP.md) for what comes next.
 
 ## Architecture
 
