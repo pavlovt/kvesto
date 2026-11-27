@@ -1,6 +1,8 @@
 name: Release
 
-# Publishes every package in packages/* to npm when a version tag (v1.2.3) is pushed.
+# Publishes every package in packages/* to npm when a version tag (v1.2.3) is pushed, or when run by hand
+# on main (Actions > Release > Run workflow), then creates the GitHub release vX.Y.Z (and its tag) with the
+# notes from CHANGELOG.md.
 # Uses npm trusted publishing (OIDC): no NPM_TOKEN secret, and npm adds provenance automatically.
 # One-time setup per package on npmjs.com: Settings > Trusted publishing > GitHub Actions,
 # repository pavlovt/kvesto, workflow release.yml.
@@ -11,7 +13,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write # to create the GitHub release (and its tag when run by hand)
   id-token: write
 
 jobs:
@@ -58,3 +60,14 @@ jobs:
             tarball=$(ls .release/$(echo "$name" | sed 's/^@//; s/\//-/')-$version.tgz)
             npm publish "$tarball" --access public --tag "$tag"
           done
+
+      - name: Create the GitHub release (skips one that already exists)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(node -p "require('./packages/core/package.json').version")
+          if gh release view "v$version" >/dev/null 2>&1; then echo "Release v$version exists, skipping"; exit 0; fi
+          # The notes are the CHANGELOG.md section for this version.
+          awk -v v="## $version" '$0==v{on=1;next} /^## /{on=0} on' CHANGELOG.md > .release/notes.md
+          flags=""; case "$version" in *-*) flags="--prerelease";; esac
+          gh release create "v$version" --target "$GITHUB_SHA" --title "v$version" --notes-file .release/notes.md $flags
