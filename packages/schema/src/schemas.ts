@@ -223,6 +223,11 @@ const questionBase = {
   defaultExpr: ExpressionTextSchema.optional(),
   /** Shown but not editable. The server refuses an answer that differs from the default. */
   readOnly: z.boolean().optional(),
+  /**
+   * Personal data. The server masks the answer in response lists, exports and webhooks unless the caller may
+   * `response:read-pii`.
+   */
+  pii: z.boolean().optional(),
   /** Editable only while this condition holds; otherwise shown read-only. */
   enableIf: ConditionSchema.optional(),
   /** Clear the answer whenever this condition becomes true (for example when an earlier choice changes). */
@@ -360,6 +365,11 @@ export const BooleanQuestionSchema = z.object({
   type: z.literal("boolean"),
   labelTrue: DisplayTextSchema.optional(),
   labelFalse: DisplayTextSchema.optional(),
+  /**
+   * A consent checkbox: the title is what the respondent agrees to. It must be ticked before the survey can be
+   * submitted, and the server records the text and the time with the response (`meta.consent`).
+   */
+  consent: z.boolean().optional(),
 });
 
 /**
@@ -652,8 +662,15 @@ export const SurveySettingsSchema = z.looseObject({
   oneResponsePer: z.enum(["browser", "respondent"]).optional(),
   /** Only respondents the server identifies (signed in to the host system) may answer. */
   requireRespondent: z.boolean().optional(),
-  /** Keep no respondent id with the responses: only a salted hash of it, enough to enforce `oneResponsePer`. */
+  /**
+   * Keep nothing that identifies the respondent: no respondent id (only a salted hash, enough to enforce
+   * `oneResponsePer`), no hidden fields except those in `anonymousHidden`, and no client meta beyond progress.
+   */
   anonymous: z.boolean().optional(),
+  /** Hidden fields an anonymous survey still keeps because they don't identify anyone, such as a campaign. */
+  anonymousHidden: z.array(id).optional(),
+  /** Delete responses (and their files) this many days after they were created. */
+  retentionDays: z.number().int().min(1).max(36_500).optional(),
   /** Shown instead of the survey when it isn't open, is full, or was already answered. */
   closedMessage: DisplayTextSchema.optional(),
   /** Bot friction, enforced by the server. All optional. */

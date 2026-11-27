@@ -295,6 +295,38 @@ export const hostedAsset = createRoute({
   responses: { 200: text("text/plain", "The file") },
 });
 
+const TokenBody = z.object({ token: z.string().min(1).max(200) }).openapi("ResponseToken");
+
+export const deleteResponse = createRoute({
+  method: "delete",
+  path: "/surveys/{id}/responses/{responseId}",
+  tags: ["Responses"],
+  summary: "Delete a response and its files",
+  ...admin,
+  request: { params: ResponseParams },
+  responses: { 204: { description: "Deleted" }, 404: error("Response not found"), ...refused },
+});
+
+export const myResponse = createRoute({
+  method: "post",
+  path: "/surveys/{id}/responses/{responseId}/mine",
+  tags: ["Responses"],
+  summary: "A respondent downloads their own response",
+  description: "With the token returned when the response was created (`resumeToken`), whether it is complete or not.",
+  request: { params: ResponseParams, body: { ...json(TokenBody, "The response's token"), required: true } },
+  responses: { 200: json(SurveyResponse, "The response"), 403: error("Wrong token"), 404: error("Response not found") },
+});
+
+export const forgetResponse = createRoute({
+  method: "post",
+  path: "/surveys/{id}/responses/{responseId}/forget",
+  tags: ["Responses"],
+  summary: "A respondent deletes their own response",
+  description: "With the response's token. Deletes the response and its files.",
+  request: { params: ResponseParams, body: { ...json(TokenBody, "The response's token"), required: true } },
+  responses: { 204: { description: "Deleted" }, 403: error("Wrong token"), 404: error("Response not found") },
+});
+
 export const uploadFile = createRoute({
   method: "post",
   path: "/surveys/{id}/files",

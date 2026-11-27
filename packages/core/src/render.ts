@@ -651,6 +651,19 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
         break;
       }
       case "boolean": {
+        if (q.consent) {
+          // One checkbox; the question's title is what the respondent agrees to.
+          const input = h(doc, "input", { type: "checkbox", name: qid, "aria-labelledby": `${qid}-title` }) as HTMLInputElement;
+          input.checked = value === true;
+          input.addEventListener("change", () => set(input.checked ? true : undefined));
+          const prev = refresh;
+          refresh = (s) => {
+            prev(s);
+            input.checked = b.get(s) === true;
+          };
+          wrap.append(h(doc, "label", { class: "kv-choice kv-consent" }, input, ` ${q.labelTrue ?? labels.agree}`));
+          break;
+        }
         for (const [v, label] of [
           [true, q.labelTrue ?? labels.yes],
           [false, q.labelFalse ?? labels.no],

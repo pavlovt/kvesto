@@ -359,6 +359,10 @@
           input type=checkbox checked={Boolean(el.readOnly)} onchange={(e) => set("readOnly", e.currentTarget.checked || undefined)}
           span 'Read-only'
         }
+        label.kv-props-check {
+          input type=checkbox checked={Boolean(el.pii)} onchange={(e) => set("pii", e.currentTarget.checked || undefined)}
+          span 'Personal data (masked for people without access)'
+        }
         ConditionBuilder(
           survey={view.survey}
           owner={{ element: el.id }}

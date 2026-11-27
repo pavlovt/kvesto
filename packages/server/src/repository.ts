@@ -73,7 +73,17 @@ export interface RespondentRecord {
 }
 
 export interface SurveyRepository extends Required<Omit<SurveyStorage, "uploadFile" | "saveProgress" | "loadProgress">> {
-  saveResponse(surveyId: string, input: ResponseInput, opts?: { resumeToken?: string; respondent?: RespondentRecord }): Promise<SurveyResponse>;
+  saveResponse(
+    surveyId: string,
+    input: ResponseInput,
+    opts?: { resumeToken?: string; respondent?: RespondentRecord; tokenHash?: string },
+  ): Promise<SurveyResponse>;
+  /** Delete one response. Returns it, or null when there was none. */
+  deleteResponse(surveyId: string, responseId: string): Promise<SurveyResponse | null>;
+  /** Delete a survey's responses created before `before` (an ISO time). Returns them. */
+  deleteResponsesBefore(surveyId: string, before: string): Promise<SurveyResponse[]>;
+  /** Delete these files of a survey. Returns how many. */
+  deleteFiles(surveyId: string, fileIds: string[]): Promise<number>;
   surveyExists(id: string): Promise<boolean>;
   /** Whether a response with this respondent key exists (any status). */
   hasRespondent(surveyId: string, key: string): Promise<boolean>;
@@ -178,7 +188,7 @@ export function drizzleRepository(db: KvestoDb): SurveyRepository {
         .all();
       return rows;
     },
-    async saveResponse(surveyId: string, input: ResponseInput, opts?: { respondent?: RespondentRecord }) {
+    async saveResponse(surveyId: string, input: ResponseInput, opts?: { respondent?: RespondentRecord; tokenHash?: string }) {
       const ts = now();
       const row = {
         id: randomUUID(),
@@ -188,7 +198,7 @@ export function drizzleRepository(db: KvestoDb): SurveyRepository {
         status: "complete" as const,
         createdAt: ts,
         updatedAt: ts,
-        resumeTokenHash: null,
+        resumeTokenHash: opts?.tokenHash ?? null,
         respondentId: opts?.respondent?.id ?? null,
         respondentKey: opts?.respondent?.key ?? null,
       };
@@ -228,6 +238,22 @@ export function drizzleRepository(db: KvestoDb): SurveyRepository {
         .where(and(eq(responses.surveyId, surveyId), eq(responses.id, responseId)))
         .run();
       return (await this.loadResponse(surveyId, responseId))!.response;
+    },
+    async deleteResponse(surveyId, responseId) {
+      const found = await this.loadResponse(surveyId, responseId);
+      if (!found) return null;
+      await db.delete(responses).where(and(eq(responses.surveyId, surveyId), eq(responses.id, responseId))).run();
+      return found.response;
+    },
+    async deleteResponsesBefore(surveyId, before) {
+      const where = and(eq(responses.surveyId, surveyId), lt(responses.createdAt, before));
+      const rows = await db.select().from(responses).where(where).all();
+      if (rows.length) await db.delete(responses).where(where).run();
+      return rows.map(toResponse);
+    },
+    async deleteFiles(surveyId, fileIds) {
+      if (!fileIds.length) return 0;
+      return (await db.delete(files).where(and(eq(files.surveyId, surveyId), inArray(files.id, fileIds))).run()).changes;
     },
     async hasRespondent(surveyId, key) {
       const row = await db

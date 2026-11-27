@@ -442,6 +442,21 @@ only the token can change a partial response; a completed one can't be changed. 
 responses out unless asked (`?status=partial` or `?status=all`). The dashboard shows the completion rate and where
 people stop, and can include partial responses in the results.
 
+#### Privacy
+
+- Mark questions that collect personal data with `"pii": true`. The server masks those answers (`[redacted]`) in
+  response lists, CSV exports and webhooks unless `authorize` allows the `response:read-pii` action (`apiKeyAuth`
+  allows it only with a key). `maskAnswers` in the core does the same for your own outputs.
+- `{ "type": "boolean", "consent": true, "title": "I agree to …" }` is a consent checkbox (the editor's "consent"
+  preset): it has to be ticked before submitting, and the server records the text and the time in `meta.consent`.
+- `settings.anonymous` keeps no respondent id, no hidden fields except `settings.anonymousHidden`, and no client meta.
+  The server never stores IP addresses or user agents.
+- `settings.retentionDays` deletes responses and their files that are older, when `app.privacy.purge()` runs
+  (`createApp({ purgeEverySeconds })` runs it on a timer).
+- Every response comes back with a `resumeToken`, with which the respondent can download it
+  (`POST …/responses/{id}/mine`) or delete it (`POST …/responses/{id}/forget`). Admins delete with
+  `DELETE /surveys/{id}/responses/{responseId}` (`response:delete`), which removes the files too.
+
 #### Availability
 
 ```json

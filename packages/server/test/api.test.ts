@@ -454,6 +454,8 @@ describe("documentation", () => {
         "/surveys/{id}/responses.csv",
         "/surveys/{id}/responses/{responseId}",
         "/surveys/{id}/responses/{responseId}/resume",
+        "/surveys/{id}/responses/{responseId}/mine",
+        "/surveys/{id}/responses/{responseId}/forget",
         "/surveys/{id}/responses/{responseId}/release",
         "/surveys/{id}/files",
         "/surveys/{id}/files/{fileId}",

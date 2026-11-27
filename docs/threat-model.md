@@ -29,6 +29,7 @@ as untrusted, what it defends against, and what it leaves to the system around i
 | Requests to admin routes | API clients | Every action goes through the host's `authorize` function (`apiKeyAuth` compares keys in constant time). Without it the server warns at startup. |
 | The embedding page | The site that embeds a survey | The hosted page runs no inline script under a strict CSP; the frame only sends its height and "complete" to its parent, never answers. The embed script accepts messages only from its own frames on the server's origin. |
 | Webhook URLs | Admins | HTTPS only; names that resolve to private, loopback or link-local addresses are refused, checked again before each delivery; redirects are not followed. Deliveries are signed (HMAC-SHA256 with a timestamp). |
+| Personal data | Respondents | `pii` answers masked in lists, exports and webhooks without `response:read-pii`; anonymous surveys keep no id, identifying hidden fields or client meta; retention purge; respondents can download or delete their response with its token. |
 | Spreadsheet exports | Respondents' answers | Cells that a spreadsheet would run as formulas (`= + - @`, tab, CR) are defused in CSV and Excel exports. |
 
 ## What the host is responsible for

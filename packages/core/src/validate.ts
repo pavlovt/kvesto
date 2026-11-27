@@ -92,6 +92,8 @@ export function validateFile(question: FileQuestion, file: { name: string; type:
  */
 export function validateAnswer(question: Question, value: AnswerValue | undefined, options: ValidateOptions = {}): string | null {
   const required = options.required ?? question.required ?? false;
+  // A consent checkbox counts only when it is ticked.
+  if (question.type === "boolean" && question.consent && required && value !== true) return message(options.locale, "consent");
   if (isEmptyAnswer(value)) return required ? message(options.locale, "required") : null;
   const shapeError = checkShape(question, value!, required, options);
   if (shapeError) return shapeError;

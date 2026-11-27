@@ -212,7 +212,8 @@ export function resolveLogic(survey: Survey, answers: Answers, options: LogicOpt
       }
       if (!visible) continue;
       into.visibleQuestions.add(el.id);
-      if (el.required || (el.requiredIf && holds(el.requiredIf, into.answers))) {
+      const consent = el.type === "boolean" && el.consent === true;
+      if (el.required || consent || (el.requiredIf && holds(el.requiredIf, into.answers))) {
         into.requiredQuestions.add(el.id);
       }
       if (el.type === "computed" || el.readOnly || (el.enableIf && !holds(el.enableIf, into.answers))) {

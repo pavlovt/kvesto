@@ -11,6 +11,9 @@ import {
   answerLimitIssues,
   checkQuestionTypes,
   collectHidden,
+  maskResponse,
+  piiQuestions,
+  walkElements,
   surveyAvailability,
   surveyLimitIssues,
   type AnswerLimits,
@@ -105,6 +108,8 @@ export interface CreateAppOptions {
   signingSecret?: string;
   /** Upload limits and checks beyond each question's `accept` and `maxSize`. */
   uploads?: UploadOptions;
+  /** Run `app.privacy.purge()` (deleting responses older than each survey's `retentionDays`) this often, in seconds. */
+  purgeEverySeconds?: number;
   /** Serve /openapi.json and the /docs UI. Default true. */
   docs?: boolean;
   /** Largest accepted upload in bytes, whatever a question allows. Default 10 MB. */
@@ -159,7 +164,7 @@ const PUBLIC_ROUTES: [string, RegExp][] = [
   ["GET", /\/surveys\/[^/]+$/],
   ["POST", /\/surveys\/[^/]+\/responses$/],
   ["PATCH", /\/surveys\/[^/]+\/responses\/[^/]+$/],
-  ["POST", /\/surveys\/[^/]+\/responses\/[^/]+\/resume$/],
+  ["POST", /\/surveys\/[^/]+\/responses\/[^/]+\/(?:resume|mine|forget)$/],
   ["POST", /\/surveys\/[^/]+\/files$/],
   ["GET", /\/surveys\/[^/]+\/files\/[^/]+$/],
   ["GET", /\/s\/[^/]+(?:\/[^/]+)?$/],
@@ -186,7 +191,7 @@ function withoutBrowserId<T extends { meta?: Record<string, unknown> }>(input: T
 function budgetFor(method: string, path: string): BudgetName | null {
   if (method === "OPTIONS") return null;
   if (method === "POST" && /\/surveys\/[^/]+\/responses$/.test(path)) return "response:create";
-  if ((method === "PATCH" && /\/responses\/[^/]+$/.test(path)) || (method === "POST" && /\/responses\/[^/]+\/resume$/.test(path))) return "response:update";
+  if ((method === "PATCH" && /\/responses\/[^/]+$/.test(path)) || (method === "POST" && /\/responses\/[^/]+\/(?:resume|mine|forget)$/.test(path))) return "response:update";
   if (method === "POST" && /\/surveys\/[^/]+\/files$/.test(path)) return "file:upload";
   return isRespondentRoute(method, path) ? null : "admin";
 }
@@ -297,7 +302,8 @@ export function createApp(options: CreateAppOptions) {
         console.error("[kvesto] onResponse failed", e);
       }
       try {
-        await dispatcher.emit(survey, event, response);
+        // Webhooks never carry `pii` answers: receivers can fetch them with a key that may read them.
+        await dispatcher.emit(survey, event, maskResponse(survey, response));
       } catch (e) {
         console.error("[kvesto] queuing webhooks failed", e);
       }
@@ -511,6 +517,73 @@ export function createApp(options: CreateAppOptions) {
       ? { error: `The files of one response are limited to ${formatBytes(quota)}` }
       : null;
   };
+  /** May this request see `pii` answers unmasked? */
+  const canReadPii = async (c: Context, surveyId: string) => (await authorize(c, { action: "response:read-pii", surveyId })) === true;
+  /** File ids of this server that the answers refer to. */
+  const fileIdsIn = (surveyId: string, answers: Answers) => {
+    const ids: string[] = [];
+    const visit = (v: unknown) => {
+      if (Array.isArray(v)) return v.forEach(visit);
+      if (!v || typeof v !== "object") return;
+      const o = v as Record<string, unknown>;
+      const m = typeof o.url === "string" ? FILE_URL.exec(o.url) : null;
+      if (m) {
+        if (m[1] === surveyId) ids.push(decodeURIComponent(m[2]!));
+        return;
+      }
+      Object.values(o).forEach(visit);
+    };
+    visit(answers);
+    return [...new Set(ids)];
+  };
+  /** Delete a response's files along with it. */
+  const deleteWithFiles = async (surveyId: string, deleted: SurveyResponse[]) => {
+    const ids = [...new Set(deleted.flatMap((r) => fileIdsIn(surveyId, r.answers)))];
+    if (ids.length) await repo.deleteFiles(surveyId, ids);
+  };
+  /**
+   * What is stored, after privacy rules: consent questions get the text and time they were agreed to, and an
+   * anonymous survey keeps only non-identifying meta and the hidden fields in `anonymousHidden`.
+   */
+  const finalize = <T extends { answers: Answers; meta?: Record<string, unknown> }>(survey: Survey, input: T, partial: boolean): T => {
+    const { consent: _given, ...rest } = input.meta ?? {};
+    let meta: Record<string, unknown> = rest;
+    if (!partial) {
+      const consent: Record<string, { text: string; at: string }> = {};
+      const at = new Date().toISOString();
+      walkElements(survey, (el) => {
+        if (el.type === "boolean" && el.consent && input.answers[el.id] === true) {
+          consent[el.id] = { text: textOf(el.title, survey.defaultLocale, survey.defaultLocale), at };
+        }
+      });
+      if (Object.keys(consent).length) meta = { ...meta, consent };
+    }
+    if (survey.settings?.anonymous) {
+      const keep = new Set(survey.settings.anonymousHidden ?? []);
+      const hidden = Object.fromEntries(Object.entries((meta.hidden ?? {}) as Record<string, string>).filter(([k]) => keep.has(k)));
+      meta = Object.fromEntries(Object.entries(meta).filter(([k]) => ["progress", "quiz", "timedOut", "consent"].includes(k)));
+      if (Object.keys(hidden).length) meta.hidden = hidden;
+    }
+    return { ...input, meta: Object.keys(meta).length ? meta : undefined };
+  };
+  const privacy = {
+    /** Delete responses (and their files) older than each survey's `retentionDays`. Returns how many. */
+    async purge(): Promise<number> {
+      let n = 0;
+      for (const { id } of await repo.listSurveys()) {
+        const days = (await repo.loadSurvey(id))?.settings?.retentionDays;
+        if (!days) continue;
+        const deleted = await repo.deleteResponsesBefore(id, new Date(Date.now() - days * 86_400_000).toISOString());
+        await deleteWithFiles(id, deleted);
+        n += deleted.length;
+      }
+      return n;
+    },
+  };
+  if (options.purgeEverySeconds) {
+    const timer = setInterval(() => void privacy.purge().catch((e) => console.error("[kvesto] purging old responses failed", e)), options.purgeEverySeconds * 1000);
+    (timer as { unref?: () => void }).unref?.();
+  }
   const uploads = {
     /** Delete files that no response refers to and that are older than `orphanAfterSeconds`. Returns how many. */
     sweep: () => repo.deleteOrphanFiles(new Date(Date.now() - (options.uploads?.orphanAfterSeconds ?? 86_400) * 1000).toISOString()),
@@ -575,6 +648,10 @@ export function createApp(options: CreateAppOptions) {
   });
   guard("POST", "/surveys/:id/responses/:responseId/resume", "response:create");
   guard("POST", "/surveys/:id/responses/:responseId/release", "survey:write");
+  guard("DELETE", "/surveys/:id/responses/:responseId", "response:delete");
+  // Respondent actions: the token in the body is what allows them.
+  guard("POST", "/surveys/:id/responses/:responseId/mine", "response:create");
+  guard("POST", "/surveys/:id/responses/:responseId/forget", "response:create");
   guard("GET", "/surveys/:id/responses", "response:read");
   guard("GET", "/surveys/:id/responses.csv", "response:read");
   guard("GET", "/s/:id", "survey:read");
@@ -679,14 +756,16 @@ export function createApp(options: CreateAppOptions) {
     // Answers to questions hidden by conditional logic are dropped, as the core runtime does.
     const { status: _status, ...given } = withoutBrowserId(input);
     const rest = withQuiz(survey, withHidden(given, hidden), checked.answers, hidden, partial);
+    const record = finalize(survey, { ...rest, answers: checked.answers }, partial);
+    // Every response gets a token: it resumes a partial one, and lets the respondent download or delete theirs.
+    const secret = randomBytes(32).toString("base64url");
     try {
       if (!partial) {
-        const saved = await repo.saveResponse(id, { ...rest, answers: checked.answers }, { respondent });
+        const saved = await repo.saveResponse(id, record, { respondent, tokenHash: hashSecret(secret) });
         notify(survey, saved);
-        return c.json(saved, 201);
+        return c.json({ ...saved, resumeToken: `${saved.id}.${secret}` }, 201);
       }
-      const secret = randomBytes(32).toString("base64url");
-      const saved = await repo.savePartialResponse(id, { ...rest, answers: checked.answers }, hashSecret(secret), respondent);
+      const saved = await repo.savePartialResponse(id, record, hashSecret(secret), respondent);
       notify(survey, saved);
       return c.json({ ...saved, resumeToken: `${saved.id}.${secret}` }, 201);
     } catch (e) {
@@ -694,6 +773,43 @@ export function createApp(options: CreateAppOptions) {
       const [status, error] = CLOSED.answered;
       return c.json({ error, reason: "answered" as const }, status);
     }
+  });
+
+  /** A response, if `token` is its token. */
+  const ownedResponse = async (surveyId: string, responseId: string, token: string) => {
+    const found = await repo.loadResponse(surveyId, responseId);
+    if (!found) return { status: 404 as const, error: "Response not found" };
+    const [rid, secret = ""] = token.split(".");
+    const expected = Buffer.from(found.tokenHash ?? "", "hex");
+    const given = Buffer.from(hashSecret(secret), "hex");
+    if (rid !== responseId || !found.tokenHash || expected.length !== given.length || !timingSafeEqual(expected, given)) {
+      return { status: 403 as const, error: "Wrong token" };
+    }
+    return { response: found.response };
+  };
+
+  app.openapi(routes.myResponse, async (c) => {
+    const { id, responseId } = c.req.valid("param");
+    const found = await ownedResponse(id, responseId, c.req.valid("json").token);
+    if (!("response" in found)) return c.json({ error: found.error }, found.status);
+    return c.json(found.response, 200);
+  });
+
+  app.openapi(routes.forgetResponse, async (c) => {
+    const { id, responseId } = c.req.valid("param");
+    const found = await ownedResponse(id, responseId, c.req.valid("json").token);
+    if (!("response" in found)) return c.json({ error: found.error }, found.status);
+    const deleted = await repo.deleteResponse(id, responseId);
+    if (deleted) await deleteWithFiles(id, [deleted]);
+    return c.body(null, 204);
+  });
+
+  app.openapi(routes.deleteResponse, async (c) => {
+    const { id, responseId } = c.req.valid("param");
+    const deleted = await repo.deleteResponse(id, responseId);
+    if (!deleted) return c.json({ error: "Response not found" }, 404);
+    await deleteWithFiles(id, [deleted]);
+    return c.body(null, 204);
   });
 
   /** A partial response, if `token` is its resume token. */
@@ -732,11 +848,15 @@ export function createApp(options: CreateAppOptions) {
     const updated = await repo.updateResponse(
       id,
       responseId,
-      withQuiz(
+      finalize(
         survey,
-        withHidden({ ...input, meta, answers: checked.answers, status: partial ? "partial" : "complete" }, hidden),
-        checked.answers,
-        hidden,
+        withQuiz(
+          survey,
+          withHidden({ ...input, meta, answers: checked.answers, status: partial ? "partial" : "complete" }, hidden),
+          checked.answers,
+          hidden,
+          partial,
+        ),
         partial,
       ),
     );
@@ -847,11 +967,12 @@ export function createApp(options: CreateAppOptions) {
     const survey = await repo.loadSurvey(id);
     if (!survey) return c.json({ error: "Survey not found" }, 404);
     const filter = filterOf(c, query);
+    const pii = (await canReadPii(c, id)) ? new Set<string>() : piiQuestions(survey);
     const all = [];
     // A page at a time, so a large survey is never one huge query.
     for (let after: { createdAt: string; id: string } | undefined; ; ) {
       const page = await repo.listResponsesPage(id, { limit: 500, offset: 0, ...filter, ...(after ? { after } : {}) });
-      all.push(...page.map(resignFiles));
+      all.push(...page.map((r) => resignFiles(pii.size ? maskResponse(survey, r, pii) : r)));
       if (page.length < 500) break;
       after = page.at(-1)!;
     }
@@ -936,7 +1057,10 @@ export function createApp(options: CreateAppOptions) {
     const [items, total] = await Promise.all([repo.listResponsesPage(id, { limit, offset, ...filter, ...(after ? { after } : {}) }), repo.countResponses(id, filter)]);
     const last = items.at(-1);
     const more = items.length === limit && last;
-    return c.json({ items: items.map(resignFiles), total, limit, offset, ...(more ? { nextCursor: encodeCursor(last) } : {}) }, 200);
+    const survey = await repo.loadSurvey(id);
+    const pii = survey && !(await canReadPii(c, id)) ? piiQuestions(survey) : new Set<string>();
+    const shown = items.map((r) => resignFiles(survey && pii.size ? maskResponse(survey, r, pii) : r));
+    return c.json({ items: shown, total, limit, offset, ...(more ? { nextCursor: encodeCursor(last) } : {}) }, 200);
   });
 
   if (options.docs !== false) {
@@ -958,7 +1082,7 @@ export function createApp(options: CreateAppOptions) {
   }
 
   // `app.webhooks.flush()` sends what is due now (tests, graceful shutdown); `stop()` ends the retry timers.
-  return Object.assign(app, { webhooks: dispatcher, uploads });
+  return Object.assign(app, { webhooks: dispatcher, uploads, privacy });
 }
 
 export type KvestoApp = ReturnType<typeof createApp>;

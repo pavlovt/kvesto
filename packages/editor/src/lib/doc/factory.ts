@@ -2,7 +2,7 @@ import { isCustomQuestion, questionType, registeredQuestionTypes, type ElementIn
 import { usedIds } from "./document.js";
 
 /** What the palette can add: every question type, panels and repeating panels, and content blocks and images. */
-export type PaletteKind = QuestionType | "panel" | "repeat" | "content" | "image";
+export type PaletteKind = QuestionType | "panel" | "repeat" | "content" | "image" | "consent";
 
 export const QUESTION_TYPES: readonly QuestionType[] = [
   "text",
@@ -30,6 +30,7 @@ export const PALETTE: readonly { kind: PaletteKind; label: string }[] = [
   { kind: "repeat", label: "repeating panel" },
   { kind: "content", label: "text block" },
   { kind: "image", label: "image" },
+  { kind: "consent", label: "consent" },
 ];
 
 /** The built-in palette plus every custom question type registered so far. */
@@ -68,6 +69,8 @@ export function newElement(kind: PaletteKind, survey: SurveyInput): ElementInput
   const count = usedIds(survey).size - survey.pages.length;
   const n = firstFree(survey, "q", count + 1);
   const base = { id: `q${n}`, title: `Question ${n}` };
+  // A consent checkbox: a yes/no question that has to be ticked; its title is what people agree to.
+  if (kind === "consent") return { ...base, type: "boolean", title: "I agree to the processing of my answers as described in the privacy policy.", consent: true };
   if (isCustomQuestion({ type: kind })) {
     return { ...base, ...questionType(kind)?.editorDefaults, type: kind } as ElementInput;
   }

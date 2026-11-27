@@ -89,3 +89,4 @@ export { filterResponses, responseColumns, responseRow, type ResponseColumn, typ
 export { exportTable, responsesToCsv, safeCell, type ExportOptions } from "./export.js";
 export { answerSchema, answersJsonSchema, surveyFromJsonSchema } from "./json-schema-interop.js";
 export { surveyAvailability, closedReasonOf, type AvailabilityContext, type ClosedReason } from "./availability.js";
+export { maskAnswers, maskResponse, MASKED, piiQuestions } from "./privacy.js";

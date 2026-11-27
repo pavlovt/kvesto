@@ -7,6 +7,9 @@ export type KvestoAction =
   | "survey:write"
   | "response:create"
   | "response:read"
+  /** See the answers to questions marked `pii` unmasked. */
+  | "response:read-pii"
+  | "response:delete"
   | "file:upload"
   | "file:read"
   | "webhook:manage";
@@ -17,6 +20,8 @@ export const KVESTO_ACTIONS: readonly KvestoAction[] = [
   "survey:write",
   "response:create",
   "response:read",
+  "response:read-pii",
+  "response:delete",
   "file:upload",
   "file:read",
   "webhook:manage",

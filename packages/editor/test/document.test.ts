@@ -138,3 +138,11 @@ describe("SurveyDocument", () => {
     expect(doc.state).toMatchObject({ canUndo: false, canRedo: true, redoLabel: "Move" });
   });
 });
+
+describe("the consent preset", () => {
+  it("adds a yes/no question marked as consent", async () => {
+    const { newElement } = await import("../src/lib/doc/factory.js");
+    const el = newElement("consent", { schemaVersion: 1, id: "s", title: "S", pages: [{ id: "p", elements: [] }] });
+    expect(el).toMatchObject({ type: "boolean", consent: true });
+  });
+});

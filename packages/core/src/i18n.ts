@@ -49,6 +49,8 @@ export const ENGLISH_LABELS = {
   closedFull: "This survey has all the responses it needs. Thank you!",
   closedAnswered: "You have already answered this survey. Thank you!",
   closedSignIn: "Please sign in to answer this survey.",
+  /** The consent checkbox's label. */
+  agree: "I agree",
 };
 export type Labels = typeof ENGLISH_LABELS;
 
@@ -59,6 +61,7 @@ export const ENGLISH_MESSAGES = {
   chooseMany: "Choose from the options.",
   rating: "Choose a rating from {min} to {max}.",
   yesNo: "Choose yes or no.",
+  consent: "Please agree to continue.",
   matrixOne: "Choose one column in each row.",
   matrixMany: "Choose from the columns in each row.",
   matrixMissing: "Answer every row (missing: {rows}).",
@@ -138,7 +141,7 @@ const packs: Record<string, LocalePack> = {
     },
     messages: {
       required: "Този въпрос е задължителен.", chooseOne: "Изберете една от възможностите.", chooseMany: "Изберете от възможностите.",
-      rating: "Изберете оценка от {min} до {max}.", yesNo: "Изберете да или не.", matrixOne: "Изберете по една колона на всеки ред.",
+      rating: "Изберете оценка от {min} до {max}.", yesNo: "Изберете да или не.", consent: "Моля, съгласете се, за да продължите.", matrixOne: "Изберете по една колона на всеки ред.",
       matrixMany: "Изберете от колоните на всеки ред.", matrixMissing: "Отговорете на всеки ред (липсват: {rows}).", rank: "Подредете всеки елемент точно веднъж.",
       pictureOne: "Изберете една от снимките.", pictureMany: "Изберете от снимките.", fileOne: "Прикачете само един файл.", fileMax: "Прикачете най-много {max} файла.",
       fileType: "„{name}“ не е разрешен тип файл.", fileSize: "„{name}“ е по-голям от {size}.", uploadFailed: "Качването не успя: {error}",
@@ -170,7 +173,7 @@ const packs: Record<string, LocalePack> = {
     },
     messages: {
       required: "Diese Frage ist erforderlich.", chooseOne: "Wählen Sie eine der Optionen.", chooseMany: "Wählen Sie aus den Optionen.",
-      rating: "Wählen Sie eine Bewertung von {min} bis {max}.", yesNo: "Wählen Sie Ja oder Nein.", matrixOne: "Wählen Sie in jeder Zeile eine Spalte.",
+      rating: "Wählen Sie eine Bewertung von {min} bis {max}.", yesNo: "Wählen Sie Ja oder Nein.", consent: "Bitte stimmen Sie zu, um fortzufahren.", matrixOne: "Wählen Sie in jeder Zeile eine Spalte.",
       matrixMany: "Wählen Sie in jeder Zeile aus den Spalten.", matrixMissing: "Beantworten Sie jede Zeile (fehlt: {rows}).", rank: "Ordnen Sie jeden Eintrag genau einmal ein.",
       pictureOne: "Wählen Sie eines der Bilder.", pictureMany: "Wählen Sie aus den Bildern.", fileOne: "Hängen Sie nur eine Datei an.", fileMax: "Hängen Sie höchstens {max} Dateien an.",
       fileType: "„{name}“ ist kein erlaubter Dateityp.", fileSize: "„{name}“ ist größer als {size}.", uploadFailed: "Hochladen fehlgeschlagen: {error}",
