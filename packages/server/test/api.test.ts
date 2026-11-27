@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it } from "vitest";
-import { createApp, createSqliteDb, drizzleRepository } from "../src/index.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { apiKeyAuth, createApp, createSqliteDb, drizzleRepository, openAccess, type KvestoAction } from "../src/index.js";
 
 const survey = {
   schemaVersion: 1,
@@ -49,7 +49,7 @@ const send = (method: string, path: string, body?: unknown) =>
   });
 
 beforeEach(() => {
-  app = createApp({ repository: drizzleRepository(createSqliteDb(":memory:")) });
+  app = createApp({ repository: drizzleRepository(createSqliteDb(":memory:")), authorize: openAccess });
 });
 
 describe("surveys", () => {
@@ -219,6 +219,104 @@ describe("files", () => {
   });
 });
 
+describe("access control", () => {
+  const KEY = "s3cret-key";
+  const authed = (method: string, path: string, body?: unknown, key?: string) =>
+    app.request(path, {
+      method,
+      headers: {
+        ...(body !== undefined ? { "content-type": "application/json" } : {}),
+        ...(key ? { authorization: `Bearer ${key}` } : {}),
+      },
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+    });
+  const upload = (key?: string) => {
+    const form = new FormData();
+    form.set("questionId", "shot");
+    form.set("file", new File([new Uint8Array(10)], "a.png", { type: "image/png" }));
+    return app.request("/surveys/uploads/files", { method: "POST", body: form, headers: key ? { authorization: `Bearer ${key}` } : {} });
+  };
+
+  beforeEach(async () => {
+    app = createApp({ repository: drizzleRepository(createSqliteDb(":memory:")), authorize: apiKeyAuth({ keys: [KEY] }) });
+    expect((await authed("POST", "/surveys", survey, KEY)).status).toBe(201);
+    expect((await authed("POST", "/surveys", uploads, KEY)).status).toBe(201);
+  });
+
+  it("keeps the respondent routes public", async () => {
+    expect((await authed("GET", "/surveys/feedback")).status).toBe(200);
+    expect((await authed("POST", "/surveys/feedback/responses", { answers: { email: "a@b.co" } })).status).toBe(201);
+    const up = await upload();
+    expect(up.status).toBe(201);
+    const { url } = await up.json();
+    expect((await app.request(new URL(url).pathname)).status).toBe(200);
+    expect((await authed("GET", "/health")).status).toBe(200);
+    expect((await authed("GET", "/openapi.json")).status).toBe(200);
+  });
+
+  it("needs a key to list, edit or delete surveys and to read responses", async () => {
+    const admin: [string, string, unknown?][] = [
+      ["GET", "/surveys"],
+      ["POST", "/surveys", { ...survey, id: "other" }],
+      ["PUT", "/surveys/feedback", survey],
+      ["GET", "/surveys/feedback/responses"],
+      ["DELETE", "/surveys/feedback"],
+    ];
+    for (const [method, path, body] of admin) {
+      const none = await authed(method, path, body);
+      expect(none.status, `${method} ${path}`).toBe(401);
+      expect(none.headers.get("www-authenticate")).toMatch(/^Bearer/);
+      expect((await authed(method, path, body, "wrong")).status, `${method} ${path}`).toBe(401);
+    }
+    // Nothing changed while refused.
+    expect((await authed("GET", "/surveys", undefined, KEY)).status).toBe(200);
+    expect((await authed("GET", "/surveys/feedback")).status).toBe(200);
+    for (const [method, path, body] of admin) {
+      expect((await authed(method, path, body, KEY)).status, `${method} ${path}`).toBeLessThan(300);
+    }
+  });
+
+  it("can lock down the respondent routes too", async () => {
+    app = createApp({
+      repository: drizzleRepository(createSqliteDb(":memory:")),
+      authorize: apiKeyAuth({ keys: [KEY], publicActions: [] }),
+    });
+    expect((await authed("POST", "/surveys", uploads, KEY)).status).toBe(201);
+    expect((await authed("GET", "/surveys/uploads")).status).toBe(401);
+    expect((await upload()).status).toBe(401);
+    expect((await upload(KEY)).status).toBe(201);
+  });
+
+  it("asks a custom authorize function about each action, with the survey id", async () => {
+    const seen: string[] = [];
+    app = createApp({
+      repository: drizzleRepository(createSqliteDb(":memory:")),
+      authorize: (_c, { action, surveyId }) => {
+        seen.push(`${action}:${surveyId ?? "-"}`);
+        return action !== ("response:read" satisfies KvestoAction);
+      },
+    });
+    await authed("POST", "/surveys", survey);
+    await authed("GET", "/surveys/feedback");
+    expect((await authed("GET", "/surveys/feedback/responses")).status).toBe(403);
+    expect(seen).toEqual(["survey:write:-", "survey:read:feedback", "response:read:feedback"]);
+  });
+
+  it("warns when no authorize option is given", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    createApp({ repository: drizzleRepository(createSqliteDb(":memory:")) });
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/authorize/));
+    warn.mockClear();
+    createApp({ repository: drizzleRepository(createSqliteDb(":memory:")), authorize: openAccess });
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("rejects an empty key list", () => {
+    expect(() => apiKeyAuth({ keys: ["", ""] })).toThrow(/at least one/);
+  });
+});
+
 describe("documentation", () => {
   it("serves an OpenAPI 3.1 document covering every route", async () => {
     const res = await send("GET", "/openapi.json");
@@ -241,6 +339,11 @@ describe("documentation", () => {
     const upload = doc.paths["/surveys/{id}/files"].post.requestBody.content["multipart/form-data"];
     expect(upload.schema.$ref).toBe("#/components/schemas/FileUpload");
     expect(doc.components.schemas.FileUpload.properties.file).toMatchObject({ type: "string", format: "binary" });
+    expect(doc.components.securitySchemes.bearerAuth).toMatchObject({ type: "http", scheme: "bearer" });
+    expect(doc.paths["/surveys"].get.security).toEqual([{ bearerAuth: [] }]);
+    expect(doc.paths["/surveys/{id}/responses"].get.security).toEqual([{ bearerAuth: [] }]);
+    expect(doc.paths["/surveys/{id}/responses"].post.security).toBeUndefined();
+    expect(doc.paths["/surveys/{id}"].get.security).toBeUndefined();
   });
 
   it("serves the interactive docs UI", async () => {

@@ -3,6 +3,7 @@ import { Scalar } from "@scalar/hono-api-reference";
 import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import { findElement, formatBytes, validateAnswers, validateFile } from "@kvesto/core";
+import { openAccess, type Authorize, type KvestoAction } from "./auth.js";
 import type { SurveyRepository } from "./repository.js";
 import * as routes from "./routes.js";
 
@@ -14,6 +15,12 @@ export interface CreateAppOptions {
   docs?: boolean;
   /** Largest accepted upload in bytes, whatever a question allows. Default 10 MB. */
   maxFileSize?: number;
+  /**
+   * Who may do what. Called before every API action (not for /health or the docs).
+   * Use `apiKeyAuth({ keys })`, or your own check. Without it every request is
+   * allowed and a warning is logged; pass `openAccess` to allow everything quietly.
+   */
+  authorize?: Authorize;
 }
 
 /** Types a browser may show inline. Anything else is served as a download, so an uploaded page can't run as this origin. */
@@ -46,6 +53,31 @@ export function createApp(options: CreateAppOptions) {
     console.error(err);
     return c.json({ error: "Internal server error" }, 500);
   });
+
+  if (!options.authorize) {
+    console.warn(
+      "[kvesto] createApp() has no `authorize` option: anyone can edit surveys and read responses. " +
+        "Use apiKeyAuth({ keys }) or your own check before exposing this server.",
+    );
+  }
+  const authorize = options.authorize ?? openAccess;
+  const guard = (method: "GET" | "POST" | "PUT" | "DELETE", path: string, action: KvestoAction) =>
+    app.on(method, path, async (c, next) => {
+      const verdict = await authorize(c, { action, ...(c.req.param("id") ? { surveyId: c.req.param("id") } : {}) });
+      if (verdict instanceof Response) return verdict;
+      if (verdict !== true) return c.json({ error: "Forbidden" }, 403);
+      await next();
+    });
+  // Registered before the routes (and before the upload body limit), so refused requests stop here.
+  guard("GET", "/surveys", "survey:list");
+  guard("POST", "/surveys", "survey:write");
+  guard("GET", "/surveys/:id", "survey:read");
+  guard("PUT", "/surveys/:id", "survey:write");
+  guard("DELETE", "/surveys/:id", "survey:write");
+  guard("POST", "/surveys/:id/responses", "response:create");
+  guard("GET", "/surveys/:id/responses", "response:read");
+  guard("POST", "/surveys/:id/files", "file:upload");
+  guard("GET", "/surveys/:id/files/:fileId", "file:read");
 
   app.openapi(routes.health, (c) => c.json({ status: "ok" as const }, 200));
 
@@ -155,6 +187,11 @@ export function createApp(options: CreateAppOptions) {
   });
 
   if (options.docs !== false) {
+    app.openAPIRegistry.registerComponent("securitySchemes", "bearerAuth", {
+      type: "http",
+      scheme: "bearer",
+      description: "An API key, when the server uses apiKeyAuth. Operations marked with it need the key by default.",
+    });
     app.doc31("/openapi.json", {
       openapi: "3.1.0",
       info: {

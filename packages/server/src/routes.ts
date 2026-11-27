@@ -19,6 +19,16 @@ const json = <T extends z.ZodType>(schema: T, description: string) => ({
 });
 const error = (description: string) => json(ErrorBody, description);
 
+/**
+ * Marks an operation that needs an API key under the default `apiKeyAuth` policy.
+ * Respondent operations (read a survey, submit, upload, download a file) stay public.
+ */
+const admin: { security: Record<string, string[]>[] } = { security: [{ bearerAuth: [] }] };
+const refused = {
+  401: error("Missing or invalid API key"),
+  403: error("Not allowed"),
+};
+
 export const health = createRoute({
   method: "get",
   path: "/health",
@@ -30,18 +40,23 @@ export const health = createRoute({
 export const listSurveys = createRoute({
   method: "get",
   path: "/surveys",
+  ...admin,
   tags: ["Surveys"],
   summary: "List surveys",
-  responses: { 200: json(SurveyList, "Survey summaries, most recently updated first") },
+  responses: {
+    ...refused,
+    200: json(SurveyList, "Survey summaries, most recently updated first") },
 });
 
 export const createSurvey = createRoute({
   method: "post",
   path: "/surveys",
+  ...admin,
   tags: ["Surveys"],
   summary: "Create a survey",
   request: { body: { ...json(Survey, "Survey definition"), required: true } },
   responses: {
+    ...refused,
     201: json(Survey, "Created"),
     400: error("Invalid survey JSON"),
     409: error("A survey with this id already exists"),
@@ -60,10 +75,12 @@ export const getSurvey = createRoute({
 export const putSurvey = createRoute({
   method: "put",
   path: "/surveys/{id}",
+  ...admin,
   tags: ["Surveys"],
   summary: "Create or replace a survey",
   request: { params: SurveyIdParam, body: { ...json(Survey, "Survey definition"), required: true } },
   responses: {
+    ...refused,
     200: json(Survey, "Saved"),
     400: error("Invalid survey JSON, or the body id does not match the path"),
   },
@@ -72,10 +89,12 @@ export const putSurvey = createRoute({
 export const deleteSurvey = createRoute({
   method: "delete",
   path: "/surveys/{id}",
+  ...admin,
   tags: ["Surveys"],
   summary: "Delete a survey and its responses",
   request: { params: SurveyIdParam },
-  responses: { 204: { description: "Deleted" }, 404: error("Not found") },
+  responses: {
+    ...refused, 204: { description: "Deleted" }, 404: error("Not found") },
 });
 
 export const submitResponse = createRoute({
@@ -95,10 +114,13 @@ export const submitResponse = createRoute({
 export const listResponses = createRoute({
   method: "get",
   path: "/surveys/{id}/responses",
+  ...admin,
   tags: ["Responses"],
   summary: "List responses",
   request: { params: SurveyIdParam, query: Pagination },
-  responses: { 200: json(ResponseList, "Responses, newest first"), 404: error("Survey not found") },
+  responses: {
+    ...refused,
+    200: json(ResponseList, "Responses, newest first"), 404: error("Survey not found") },
 });
 
 export const uploadFile = createRoute({
