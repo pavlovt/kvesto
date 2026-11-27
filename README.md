@@ -35,6 +35,8 @@ apps/editor and apps/dashboard are SvelteKit demos around them.
 | [`packages/server`](packages/server) | REST API built with Hono, `@hono/zod-openapi` and Drizzle ORM on SQLite. Interactive docs at `/docs`. |
 | [`packages/editor`](packages/editor) | `@kvesto/editor`: the embeddable survey editor (JSON editor, question palette, live preview) as a Svelte 5 component and a standalone bundle. |
 | [`packages/dashboard`](packages/dashboard) | `@kvesto/dashboard`: the embeddable results dashboard as Svelte 5 components and a standalone bundle. |
+| [`packages/react`](packages/react) | `@kvesto/react`: a `useSurvey` hook and a `<Survey>` component. |
+| [`packages/vue`](packages/vue) | `@kvesto/vue`: a `useSurvey` composable and a `<Survey>` component. |
 | [`apps/editor`](apps/editor) | SvelteKit demo app around `@kvesto/editor`. |
 | [`apps/dashboard`](apps/dashboard) | SvelteKit demo app around `@kvesto/dashboard`. |
 
@@ -96,6 +98,21 @@ renderSurvey(el, await loadSurvey("customer-feedback", { storage }));
 
 `SurveyModel` is DOM-free and its `subscribe` follows the Svelte store contract, so you can drive your own UI in
 React, Vue or Svelte instead of using the bundled renderer.
+
+### In plain HTML or any framework: `<kvesto-survey>`
+
+```html
+<script type="module">
+  import { defineSurveyElement } from "https://cdn.jsdelivr.net/npm/kvesto/dist/index.js";
+  defineSurveyElement();
+</script>
+<kvesto-survey api="https://example.com/api" survey-id="customer-feedback" locale="de" theme="auto"></kvesto-survey>
+```
+
+The element also takes the survey as an inline `<script type="application/json">` child or as its `survey`
+property, any other option as its `options` property, and fires `kvesto-complete` and `kvesto-change` events. It
+renders into its own children, so your stylesheets apply. For React and Vue there are `@kvesto/react` and
+`@kvesto/vue`: a `<Survey>` component and a `useSurvey` hook or composable each.
 
 ### Survey JSON
 

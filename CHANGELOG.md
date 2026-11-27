@@ -1,6 +1,6 @@
 # Changelog
 
-All six packages (`kvesto`, `@kvesto/schema`, `core`, `server`, `editor`, `dashboard`) share one version.
+All packages (`kvesto`, `@kvesto/schema`, `core`, `server`, `editor`, `dashboard`, `react`, `vue`) share one version.
 
 ## Unreleased
 
@@ -42,6 +42,8 @@ All six packages (`kvesto`, `@kvesto/schema`, `core`, `server`, `editor`, `dashb
 - Accessibility audit (M25): axe-core checks on every question type and every editor tab, an error summary with links,
   errors tied to their inputs, `autocomplete` on text questions, a typed signature, announced ranking moves, 24-pixel
   targets, `lang` on the survey, and ACCESSIBILITY.md with the keyboard map and a conformance report.
+- Framework wrappers (M26): a `<kvesto-survey>` custom element (`defineSurveyElement`), and new `@kvesto/react` and
+  `@kvesto/vue` packages with a `<Survey>` component and a `useSurvey` hook or composable, in the release workflow.
 
 ## 0.2.0
 

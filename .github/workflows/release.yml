@@ -45,12 +45,12 @@ jobs:
       - name: Pack
         run: |
           mkdir -p .release
-          for d in schema core server kvesto editor dashboard; do (cd packages/$d && pnpm pack --pack-destination ../../.release); done
+          for d in schema core server kvesto editor dashboard react vue; do (cd packages/$d && pnpm pack --pack-destination ../../.release); done
           ls -l .release
 
       - name: Publish (skips versions already on npm)
         run: |
-          for d in schema core server kvesto editor dashboard; do
+          for d in schema core server kvesto editor dashboard react vue; do
             name=$(node -p "require('./packages/$d/package.json').name")
             version=$(node -p "require('./packages/$d/package.json').version")
             if npm view "$name@$version" version >/dev/null 2>&1; then
