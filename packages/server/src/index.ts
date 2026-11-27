@@ -1,6 +1,7 @@
 export { createApp, isRespondentRoute, type CreateAppOptions, type KvestoApp, type UploadOptions } from "./app.js";
 export { checkUploadType, safeFileName, sniffType } from "./uploads.js";
-export { drizzleRepository, type StoredFile, type SurveyRepository } from "./repository.js";
+export { drizzleRepository, type DrizzleRepository, type DrizzleRepositoryOptions, type StoredFile, type SurveyRepository } from "./repository.js";
+export { createEncryption, encryptionFromEnv, type Encryption, type EncryptionOptions } from "./encryption.js";
 export { createSqliteDb, type KvestoDb } from "./db/sqlite.js";
 export { guardOutboundUrl, isPrivateAddress, OutboundUrlError, type OutboundOptions } from "./outbound.js";
 export {

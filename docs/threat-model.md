@@ -46,4 +46,5 @@ as untrusted, what it defends against, and what it leaves to the system around i
 - `oneResponsePer: "browser"` is best effort: it relies on an id in the browser's storage.
 - Rate limits are off in `createApp` unless set (the `kvesto-server` command turns them on), and the default store is
   per process.
-- Until M38 answers are stored in plain text in the database.
+- Answers are encrypted at rest only for `pii` questions, and only when the repository has `encryption` keys.
+  The server holds the keys, so a compromised server can read everything; end-to-end encryption is not built yet.

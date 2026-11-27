@@ -29,6 +29,25 @@ KVESTO_ADMIN_ORIGINS=https://admin.example.com npx kvesto-server  # sites that m
 - Outbound requests (webhooks) go only to public HTTPS addresses, checked again after DNS resolution, with no
   redirects followed.
 
+## Encryption at rest
+
+```ts
+const repository = drizzleRepository(createSqliteDb("kvesto.db"), {
+  encryption: { keys: { "2026-06": process.env.KEY_JUNE!, "2026-01": process.env.KEY_JAN! }, current: "2026-06" },
+});
+```
+
+Answers to `pii` questions and every uploaded file are stored encrypted (AES-256-GCM, 32-byte keys in base64). Each
+value records its key's id, so to rotate: add a new key and make it `current` (new values use it, old ones still
+read), run `repository.reencrypt()` (or `kvesto-server reencrypt`), then drop the old key. `reencrypt` also encrypts
+what was stored before encryption was on, or before a question was marked `pii`. `kvesto-server` reads the keys from
+`KVESTO_ENCRYPTION_KEYS=id:base64,id:base64` (the first one is current); make a key with
+`node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`.
+
+The API reads and checks answers in the clear, so this protects the database file and its backups, not a server
+whose keys are taken. File answers (name, type, URL) stay readable; the files themselves are encrypted. Encrypted
+answers can't be used in the `answer=` list filter.
+
 ## Uploads
 
 Every upload's real type is read from its first bytes. A file whose content doesn't match its declared type (HTML

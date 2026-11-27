@@ -3,6 +3,7 @@ import { serve } from "@hono/node-server";
 import { createApp } from "./app.js";
 import { apiKeyAuth } from "./auth.js";
 import { createSqliteDb } from "./db/sqlite.js";
+import { encryptionFromEnv } from "./encryption.js";
 import { drizzleRepository } from "./repository.js";
 
 const port = Number(process.env.PORT ?? 3000);
@@ -18,8 +19,19 @@ const adminOrigins = (process.env.KVESTO_ADMIN_ORIGINS ?? (keys.length ? "" : "h
   .map((o) => o.trim())
   .filter(Boolean);
 
+// `id:base64key,id:base64key` (32-byte keys, the first one current) encrypts pii answers and files at rest.
+const encryption = encryptionFromEnv(process.env.KVESTO_ENCRYPTION_KEYS);
+const repository = drizzleRepository(createSqliteDb(dbFile), encryption ? { encryption } : {});
+
+// `kvesto-server reencrypt`: encrypt everything with the current key, then exit.
+if (process.argv[2] === "reencrypt") {
+  const done = await repository.reencrypt();
+  console.log(`Re-encrypted ${done.responses} responses and ${done.files} files with key "${encryption!.current}"`);
+  process.exit(0);
+}
+
 const app = createApp({
-  repository: drizzleRepository(createSqliteDb(dbFile)),
+  repository,
   ...(keys.length ? { authorize: apiKeyAuth({ keys }) } : {}),
   adminCors: adminOrigins.length ? adminOrigins : false,
   // Rate limits are on unless KVESTO_RATE_LIMIT=off. Behind a proxy, set KVESTO_TRUST_PROXY to the number of proxies.

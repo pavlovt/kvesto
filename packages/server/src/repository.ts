@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { and, count, desc, eq, gte, inArray, lt, lte, or, sql } from "drizzle-orm";
 import type { SurveyStorage, SurveySummary } from "@kvesto/core";
-import { textOf, type ResponseInput, type Survey, type SurveyResponse } from "@kvesto/schema";
+import { textOf, walkElements, type Answers, type ResponseInput, type Survey, type SurveyResponse } from "@kvesto/schema";
+import { createEncryption, mapAnswerValues, openAnswers, type EncryptionOptions } from "./encryption.js";
 
 /** The survey's title in its default locale, for listings. */
 const titleOf = (survey: Survey) => textOf(survey.title, survey.defaultLocale, survey.defaultLocale);
@@ -144,10 +145,76 @@ const byFilter = (surveyId: string, { status = "complete", hidden = {}, answers 
     ...(to ? [lte(responses.createdAt, to)] : []),
   );
 
-export function drizzleRepository(db: KvestoDb): SurveyRepository {
-  const now = () => new Date().toISOString();
+export interface DrizzleRepositoryOptions {
+  /** Encrypt answers to `pii` questions and uploaded files at rest. */
+  encryption?: EncryptionOptions;
+}
 
-  const repo: SurveyRepository = {
+export type DrizzleRepository = SurveyRepository & {
+  /**
+   * Encrypt everything again with the current key (and encrypt what was stored before encryption was on, or
+   * before a question was marked `pii`). Run it after adding a new current key, before dropping the old one.
+   */
+  reencrypt(): Promise<{ responses: number; files: number }>;
+};
+
+export function drizzleRepository(db: KvestoDb, options: DrizzleRepositoryOptions = {}): DrizzleRepository {
+  const now = () => new Date().toISOString();
+  const enc = options.encryption ? createEncryption(options.encryption) : null;
+  /** The survey's `pii` questions whose answers are encrypted. File answers stay as they are: the files are. */
+  const sealedQuestions = async (surveyId: string) => {
+    const ids = new Set<string>();
+    const survey = enc ? await repo.loadSurvey(surveyId) : null;
+    if (survey) {
+      walkElements(survey, (el) => {
+        if ("pii" in el && el.pii && el.type !== "file" && el.type !== "signature") ids.add(el.id);
+      });
+    }
+    return ids;
+  };
+  const seal = async (surveyId: string, answers: Answers): Promise<Answers> =>
+    enc ? (mapAnswerValues(answers, await sealedQuestions(surveyId), (v) => enc.sealValue(v)) as Answers) : answers;
+  const read = (row: typeof responses.$inferSelect): SurveyResponse =>
+    toResponse(enc ? { ...row, answers: openAnswers(enc, row.answers) as Answers } : row);
+
+  const repo: DrizzleRepository = {
+    async reencrypt() {
+      if (!enc) throw new Error("reencrypt needs the encryption option");
+      let changedResponses = 0;
+      for (const row of await db.select().from(responses).all()) {
+        let changed = false;
+        // Values under an older key move to the current one; values under the current key stay as they are.
+        const rekey = (v: unknown): unknown => {
+          if (typeof v === "string") {
+            const id = enc.keyOf(v);
+            if (id === null || id === enc.current) return v;
+            changed = true;
+            return enc.sealValue(enc.openValue(v));
+          }
+          if (Array.isArray(v)) return v.map(rekey);
+          if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, rekey(x)]));
+          return v;
+        };
+        // Then plaintext answers of `pii` questions (stored before encryption, or before the question was marked).
+        const answers = mapAnswerValues(rekey(row.answers) as Answers, await sealedQuestions(row.surveyId), (v) => {
+          if (enc.keyOf(v) !== null) return v;
+          changed = true;
+          return enc.sealValue(v);
+        }) as Answers;
+        if (!changed) continue;
+        await db.update(responses).set({ answers }).where(eq(responses.id, row.id)).run();
+        changedResponses++;
+      }
+      let changedFiles = 0;
+      for (const { id } of await db.select({ id: files.id }).from(files).all()) {
+        const row = (await db.select({ data: files.data }).from(files).where(eq(files.id, id)).get())!;
+        const data = new Uint8Array(row.data);
+        if (enc.keyOf(data) === enc.current) continue;
+        await db.update(files).set({ data: enc.sealBytes(enc.openBytes(data)) }).where(eq(files.id, id)).run();
+        changedFiles++;
+      }
+      return { responses: changedResponses, files: changedFiles };
+    },
     async surveyExists(id) {
       return (await db.select({ id: surveys.id }).from(surveys).where(eq(surveys.id, id)).get()) !== undefined;
     },
@@ -193,7 +260,7 @@ export function drizzleRepository(db: KvestoDb): SurveyRepository {
       const row = {
         id: randomUUID(),
         surveyId,
-        answers: input.answers,
+        answers: await seal(surveyId, input.answers),
         meta: input.meta ?? null,
         status: "complete" as const,
         createdAt: ts,
@@ -203,14 +270,14 @@ export function drizzleRepository(db: KvestoDb): SurveyRepository {
         respondentKey: opts?.respondent?.key ?? null,
       };
       await db.insert(responses).values(row).run();
-      return toResponse(row);
+      return toResponse({ ...row, answers: input.answers });
     },
     async savePartialResponse(surveyId, input, tokenHash, respondent) {
       const ts = now();
       const row = {
         id: randomUUID(),
         surveyId,
-        answers: input.answers,
+        answers: await seal(surveyId, input.answers),
         meta: input.meta ?? null,
         status: "partial" as const,
         createdAt: ts,
@@ -220,7 +287,7 @@ export function drizzleRepository(db: KvestoDb): SurveyRepository {
         respondentKey: respondent?.key ?? null,
       };
       await db.insert(responses).values(row).run();
-      return toResponse(row);
+      return toResponse({ ...row, answers: input.answers });
     },
     async loadResponse(surveyId, responseId) {
       const row = await db
@@ -228,13 +295,13 @@ export function drizzleRepository(db: KvestoDb): SurveyRepository {
         .from(responses)
         .where(and(eq(responses.surveyId, surveyId), eq(responses.id, responseId)))
         .get();
-      return row ? { response: toResponse(row), tokenHash: row.resumeTokenHash } : null;
+      return row ? { response: read(row), tokenHash: row.resumeTokenHash } : null;
     },
     async updateResponse(surveyId, responseId, input) {
       const status = input.status ?? "complete";
       await db
         .update(responses)
-        .set({ answers: input.answers, meta: input.meta ?? null, status, updatedAt: now() })
+        .set({ answers: await seal(surveyId, input.answers), meta: input.meta ?? null, status, updatedAt: now() })
         .where(and(eq(responses.surveyId, surveyId), eq(responses.id, responseId)))
         .run();
       return (await this.loadResponse(surveyId, responseId))!.response;
@@ -249,7 +316,7 @@ export function drizzleRepository(db: KvestoDb): SurveyRepository {
       const where = and(eq(responses.surveyId, surveyId), lt(responses.createdAt, before));
       const rows = await db.select().from(responses).where(where).all();
       if (rows.length) await db.delete(responses).where(where).run();
-      return rows.map(toResponse);
+      return rows.map(read);
     },
     async deleteFiles(surveyId, fileIds) {
       if (!fileIds.length) return 0;
@@ -280,11 +347,11 @@ export function drizzleRepository(db: KvestoDb): SurveyRepository {
         .limit(limit)
         .offset(after ? 0 : offset)
         .all();
-      return rows.map(toResponse);
+      return rows.map(read);
     },
     async listResponses(surveyId) {
       const rows = await db.select().from(responses).where(eq(responses.surveyId, surveyId)).all();
-      return rows.map(toResponse);
+      return rows.map(read);
     },
     async createWebhook(input) {
       const row = { ...input, id: randomUUID(), createdAt: now() };
@@ -339,7 +406,7 @@ export function drizzleRepository(db: KvestoDb): SurveyRepository {
     },
     async saveFile(input, data) {
       const file: StoredFile = { ...input, id: randomUUID(), createdAt: now() };
-      await db.insert(files).values({ ...file, data }).run();
+      await db.insert(files).values({ ...file, data: enc ? enc.sealBytes(data) : data }).run();
       return file;
     },
     async fileBytes(surveyId) {
@@ -376,7 +443,7 @@ export function drizzleRepository(db: KvestoDb): SurveyRepository {
         .get();
       if (!row) return null;
       const { data, ...file } = row;
-      return { file, data: new Uint8Array(data) };
+      return { file, data: enc ? enc.openBytes(new Uint8Array(data)) : new Uint8Array(data) };
     },
   };
   return repo;
