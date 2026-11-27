@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { ElementInput, PanelInput } from "@kvesto/core";
+  import { textOf, type ElementInput, type PanelInput } from "@kvesto/core";
   import { tick } from "svelte";
   import type { Container, DocumentState, SurveyDocument } from "../doc/document.js";
   import { containerKey, sameTarget } from "../doc/positions.js";
@@ -12,7 +12,8 @@
     drag.root = root ?? null;
   });
 
-  const label = (el: ElementInput) => ("title" in el && el.title ? el.title : el.id);
+  const label = (el: ElementInput) => ("title" in el && el.title ? textOf(el.title as string, defaultLocale, defaultLocale) || el.id : el.id);
+  const defaultLocale = $derived(view.survey.defaultLocale ?? "en");
   const kind = (el: ElementInput) => (el.type === "panel" ? ((el as PanelInput).repeat ? "repeat" : "panel") : el.type);
   const children = (el: ElementInput) => (el as PanelInput).elements;
   const at = (container: Container, index: number) => sameTarget(drag.target, { container, index });

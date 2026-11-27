@@ -315,6 +315,48 @@ createApp({ repository, authorize, validators });          // on the server
 
 A `custom` validator whose function isn't registered never passes, so a missing registration can't let bad data in.
 
+#### Languages
+
+Any text in a survey can be a plain string (in the survey's `defaultLocale`, "en" unless set) or an object per
+locale. Pick the locale when creating the runner:
+
+```json
+{ "defaultLocale": "en", "locales": ["en", "de"],
+  "title": { "en": "Feedback", "de": "Rückmeldung" },
+  "pages": [{ "id": "p1", "elements": [
+    { "id": "name", "type": "text", "title": { "en": "Your name", "de": "Ihr Name" } } ] }] }
+```
+
+```ts
+mountSurvey(el, { survey, locale: "de" }); // also createSurvey({ survey, locale })
+```
+
+`detectLocale(survey, { url: location.href, languages: navigator.languages })` picks one of the survey's
+`locales` from a `?lang=` URL parameter (opt-in, by passing `url`) or the browser's languages. A missing translation
+falls back to the language (`pt` for `pt-BR`), then to the default locale. The runner's
+buttons and the validation messages come in English, Bulgarian, German, French, Spanish, Italian, Portuguese,
+Dutch, Polish, Russian, Chinese and Japanese; `addLocalePack(locale, { labels, messages })` adds or overrides one.
+The server answers with messages in the first `Accept-Language` the survey offers, and the dashboard takes a
+`locale` too.
+
+**Translating.** The editor's Translations tab lists every text per language, highlights the missing ones, and
+exports and imports them as CSV, XLIFF 2.0 or JSON. The JSON file says what to translate and what to keep, so it can
+be handed straight to an AI tool. Pass a `translate` function to the editor to fill a language with machine
+translations:
+
+```ts
+mountEditor(el, {
+  survey,
+  // texts by key in, translations by key out: call any AI model or translation service here.
+  translate: async (texts, from, to) => myAi.translate(texts, from, to),
+});
+```
+
+Machine-translated texts are marked "to review" (in `translationsToReview`) until someone confirms them. A
+translation that drops or changes an answer placeholder such as `{name}` is refused and reported, on import and from
+`translate` alike. The same tools work without the editor: `translationTable`, `exportTranslations`,
+`importTranslations`, `translateSurvey` and `markReviewed` in `@kvesto/core`.
+
 #### One question at a time
 
 Set `"settings": { "layout": "question" }` on the survey, or pass `layout: "question"` to `mountSurvey` /

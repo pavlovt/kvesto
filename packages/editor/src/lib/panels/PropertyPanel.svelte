@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { gridCellQuestion, type Choice, type GridColumn, type Question, type Validator } from "@kvesto/core";
+  import { gridCellQuestion, textOf, withText, type Choice, type GridColumn, type Question, type Validator } from "@kvesto/core";
   import type { DocumentState, SurveyDocument } from "../doc/document.js";
   import type { Condition, Trigger } from "@kvesto/core";
   import ChoiceList from "./ChoiceList.svelte";
@@ -26,11 +26,20 @@
     idError = "";
   });
 
+  // Display text may be translated (an object per locale): fields show and edit the default locale's text.
+  const dl = $derived(((view.survey as Loose).defaultLocale ?? "en") as string);
+  const tx = (v: unknown) => textOf(v as string | undefined, dl, dl);
+  const isLocalized = (v: unknown) =>
+    typeof v === "object" && v !== null && !Array.isArray(v) && Object.values(v).every((x) => typeof x === "string");
+  /** The new value of a text field: keeps the other locales of a translated text. */
+  const textValue = (old: unknown, value: unknown) =>
+    typeof value === "string" && isLocalized(old) ? withText(old as Record<string, string>, dl, value, dl) : value;
   const set = (key: string, value: unknown) => {
     if (!el) return;
-    doc.updateElement(el.id, { [key]: value === "" ? undefined : value }, { mergeKey: `${el.id}.${key}` });
+    const next = textValue(el[key], value);
+    doc.updateElement(el.id, { [key]: next === "" ? undefined : next }, { mergeKey: `${el.id}.${key}` });
   };
-  const setTitle = (value: string) => el && doc.updateElement(el.id, { title: value }, { mergeKey: `${el.id}.title` });
+  const setTitle = (value: string) => el && doc.updateElement(el.id, { title: textValue(el.title, value) }, { mergeKey: `${el.id}.title` });
   const num = (s: string) => (s.trim() === "" ? undefined : Number(s));
   function rename() {
     if (!el || idDraft === el.id) return;
@@ -44,15 +53,21 @@
     el && doc.updateElement(el.id, { [key]: c }, typing ? { mergeKey: `${el.id}.${key}` } : {});
   const setPageCondition = (id: string, c: Condition | undefined, typing: boolean) =>
     doc.updatePage(id, { visibleIf: c }, typing ? { mergeKey: `page.${id}.visibleIf` } : {});
-  const setSurvey = (key: string, value: string) =>
-    doc.updateSurvey({ [key]: value === "" && key !== "title" ? undefined : value }, { mergeKey: `survey.${key}` });
-  const setPage = (id: string, key: string, value: string) =>
-    doc.updatePage(id, { [key]: value === "" ? undefined : value }, { mergeKey: `page.${id}.${key}` });
+  const setSurvey = (key: string, value: string) => {
+    const next = textValue((view.survey as Loose)[key], value);
+    doc.updateSurvey({ [key]: next === "" && key !== "title" ? undefined : next }, { mergeKey: `survey.${key}` });
+  };
+  const setPage = (id: string, key: string, value: string) => {
+    const page = view.survey.pages.find((p) => p.id === id) as Loose | undefined;
+    const next = textValue(page?.[key], value);
+    doc.updatePage(id, { [key]: next === "" ? undefined : next }, { mergeKey: `page.${id}.${key}` });
+  };
   const setRepeat = (key: string, value: unknown) => {
     if (!el) return;
     const next: Loose = { ...(el.repeat ?? {}) };
-    if (value === undefined || value === "") delete next[key];
-    else next[key] = value;
+    const v = textValue(next[key], value);
+    if (v === undefined || v === "") delete next[key];
+    else next[key] = v;
     set("repeat", next);
   };
   const editColumn = (i: number, patch: Loose) => {
@@ -105,17 +120,17 @@
       h3 'Survey'
       label {
         span 'Title'
-        input value={view.survey.title} oninput={(e) => setSurvey("title", e.currentTarget.value)}
+        input value={tx(view.survey.title)} oninput={(e) => setSurvey("title", e.currentTarget.value)}
       }
       label {
         span 'Description'
-        textarea rows=2 value={view.survey.description ?? ""} oninput={(e) => setSurvey("description", e.currentTarget.value)}
+        textarea rows=2 value={tx(view.survey.description)} oninput={(e) => setSurvey("description", e.currentTarget.value)}
       }
       h3 'Pages'
       each view.survey.pages as page, pi (page.id) {
         label {
           span '{page.id}'
-          input value={page.title ?? ""} placeholder="Page title" oninput={(e) => setPage(page.id, "title", e.currentTarget.value)}
+          input value={tx(page.title)} placeholder="Page title" oninput={(e) => setPage(page.id, "title", e.currentTarget.value)}
         }
         if pi > 0 {
           .kv-props-logic {
@@ -164,7 +179,7 @@
         if el.type === "content" {
           label {
             span 'Text'
-            textarea.kv-props-markdown rows=6 value={el.markdown ?? ""} oninput={(e) => set("markdown", e.currentTarget.value)}
+            textarea.kv-props-markdown rows=6 value={tx(el.markdown)} oninput={(e) => set("markdown", e.currentTarget.value)}
           }
           p.kv-props-hint 'Markdown: **bold**, *italic*, [link](https://…), - lists, 1. lists. Answers: {"{questionId}"}.'
         } else {
@@ -174,7 +189,7 @@
           }
           label {
             span 'Alt text'
-            input value={el.alt ?? ""} placeholder="Describe the image" oninput={(e) => doc.updateElement(el.id, { alt: e.currentTarget.value }, { mergeKey: `${el.id}.alt` })}
+            input value={tx(el.alt)} placeholder="Describe the image" oninput={(e) => doc.updateElement(el.id, { alt: textValue(el.alt, e.currentTarget.value) }, { mergeKey: `${el.id}.alt` })}
           }
           label {
             span 'Width'
@@ -193,7 +208,7 @@
       } else {
       label {
         span 'Title'
-        input value={el.title ?? ""} oninput={(e) => (el.type === "panel" ? set("title", e.currentTarget.value) : setTitle(e.currentTarget.value))}
+        input value={tx(el.title)} oninput={(e) => (el.type === "panel" ? set("title", e.currentTarget.value) : setTitle(e.currentTarget.value))}
       }
       if pipeSources.length {
         select.kv-props-pipe aria-label="Insert an earlier answer into the title" onchange={(e) => insertAnswer(e.currentTarget)} {
@@ -205,7 +220,7 @@
       }
       label {
         span 'Description'
-        textarea rows=2 value={el.description ?? ""} oninput={(e) => set("description", e.currentTarget.value)}
+        textarea rows=2 value={tx(el.description)} oninput={(e) => set("description", e.currentTarget.value)}
       }
       h4 'Logic'
       ConditionBuilder(
@@ -275,11 +290,11 @@
         }
         label {
           span 'Prefix'
-          input value={el.prefix ?? ""} oninput={(e) => set("prefix", e.currentTarget.value)}
+          input value={tx(el.prefix)} oninput={(e) => set("prefix", e.currentTarget.value)}
         }
         label {
           span 'Suffix'
-          input value={el.suffix ?? ""} oninput={(e) => set("suffix", e.currentTarget.value)}
+          input value={tx(el.suffix)} oninput={(e) => set("suffix", e.currentTarget.value)}
         }
       }
 
@@ -296,7 +311,7 @@
       if el.type === "text" || el.type === "comment" {
         label {
           span 'Placeholder'
-          input value={el.placeholder ?? ""} oninput={(e) => set("placeholder", e.currentTarget.value)}
+          input value={tx(el.placeholder)} oninput={(e) => set("placeholder", e.currentTarget.value)}
         }
       }
       if el.type === "comment" {
@@ -318,16 +333,16 @@
       if el.type === "boolean" {
         label {
           span 'Yes label'
-          input value={el.labelTrue ?? ""} placeholder="Yes" oninput={(e) => set("labelTrue", e.currentTarget.value)}
+          input value={tx(el.labelTrue)} placeholder="Yes" oninput={(e) => set("labelTrue", e.currentTarget.value)}
         }
         label {
           span 'No label'
-          input value={el.labelFalse ?? ""} placeholder="No" oninput={(e) => set("labelFalse", e.currentTarget.value)}
+          input value={tx(el.labelFalse)} placeholder="No" oninput={(e) => set("labelFalse", e.currentTarget.value)}
         }
       }
       if "choices" in el && el.type !== "grid" {
         h4 'Choices'
-        ChoiceList items={el.choices as Choice[]} min={el.type === "ranking" ? 2 : 1} images={el.type === "image-choice"} onchange={(items) => set("choices", items)}
+        ChoiceList defaultLocale={dl} items={el.choices as Choice[]} min={el.type === "ranking" ? 2 : 1} images={el.type === "image-choice"} onchange={(items) => set("choices", items)}
       }
       if el.type === "dropdown" {
         label.kv-props-check {
@@ -353,7 +368,7 @@
       }
       if el.type === "multi-text" {
         h4 'Fields'
-        ChoiceList items={el.items as Choice[]} noun="field" onchange={(items) => set("items", items)}
+        ChoiceList defaultLocale={dl} items={el.items as Choice[]} noun="field" onchange={(items) => set("items", items)}
       }
       if el.type === "slider" {
         label {
@@ -370,16 +385,16 @@
         }
         label {
           span 'Unit'
-          input value={el.unit ?? ""} placeholder="%" oninput={(e) => set("unit", e.currentTarget.value)}
+          input value={tx(el.unit)} placeholder="%" oninput={(e) => set("unit", e.currentTarget.value)}
         }
       }
       if el.type === "matrix" || el.type === "grid" {
         h4 'Rows'
-        ChoiceList items={el.rows as Choice[]} noun="row" onchange={(items) => set("rows", items)}
+        ChoiceList defaultLocale={dl} items={el.rows as Choice[]} noun="row" onchange={(items) => set("rows", items)}
       }
       if el.type === "matrix" {
         h4 'Columns'
-        ChoiceList items={el.columns as Choice[]} noun="column" onchange={(items) => set("columns", items)}
+        ChoiceList defaultLocale={dl} items={el.columns as Choice[]} noun="column" onchange={(items) => set("columns", items)}
         label.kv-props-check {
           input type=checkbox checked={Boolean(el.multiple)} onchange={(e) => set("multiple", e.currentTarget.checked || undefined)}
           span 'Several answers per row'
@@ -410,7 +425,7 @@
               span 'Required in each row'
             }
             if col.cellType === "dropdown" {
-              ChoiceList items={col.choices ?? []} onchange={(items) => editColumn(ci, { choices: items })}
+              ChoiceList defaultLocale={dl} items={col.choices ?? []} onchange={(items) => editColumn(ci, { choices: items })}
             }
             if col.cellType === "text" || col.cellType === "number" {
               ValidatorList(
@@ -467,11 +482,11 @@
           }
           label {
             span 'Item title'
-            input value={el.repeat.itemTitle ?? ""} placeholder={"Item {n}"} oninput={(e) => setRepeat("itemTitle", e.currentTarget.value)}
+            input value={tx(el.repeat.itemTitle)} placeholder={"Item {n}"} oninput={(e) => setRepeat("itemTitle", e.currentTarget.value)}
           }
           label {
             span 'Add button'
-            input value={el.repeat.addLabel ?? ""} placeholder="Add" oninput={(e) => setRepeat("addLabel", e.currentTarget.value)}
+            input value={tx(el.repeat.addLabel)} placeholder="Add" oninput={(e) => setRepeat("addLabel", e.currentTarget.value)}
           }
         }
       }

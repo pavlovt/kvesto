@@ -1,4 +1,5 @@
 import {
+  textOf,
   signatureFileRules,
   gridCellQuestion,
   isQuestion,
@@ -16,6 +17,7 @@ import {
 import { isEmptyAnswer, repeatItems, resolveLogic, type LogicOptions, type SurveyLogic } from "./logic.js";
 import { runValidators, type CustomValidators } from "./validators.js";
 import { questionType } from "./question-types.js";
+import { message } from "./i18n.js";
 import { compileExpression, evaluateNode, isEmptyValue, surveyVariables, toAnswerValue, toNumber, type EvaluateOptions } from "./expression.js";
 
 export interface ValidateOptions {
@@ -27,13 +29,15 @@ export interface ValidateOptions {
   answers?: Answers;
   /** Functions, variables and the repeat item for `expression` rules. */
   expression?: EvaluateOptions;
+  /** Locale of the messages (and of the labels inside them). Default English. */
+  locale?: string;
 }
 
 const cellTypeHint = {
-  text: "expected text.",
-  number: "enter a number.",
-  dropdown: "choose one of the options.",
-  boolean: "choose yes or no.",
+  text: "cellText",
+  number: "cellNumber",
+  dropdown: "cellDropdown",
+  boolean: "cellBoolean",
 } as const;
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -73,10 +77,10 @@ export function formatBytes(n: number): string {
 }
 
 /** Validates one file against a file question's limits. Returns an error message or null. */
-export function validateFile(question: FileQuestion, file: { name: string; type: string; size: number }): string | null {
-  if (!fileMatchesAccept(file, question.accept)) return `"${file.name}" is not an accepted file type.`;
+export function validateFile(question: FileQuestion, file: { name: string; type: string; size: number }, locale?: string): string | null {
+  if (!fileMatchesAccept(file, question.accept)) return message(locale, "fileType", { name: file.name });
   if (question.maxSize !== undefined && file.size > question.maxSize) {
-    return `"${file.name}" is larger than ${formatBytes(question.maxSize)}.`;
+    return message(locale, "fileSize", { name: file.name, size: formatBytes(question.maxSize) });
   }
   return null;
 }
@@ -88,7 +92,7 @@ export function validateFile(question: FileQuestion, file: { name: string; type:
  */
 export function validateAnswer(question: Question, value: AnswerValue | undefined, options: ValidateOptions = {}): string | null {
   const required = options.required ?? question.required ?? false;
-  if (isEmptyAnswer(value)) return required ? "This question is required." : null;
+  if (isEmptyAnswer(value)) return required ? message(options.locale, "required") : null;
   const shapeError = checkShape(question, value!, required, options);
   if (shapeError) return shapeError;
   return question.validators?.length
@@ -96,6 +100,7 @@ export function validateAnswer(question: Question, value: AnswerValue | undefine
         custom: options.validators,
         answers: options.answers ?? {},
         expression: options.expression,
+        locale: options.locale,
       })
     : null;
 }
@@ -115,6 +120,7 @@ export function defaultAnswer(question: Question, answers: Answers, expression: 
 const sameAnswer = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 
 function checkShape(question: Question, value: AnswerValue, required: boolean, options: ValidateOptions): string | null {
+  const L = options.locale;
   switch (question.type) {
     case "computed":
       // Worked out by resolveLogic, never typed in.
@@ -130,17 +136,17 @@ function checkShape(question: Question, value: AnswerValue, required: boolean, o
     case "dropdown":
       return typeof value === "string" && question.choices.some((c) => c.value === value)
         ? null
-        : "Choose one of the options.";
+        : message(L, "chooseOne");
     case "multiple-choice":
       return Array.isArray(value) && value.every((v) => question.choices.some((c) => c.value === v))
         ? null
-        : "Choose from the options.";
+        : message(L, "chooseMany");
     case "rating":
       return typeof value === "number" && Number.isInteger(value) && value >= question.min && value <= question.max
         ? null
-        : `Choose a rating from ${question.min} to ${question.max}.`;
+        : message(L, "rating", { min: question.min, max: question.max });
     case "boolean":
-      return typeof value === "boolean" ? null : "Choose yes or no.";
+      return typeof value === "boolean" ? null : message(L, "yesNo");
     case "matrix": {
       if (!isRecord(value)) return "Expected one answer per row.";
       const rows = new Set(question.rows.map((r) => r.value));
@@ -149,18 +155,18 @@ function checkShape(question: Question, value: AnswerValue, required: boolean, o
         if (!rows.has(row)) return `Unknown row "${row}".`;
         const picked = question.multiple ? cell : [cell];
         if (!Array.isArray(picked) || !picked.every((c) => typeof c === "string" && columns.has(c))) {
-          return question.multiple ? "Choose from the columns in each row." : "Choose one column in each row.";
+          return message(L, question.multiple ? "matrixMany" : "matrixOne");
         }
       }
       if (required) {
         const missing = question.rows.filter((r) => isEmptyAnswer(value[r.value] as AnswerValue | undefined));
-        if (missing.length) return `Answer every row (missing: ${missing.map((r) => r.label).join(", ")}).`;
+        if (missing.length) return message(L, "matrixMissing", { rows: missing.map((r) => textOf(r.label, L)).join(", ") });
       }
       return null;
     }
     case "grid": {
       if (!isRecord(value)) return "Expected one set of answers per row.";
-      const rows = new Map(question.rows.map((r) => [r.value, r.label]));
+      const rows = new Map(question.rows.map((r) => [r.value, textOf(r.label, L)]));
       const columns = new Map(question.columns.map((c) => [c.value, c]));
       for (const [row, cells] of Object.entries(value)) {
         if (!rows.has(row)) return `Unknown row "${row}".`;
@@ -177,24 +183,24 @@ function checkShape(question: Question, value: AnswerValue, required: boolean, o
                 : column.cellType === "dropdown"
                   ? typeof cell === "string" && (column.choices ?? []).some((c) => c.value === cell)
                   : typeof cell === "string";
-          if (!ok) return `${rows.get(row)}, ${column.label}: ${cellTypeHint[column.cellType]}`;
+          if (!ok) return message(L, cellTypeHint[column.cellType], { row: rows.get(row)!, column: textOf(column.label, L) });
           const err = column.validators?.length
             ? runValidators(gridCellQuestion(question, column), cell as AnswerValue, column.validators, {
                 custom: options.validators,
                 answers: options.answers ?? {},
               })
             : null;
-          if (err) return `${rows.get(row)}, ${column.label}: ${err}`;
+          if (err) return `${rows.get(row)}, ${textOf(column.label, L)}: ${err}`;
         }
         const filled = Object.values(cells).some((c) => !isEmptyAnswer(c as AnswerValue));
         for (const column of question.columns) {
           if (filled && column.required && isEmptyAnswer(cells[column.value] as AnswerValue | undefined)) {
-            return `${rows.get(row)}: ${column.label} is required.`;
+            return message(L, "cellRequired", { row: rows.get(row)!, column: textOf(column.label, L) });
           }
         }
       }
       if (required && !Object.values(value).some((cells) => isRecord(cells) && Object.values(cells).some((c) => !isEmptyAnswer(c as AnswerValue)))) {
-        return "This question is required.";
+        return message(L, "required");
       }
       return null;
     }
@@ -205,7 +211,7 @@ function checkShape(question: Question, value: AnswerValue, required: boolean, o
         value.length === expected.length &&
         value.every((v) => typeof v === "string" && expected.includes(v)) &&
         new Set(value as string[]).size === value.length;
-      return ok ? null : "Rank every item exactly once.";
+      return ok ? null : message(L, "rank");
     }
     case "multi-text": {
       if (!isRecord(value)) return "Expected one answer per field.";
@@ -215,11 +221,11 @@ function checkShape(question: Question, value: AnswerValue, required: boolean, o
         if (!item) return `Unknown field "${key}".`;
         if (typeof v !== "string") return `${item.label}: expected text.`;
         if (v === "") continue;
-        if (item.inputType === "number" && toNumber(v) === null) return `${item.label}: enter a number.`;
-        if (item.inputType === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return `${item.label}: enter a valid email address.`;
+        if (item.inputType === "number" && toNumber(v) === null) return message(L, "fieldNumber", { label: textOf(item.label, L) });
+        if (item.inputType === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return message(L, "fieldEmail", { label: textOf(item.label, L) });
       }
       for (const item of question.items) {
-        if (item.required && isEmptyAnswer(value[item.value] as AnswerValue | undefined)) return `${item.label} is required.`;
+        if (item.required && isEmptyAnswer(value[item.value] as AnswerValue | undefined)) return message(L, "fieldRequired", { label: textOf(item.label, L) });
       }
       return null;
     }
@@ -228,23 +234,23 @@ function checkShape(question: Question, value: AnswerValue, required: boolean, o
       const onStep = typeof value === "number" && Math.abs((value - min) / step - Math.round((value - min) / step)) < 1e-9;
       return typeof value === "number" && Number.isFinite(value) && value >= min && value <= max && onStep
         ? null
-        : `Choose a value from ${min} to ${max}${step !== 1 ? ` in steps of ${step}` : ""}.`;
+        : message(L, step !== 1 ? "sliderStep" : "slider", { min, max, step });
     }
     case "tags": {
       if (!Array.isArray(value) || !value.every((v) => typeof v === "string" && v.trim() !== "")) return "Expected a list of entries.";
       const known = new Set(question.choices.map((c) => c.value));
       for (const v of value as string[]) {
-        if (!known.has(v) && !question.allowCustom) return "Choose from the list.";
+        if (!known.has(v) && !question.allowCustom) return message(L, "tagsList");
         if (!known.has(v) && v.length > 200) return "Entries are limited to 200 characters.";
       }
-      if (new Set(value as string[]).size !== value.length) return "Each entry can be added once.";
-      if (question.maxTags !== undefined && value.length > question.maxTags) return `Add at most ${question.maxTags} entries.`;
+      if (new Set(value as string[]).size !== value.length) return message(L, "tagsOnce");
+      if (question.maxTags !== undefined && value.length > question.maxTags) return message(L, "tagsMax", { max: question.maxTags });
       return null;
     }
     case "image-choice": {
       const known = (v: unknown) => typeof v === "string" && question.choices.some((c) => c.value === v);
-      if (question.multiple) return Array.isArray(value) && value.every(known) ? null : "Choose from the pictures.";
-      return known(value) ? null : "Choose one of the pictures.";
+      if (question.multiple) return Array.isArray(value) && value.every(known) ? null : message(L, "pictureMany");
+      return known(value) ? null : message(L, "pictureOne");
     }
     default: {
       // A registered custom type (`x-…`).
@@ -257,11 +263,11 @@ function checkShape(question: Question, value: AnswerValue, required: boolean, o
     case "file": {
       if (!Array.isArray(value) || !value.every(isFileAnswer)) return "Expected uploaded files.";
       if (value.length > question.maxFiles) {
-        return question.maxFiles === 1 ? "Attach only one file." : `Attach at most ${question.maxFiles} files.`;
+        return question.maxFiles === 1 ? message(L, "fileOne") : message(L, "fileMax", { max: question.maxFiles });
       }
       for (const file of value) {
         const inline = dataUrlBytes(file.url);
-        const err = validateFile(question, inline === null ? file : { ...file, size: Math.max(file.size, inline) });
+        const err = validateFile(question, inline === null ? file : { ...file, size: Math.max(file.size, inline) }, L);
         if (err) return err;
       }
       return null;
@@ -286,7 +292,6 @@ export function itemKey(panelId: string, index: number, questionId: string): str
   return `${panelId}.${index}.${questionId}`;
 }
 
-const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 /**
  * Validate a repeating panel's answer: the number of items, and every visible
@@ -296,7 +301,7 @@ export function validateRepeat(
   panel: Panel,
   value: AnswerValue | undefined,
   logic: SurveyLogic,
-  options: Pick<ValidateOptions, "validators" | "expression"> & { strict?: boolean } = {},
+  options: Pick<ValidateOptions, "validators" | "expression" | "locale"> & { strict?: boolean } = {},
 ): AnswerIssue[] {
   const issues: AnswerIssue[] = [];
   const add = (questionId: string, message: string, path: (string | number)[]) => issues.push({ questionId, message, path });
@@ -306,8 +311,10 @@ export function validateRepeat(
   }
   const raw = repeatItems(value);
   const { min = 0, max } = panel.repeat ?? {};
-  if (raw.length < min) add(panel.id, `Add at least ${plural(min, "item", "items")}.`, [panel.id]);
-  if (max !== undefined && raw.length > max) add(panel.id, `Add at most ${plural(max, "item", "items")}.`, [panel.id]);
+  const L = options.locale;
+  const unit = (n: number) => message(L, n === 1 ? "unitItem" : "unitItems");
+  if (raw.length < min) add(panel.id, message(L, "repeatMin", { n: min, unit: unit(min) }), [panel.id]);
+  if (max !== undefined && raw.length > max) add(panel.id, message(L, "repeatMax", { n: max, unit: unit(max) }), [panel.id]);
 
   const questions = panelQuestions<Element>(panel);
   const known = new Set(questions.map((q) => q.id));
@@ -325,6 +332,7 @@ export function validateRepeat(
         validators: options.validators,
         answers: { ...logic.answers, ...il.answers },
         expression: { ...options.expression, item: il.answers },
+        locale: L,
       });
       if (message) add(itemKey(panel.id, i, q.id), message, [panel.id, i, q.id]);
     }
@@ -355,7 +363,7 @@ export function validationTargets(elements: readonly Element[]): { questions: Qu
 export function validateAnswers(
   survey: Survey,
   answers: Answers,
-  options: Pick<ValidateOptions, "validators"> & LogicOptions = {},
+  options: Pick<ValidateOptions, "validators" | "locale"> & LogicOptions = {},
 ): { issues: AnswerIssue[]; answers: Answers } {
   const logic = resolveLogic(survey, answers, { functions: options.functions, now: options.now });
   const expression: EvaluateOptions = { functions: options.functions, now: options.now, variables: surveyVariables(survey) };
@@ -369,21 +377,22 @@ export function validateAnswers(
     // Read-only and disabled answers must be left as they started.
     if (q.type !== "computed" && logic.disabledQuestions.has(q.id) && !isEmptyValue(answers[q.id])) {
       if (!sameAnswer(answers[q.id], defaultAnswer(q, logic.answers, expression))) {
-        issues.push({ questionId: q.id, message: "This answer can't be changed.", path: [q.id] });
+        issues.push({ questionId: q.id, message: message(options.locale, "readOnly"), path: [q.id] });
         continue;
       }
     }
-    const message = validateAnswer(q, logic.answers[q.id], {
+    const error = validateAnswer(q, logic.answers[q.id], {
       required: logic.requiredQuestions.has(q.id),
       validators: options.validators,
       answers: logic.answers,
       expression,
+      locale: options.locale,
     });
-    if (message) issues.push({ questionId: q.id, message, path: [q.id] });
+    if (error) issues.push({ questionId: q.id, message: error, path: [q.id] });
   }
   for (const panel of repeats) {
     if (!logic.visiblePanels.has(panel.id)) continue;
-    issues.push(...validateRepeat(panel, answers[panel.id], logic, { validators: options.validators, expression, strict: true }));
+    issues.push(...validateRepeat(panel, answers[panel.id], logic, { validators: options.validators, expression, locale: options.locale, strict: true }));
   }
   return { issues, answers: logic.answers };
 }

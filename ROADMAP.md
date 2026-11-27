@@ -4,8 +4,8 @@ This is the plan for growing Kvesto from today's skeleton into a full survey too
 Each milestone is meant to be one focused change on `main`: it builds, type-checks and passes tests on its own, and
 can ship in a patch or minor release without waiting for the next one.
 
-> **Where we are now:** M19 (one question at a time) is the latest finished milestone. Next up:
-> M20 (localization). The [Status](#status) table at the bottom lists every milestone.
+> **Where we are now:** M20 (localization) is the latest finished milestone. Next up:
+> M21 (partial responses and resume). The [Status](#status) table at the bottom lists every milestone.
 
 Milestones marked **★** are ideas that go beyond the original feature list. They come from looking at how other
 form and survey tools solve the same problems (conversational forms, headless form renderers, open source
@@ -319,10 +319,12 @@ After that the phases can be taken in almost any order; dependencies are listed 
   locale packs: English, Bulgarian, German, French, Spanish, Italian, Portuguese, Dutch, Polish and Russian, plus
   Chinese and Japanese if they need nothing beyond translation (contributions welcome). Validation messages use the same packs. An
   editor translation tab lists every string per locale with missing ones highlighted.
-  - **Translation files:** every string exports to CSV and XLIFF and imports back, keyed by element id and
-    property, with a report of strings that no longer exist, so translators can work outside the editor.
+  - **Translation files:** every string exports to CSV, XLIFF and JSON and imports back, keyed by element id and
+    property, with a report of strings that no longer exist, so translators can work outside the editor. The JSON
+    file carries instructions, so it can be handed to an AI tool as it is.
   - **Machine-translated drafts:** an optional `translate(strings, from, to)` host hook fills a new locale with
-    drafts marked "needs review" until a person confirms them. Kvesto bundles no translation service.
+    drafts marked "needs review" until a person confirms them, from a "Translate with AI" button in the editor.
+    Kvesto bundles no translation service. A draft or an import that breaks an answer placeholder is refused.
   - **Formatting and choice of locale:** numbers, dates and piped values are formatted with `Intl` for the active
     locale; the locale can come from a `lang` URL parameter (opt-in) or the browser's language list.
 - **Depends on:** M1. Easier the earlier it lands, since every later milestone adds strings.
@@ -1179,6 +1181,7 @@ Decided:
 | M17 · Input question types | Done (unreleased). Built in to the schema rather than through the registry, so they get JSON Schema and server checks like the other built-ins |
 | M18 · Signature | Done (unreleased). Not yet: a keyboard alternative to drawing (planned with the accessibility audit, M25) |
 | M19 · One question at a time | Done (unreleased) |
-| M20 – M79 | Planned |
+| M20 · Localization | Done (unreleased). Not yet: Intl number and date formatting of piped values; rarely shown messages for malformed answers stay English |
+| M21 – M79 | Planned |
 
 Update this table as milestones land, with the release they shipped in.

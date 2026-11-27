@@ -5,6 +5,7 @@
  * survey JSON as authored.
  */
 import {
+  textOf,
   ExpressionError,
   parseExpression,
   safeExpressionRefs,
@@ -56,7 +57,7 @@ function walk(survey: SurveyInput): Walked[] {
   return out;
 }
 
-const labelOf = (el: Loose) => (typeof el.title === "string" && el.title ? el.title : el.id);
+const labelOf = (el: Loose) => textOf(el.title) || el.id;
 
 /**
  * The questions a condition on `owner` may use, in survey order: earlier
@@ -326,15 +327,15 @@ export function describeCondition(survey: SurveyInput, condition: Condition): st
     let subject = q ? labelOf(q) : `"${c.question}" (missing)`;
     if (c.row !== undefined) {
       const row = (q?.rows as { value: string; label: string }[] | undefined)?.find((r) => r.value === c.row);
-      subject += ` › ${row?.label ?? c.row}`;
+      subject += ` › ${row ? textOf(row.label) : c.row}`;
     }
     if (c.scope === "item") subject += " (same item)";
     const options: { value: string; label: string }[] = (q?.type === "matrix" ? q.columns : q?.choices) ?? [];
     const word = (v: ConditionValue) => {
-      if (typeof v === "boolean") return v ? (q?.labelTrue ?? "Yes") : (q?.labelFalse ?? "No");
+      if (typeof v === "boolean") return v ? textOf(q?.labelTrue) || "Yes" : textOf(q?.labelFalse) || "No";
       if (typeof v === "number") return String(v);
       const choice = options.find((o) => o.value === v);
-      return `"${choice?.label ?? v}"`;
+      return `"${choice ? textOf(choice.label) : v}"`;
     };
     if (c.op === "empty" || c.op === "notEmpty") return `${subject} ${PHRASES[c.op]}`;
     const value = c.value === undefined ? "…" : Array.isArray(c.value) ? c.value.map(word).join(", ") || "…" : word(c.value);

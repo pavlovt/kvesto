@@ -1,4 +1,4 @@
-import type { Survey, SurveyResponse } from "@kvesto/schema";
+import { textOf, type Survey, type SurveyResponse } from "@kvesto/schema";
 import { fileToDataUrl } from "../files.js";
 import { newId, type SurveyStorage } from "../storage.js";
 
@@ -43,7 +43,7 @@ export function localStorageStorage(options: LocalStorageOptions = {}): Required
       return index().flatMap((id) => {
         const s = read<Survey | null>(`survey:${id}`, null);
         return s
-          ? [{ id, title: s.title, responseCount: read<SurveyResponse[]>(`responses:${id}`, []).length }]
+          ? [{ id, title: textOf(s.title, s.defaultLocale, s.defaultLocale), responseCount: read<SurveyResponse[]>(`responses:${id}`, []).length }]
           : [];
       });
     },

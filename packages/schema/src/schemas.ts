@@ -7,18 +7,30 @@
 import { z } from "zod";
 import { isQuestion, walkElements } from "./elements.js";
 import { textPlaceholders } from "./placeholders.js";
+import { LOCALE_PATTERN, type LocalizedText } from "./i18n.js";
 import { ExpressionError, MAX_EXPRESSION_LENGTH, expressionRefs, parseExpression, type ExpressionRef } from "./expression.js";
 
 export const SURVEY_SCHEMA_VERSION = 1 as const;
 
+/** Text per locale: `{ "en": "Your name", "bg": "Вашето име" }`. */
+export const LocalizedTextSchema = z.record(z.string().regex(LOCALE_PATTERN, "Use a locale code such as en or pt-BR"), z.string());
+
 /**
  * Human-readable text shown to respondents (titles, descriptions, labels,
- * placeholders). A plain string today; localization will widen this one
- * schema to also accept per-locale strings, so every text field gets it at once.
+ * placeholders): a plain string in the survey's default locale, or an object
+ * of strings per locale.
  */
-export const DisplayTextSchema = z.string();
-/** Display text that must not be empty. */
-export const RequiredDisplayTextSchema = DisplayTextSchema.min(1);
+export const DisplayTextSchema = z.union([z.string(), LocalizedTextSchema]);
+/** Display text that must not be empty (in the default locale, or in some locale). */
+export const RequiredDisplayTextSchema = z.union([
+  z.string().min(1),
+  LocalizedTextSchema.refine((t) => Object.values(t).some((v) => v !== ""), "Text must not be empty"),
+]);
+/** Display text of at most `max` characters in each locale. */
+const boundedText = (max: number) =>
+  DisplayTextSchema.refine((t) => (typeof t === "string" ? [t] : Object.values(t)).every((v) => v.length <= max), {
+    message: `Text is limited to ${max} characters`,
+  });
 export type DisplayText = z.infer<typeof DisplayTextSchema>;
 
 const id = z
@@ -559,7 +571,7 @@ export const ContentElementSchema = z.object({
   type: z.literal("content"),
   id,
   visibleIf: ConditionSchema.optional(),
-  markdown: DisplayTextSchema.max(MAX_CONTENT_LENGTH).optional(),
+  markdown: boundedText(MAX_CONTENT_LENGTH).optional(),
   html: z.string().max(MAX_CONTENT_LENGTH).optional(),
 });
 
@@ -747,6 +759,12 @@ export const SurveySchema = z
     triggers: z.array(TriggerSchema).optional(),
     /** Presentation and behaviour settings. */
     settings: SurveySettingsSchema.optional(),
+    /** The locale of plain-string texts, and the fallback for missing translations. Default "en". */
+    defaultLocale: z.string().regex(LOCALE_PATTERN).optional(),
+    /** The locales this survey is translated into (the default locale included). */
+    locales: z.array(z.string().regex(LOCALE_PATTERN)).optional(),
+    /** Machine-translated texts that nobody has checked yet, as text keys per locale. Ignored by the runner. */
+    translationsToReview: z.record(z.string().regex(LOCALE_PATTERN), z.array(z.string())).optional(),
   })
   .superRefine((survey, ctx) => {
     // Questions seen so far, in survey order (conditions may only look back), with the repeating panel they are in.
@@ -871,14 +889,16 @@ export const SurveySchema = z
     };
     /** Answer placeholders in display text may only refer to earlier questions. Braces around anything else are plain text. */
     const checkText = (
-      text: string | undefined,
+      text: string | LocalizedText | undefined,
       path: (string | number)[],
       earlierOnly: Set<string>,
       repeat: string | undefined,
       { itemRefs = true } = {},
     ) => {
-      if (!text || !text.includes("{")) return;
-      const refs = textPlaceholders(text).filter(
+      if (!text) return;
+      const all = typeof text === "string" ? text : Object.values(text).join(" ");
+      if (!all.includes("{")) return;
+      const refs = textPlaceholders(all).filter(
         (r) => (questionIds.has(r.name) || (variableDeps.has(r.name) && !r.scope)) && (itemRefs || r.scope !== "item"),
       );
       for (const message of refProblems(refs, earlierOnly, repeat)) ctx.addIssue({ code: "custom", path, message });

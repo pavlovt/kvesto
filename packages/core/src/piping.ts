@@ -2,7 +2,7 @@
  * Answer piping: `{questionId}` placeholders in display text, filled with the
  * current answer. The result is plain text, never HTML.
  */
-import { allQuestions, isCustomQuestion, replacePlaceholders, type Answers, type Question, type Survey } from "@kvesto/schema";
+import { allQuestions, isCustomQuestion, replacePlaceholders, textOf, type Answers, type LocalizedText, type Question, type Survey } from "@kvesto/schema";
 
 export interface PipeOptions {
   /** Answers of the current item of a repeating panel, for `{$item.q}`. */
@@ -29,26 +29,26 @@ const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "obj
 /** An answer as text: choice values become their labels, lists are joined with commas. */
 export function formatAnswer(question: Question | undefined, value: unknown, path: string[] = [], options: PipeOptions = {}): string {
   if (value === undefined || value === null) return "";
-  const yesNo = (b: boolean, q?: { labelTrue?: string; labelFalse?: string }) =>
-    b ? (q?.labelTrue ?? options.yes ?? "Yes") : (q?.labelFalse ?? options.no ?? "No");
+  const yesNo = (b: boolean, q?: { labelTrue?: string | LocalizedText; labelFalse?: string | LocalizedText }) =>
+    b ? (q?.labelTrue ? textOf(q.labelTrue) : (options.yes ?? "Yes")) : q?.labelFalse ? textOf(q.labelFalse) : (options.no ?? "No");
   if (path.length) {
     let v: unknown = value;
     for (const p of path) v = isRecord(v) ? v[p] : undefined;
     if (v === undefined || v === null) return "";
     if (question?.type === "matrix") {
-      const label = (c: unknown) => question.columns.find((x) => x.value === c)?.label ?? String(c);
+      const label = (c: unknown) => textOf(question.columns.find((x) => x.value === c)?.label) || String(c);
       return Array.isArray(v) ? v.map(label).join(", ") : label(v);
     }
     if (typeof v === "boolean") return yesNo(v);
     if (question?.type === "grid" && path.length === 2) {
       const column = question.columns.find((c) => c.value === path[1]);
-      if (column?.cellType === "dropdown") return column.choices?.find((c) => c.value === v)?.label ?? String(v);
+      if (column?.cellType === "dropdown") return textOf(column.choices?.find((c) => c.value === v)?.label) || String(v);
     }
     return typeof v === "object" ? "" : String(v);
   }
   if (question?.type === "computed") return formatComputed(question, value);
   if (question && !isCustomQuestion(question) && "choices" in question) {
-    const label = (c: unknown) => question.choices.find((x) => x.value === c)?.label ?? String(c);
+    const label = (c: unknown) => textOf(question.choices.find((x) => x.value === c)?.label) || String(c);
     return Array.isArray(value) ? value.map(label).join(", ") : label(value);
   }
   if (typeof value === "boolean") return yesNo(value, question?.type === "boolean" ? question : undefined);
@@ -60,7 +60,10 @@ export function formatAnswer(question: Question | undefined, value: unknown, pat
 }
 
 /** A computed question's value for display: rounded to `decimals`, between `prefix` and `suffix`. */
-export function formatComputed(question: { decimals?: number; prefix?: string; suffix?: string }, value: unknown): string {
+export function formatComputed(
+  question: { decimals?: number; prefix?: string | LocalizedText; suffix?: string | LocalizedText },
+  value: unknown,
+): string {
   if (value === undefined || value === null || value === "") return "";
   const text =
     typeof value === "number" && question.decimals !== undefined
@@ -68,7 +71,7 @@ export function formatComputed(question: { decimals?: number; prefix?: string; s
       : Array.isArray(value)
         ? value.join(", ")
         : String(value);
-  return `${question.prefix ?? ""}${text}${question.suffix ?? ""}`;
+  return `${textOf(question.prefix)}${text}${textOf(question.suffix)}`;
 }
 
 /**
@@ -77,9 +80,9 @@ export function formatComputed(question: { decimals?: number; prefix?: string; s
  * hidden question pipes as empty. Placeholders whose name is not a question
  * are left as they are, and `{{` / `}}` give literal braces.
  */
-export function pipeText(text: string, survey: Survey, answers: Answers, options: PipeOptions = {}): string {
+export function pipeText(text: string | LocalizedText, survey: Survey, answers: Answers, options: PipeOptions = {}): string {
   const questions = questionsById(survey);
-  return replacePlaceholders(text, (p) => {
+  return replacePlaceholders(textOf(text, survey.defaultLocale, survey.defaultLocale), (p) => {
     const question = questions.get(p.name);
     if (!question) {
       if (!p.scope && !p.path.length && options.values && Object.hasOwn(options.values, p.name)) {

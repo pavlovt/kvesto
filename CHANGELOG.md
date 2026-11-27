@@ -25,6 +25,9 @@ All six packages (`kvesto`, `@kvesto/schema`, `core`, `server`, `editor`, `dashb
 - One question at a time (M19): `settings.layout: "question"` (or the `layout` render option) with a progress bar,
   Enter to continue, number keys and auto-advance; `nextStep` / `prevStep` on the model; a preview toggle in the
   editor. `mountSurvey` now passes every render option on (it used to drop all but `labels`).
+- Localization (M20): per-locale display text with `defaultLocale` and `locales`, a `locale` option on the runner and
+  dashboard, built-in labels and validation messages in 12 languages, server messages from `Accept-Language`, and an
+  editor Translations tab with CSV, XLIFF and JSON import and export and AI drafts through a `translate` hook.
 
 ## 0.2.0
 

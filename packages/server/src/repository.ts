@@ -1,7 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { and, count, desc, eq } from "drizzle-orm";
 import type { SurveyStorage, SurveySummary } from "@kvesto/core";
-import type { ResponseInput, Survey, SurveyResponse } from "@kvesto/schema";
+import { textOf, type ResponseInput, type Survey, type SurveyResponse } from "@kvesto/schema";
+
+/** The survey's title in its default locale, for listings. */
+const titleOf = (survey: Survey) => textOf(survey.title, survey.defaultLocale, survey.defaultLocale);
 import { files, responses, surveys } from "./db/schema.js";
 import type { KvestoDb } from "./db/sqlite.js";
 
@@ -55,7 +58,7 @@ export function drizzleRepository(db: KvestoDb): SurveyRepository {
       const ts = now();
       await db
         .insert(surveys)
-        .values({ id: survey.id, title: survey.title, schemaVersion: survey.schemaVersion, definition: survey, createdAt: ts, updatedAt: ts })
+        .values({ id: survey.id, title: titleOf(survey), schemaVersion: survey.schemaVersion, definition: survey, createdAt: ts, updatedAt: ts })
         .run();
       return survey;
     },
@@ -63,10 +66,10 @@ export function drizzleRepository(db: KvestoDb): SurveyRepository {
       const ts = now();
       await db
         .insert(surveys)
-        .values({ id: survey.id, title: survey.title, schemaVersion: survey.schemaVersion, definition: survey, createdAt: ts, updatedAt: ts })
+        .values({ id: survey.id, title: titleOf(survey), schemaVersion: survey.schemaVersion, definition: survey, createdAt: ts, updatedAt: ts })
         .onConflictDoUpdate({
           target: surveys.id,
-          set: { title: survey.title, schemaVersion: survey.schemaVersion, definition: survey, updatedAt: ts },
+          set: { title: titleOf(survey), schemaVersion: survey.schemaVersion, definition: survey, updatedAt: ts },
         })
         .run();
       return survey;

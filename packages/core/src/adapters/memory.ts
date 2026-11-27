@@ -1,4 +1,4 @@
-import type { ResponseInput, Survey, SurveyResponse } from "@kvesto/schema";
+import { textOf, type ResponseInput, type Survey, type SurveyResponse } from "@kvesto/schema";
 import { fileToDataUrl } from "../files.js";
 import { newId, type SurveyStorage, type SurveySummary } from "../storage.js";
 
@@ -23,7 +23,7 @@ export function memoryStorage(seed: Survey[] = []): Required<SurveyStorage> {
     async listSurveys(): Promise<SurveySummary[]> {
       return [...surveys.values()].map((s) => ({
         id: s.id,
-        title: s.title,
+        title: textOf(s.title, s.defaultLocale, s.defaultLocale),
         responseCount: responses.get(s.id)?.length ?? 0,
       }));
     },

@@ -1,5 +1,5 @@
 <script lang="ts" module>
-  import type { Survey, SurveyInput, SurveyStorage } from "@kvesto/core";
+  import type { Survey, SurveyInput, SurveyStorage, TranslateFn } from "@kvesto/core";
 
   export interface SurveyEditorProps {
     /** Survey to start from. Defaults to a small example survey. */
@@ -12,8 +12,14 @@
     onsave?: (survey: Survey) => void;
     /** Show the live preview. Default true. */
     preview?: boolean;
-    /** The view to open with: the visual designer or the JSON source. Default "design". */
-    view?: "design" | "json";
+    /** The view to open with: the visual designer, the translations or the JSON source. Default "design". */
+    view?: "design" | "translations" | "json";
+    /**
+     * Machine translation for the Translations tab, e.g. a call to an AI model:
+     * gets texts by key and returns translations by key. Drafts are marked for
+     * review. Without it the "Translate with AI" button is hidden.
+     */
+    translate?: TranslateFn;
   }
 </script>
 
@@ -25,11 +31,12 @@
   import { newElement, palette, type PaletteKind } from "./doc/factory.js";
   import Outline from "./panels/Outline.svelte";
   import PropertyPanel from "./panels/PropertyPanel.svelte";
+  import TranslationPanel from "./panels/TranslationPanel.svelte";
   import { OutlineDrag } from "./panels/drag.svelte.js";
 
-  let { survey = starterSurvey, storage, onchange, onsave, preview = true, view = "design" }: SurveyEditorProps = $props();
+  let { survey = starterSurvey, storage, onchange, onsave, preview = true, view = "design", translate }: SurveyEditorProps = $props();
   // svelte-ignore state_referenced_locally
-  let tab = $state<"design" | "json">(view);
+  let tab = $state<"design" | "translations" | "json">(view);
 
   // The `survey` prop is only the starting point; edits live in the document.
   // svelte-ignore state_referenced_locally
@@ -137,6 +144,13 @@
           class:kv-editor-tab-on={tab === "json"}
           onclick={() => (tab = "json")}
         ) 'JSON'
+        button(
+          type=button
+          role=tab
+          aria-selected={tab === "translations"}
+          class:kv-editor-tab-on={tab === "translations"}
+          onclick={() => (tab = "translations")}
+        ) 'Translations'
       }
       button.kv-editor-undo(
         type=button
@@ -215,6 +229,10 @@
           h2 'Properties'
           PropertyPanel doc={doc} docState={docState}
         }
+      }
+    } else if tab === "translations" {
+      section.kv-editor-pane.kv-editor-translations {
+        TranslationPanel doc={doc} docState={docState} translate={translate}
       }
     } else {
       .kv-editor-source class:kv-editor-source--single={!preview} {

@@ -1,4 +1,6 @@
 import {
+  textOf,
+  type LocalizedText,
   type DisplayElement,
   type Answers,
   type AnswerValue,
@@ -17,12 +19,13 @@ import { createSurvey, type CreateSurveyOptions, type SurveyModel, type SurveySt
 import { repeatItems } from "./logic.js";
 import { formatBytes, itemKey } from "./validate.js";
 import { formatComputed, pipeText } from "./piping.js";
+import { labelsFor, type Labels } from "./i18n.js";
 import { questionType } from "./question-types.js";
 import { parseMarkdown, type MarkdownInline } from "./markdown.js";
 
 export interface RenderOptions {
   /** Text overrides for the built-in buttons and messages. */
-  labels?: Partial<typeof defaultLabels>;
+  labels?: Partial<Labels>;
   /**
    * Turns a content block's raw `html` into safe HTML (use a sanitizer such as
    * DOMPurify). Without it `html` is never shown: only the block's Markdown is.
@@ -43,33 +46,7 @@ export interface RenderOptions {
 /** Question types answered with one click, which auto-advance and take number keys. */
 const ONE_CLICK = new Set(["single-choice", "boolean", "rating", "image-choice"]);
 
-const defaultLabels = {
-  next: "Next",
-  prev: "Back",
-  complete: "Submit",
-  completed: "Thank you! Your response has been recorded.",
-  yes: "Yes",
-  no: "No",
-  moveUp: "Move up",
-  moveDown: "Move down",
-  keepOrder: "Keep this order",
-  rankingHint: "Drag the items, or use the arrow buttons, to put them in order.",
-  removeFile: "Remove",
-  addItem: "Add",
-  removeItem: "Remove",
-  /** Title of each item of a repeating panel; `{n}` is the item number. */
-  itemTitle: "Item {n}",
-  /** Progress text; `{n}` is the current step or page, `{total}` how many there are. */
-  progress: "{n} of {total}",
-  progressLabel: "Progress",
-  uploading: "Uploading…",
-  /** A slider nobody has moved yet. */
-  notSet: "Not set",
-  /** The list of picked tags, for screen readers. */
-  selected: "Selected",
-  clearSignature: "Clear",
-  signed: "Signed.",
-};
+
 
 export interface RenderedSurvey {
   model: SurveyModel;
@@ -79,17 +56,20 @@ export interface RenderedSurvey {
 type El = HTMLElement;
 
 const isRecordValue = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
-type Labels = typeof defaultLabels;
 
+/**
+ * Create an element. Text children may be display text: the model's survey is
+ * already localized, so they are strings, but the type allows either.
+ */
 function h<K extends keyof HTMLElementTagNameMap>(
   doc: Document,
   tag: K,
-  props: Record<string, string> = {},
-  ...children: (Node | string)[]
+  props: Record<string, string | LocalizedText> = {},
+  ...children: (Node | string | LocalizedText)[]
 ): HTMLElementTagNameMap[K] {
   const el = doc.createElement(tag);
-  for (const [k, v] of Object.entries(props)) el.setAttribute(k, v);
-  for (const c of children) el.append(c);
+  for (const [k, v] of Object.entries(props)) el.setAttribute(k, textOf(v));
+  for (const c of children) el.append(typeof c === "string" || c instanceof Node ? c : textOf(c));
   return el;
 }
 
@@ -128,7 +108,8 @@ interface QuestionView {
  */
 export function renderSurvey(target: El, model: SurveyModel, options: RenderOptions = {}): RenderedSurvey {
   const doc = target.ownerDocument;
-  const labels: Labels = { ...defaultLabels, ...options.labels };
+  // The built-in texts in the model's locale, with any overrides on top.
+  const labels: Labels = { ...labelsFor(model.locale), ...options.labels };
   const root = h(doc, "form", { class: "kv-survey", novalidate: "" });
   target.replaceChildren(root);
 
@@ -152,7 +133,8 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
    * Display text, with `{questionId}` placeholders filled from the answers and
    * kept up to date as they change. Always text, never HTML.
    */
-  const txt = (raw: string, item?: (s: SurveyState) => Answers | undefined): Node | string => {
+  const txt = (text: string | LocalizedText, item?: (s: SurveyState) => Answers | undefined): Node | string => {
+    const raw = textOf(text);
     if (!raw.includes("{") && !raw.includes("}")) return raw;
     const node = doc.createTextNode("");
     const refresh = (s: SurveyState) => {
@@ -335,7 +317,7 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
           }
           return h(doc, n.type === "strong" ? "strong" : "em", {}, ...inline(n.children));
         });
-      for (const block of parseMarkdown(el.markdown ?? "")) {
+      for (const block of parseMarkdown(textOf(el.markdown))) {
         if (block.type === "paragraph") wrap.append(h(doc, "p", {}, ...inline(block.children)));
         else wrap.append(h(doc, block.ordered ? "ol" : "ul", {}, ...block.items.map((i) => h(doc, "li", {}, ...inline(i)))));
       }
@@ -394,7 +376,7 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
         ...items.map((_, index) => {
           const item = h(doc, "div", { class: "kv-repeat-item", "data-item": String(index) });
           const itemAnswers = (st: SurveyState) => st.logic.items[panel.id]?.[index]?.answers;
-          const rawTitle = (repeat.itemTitle ?? labels.itemTitle).replaceAll("{n}", String(index + 1));
+          const rawTitle = textOf(repeat.itemTitle ?? labels.itemTitle).replaceAll("{n}", String(index + 1));
           const title = pipeText(rawTitle, s.survey, s.logic.answers, { ...pipeOptions, item: itemAnswers(s) });
           const remove = h(
             doc,
@@ -481,7 +463,7 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
     switch (q.type) {
       case "text": {
         const input = h(doc, "input", { id: qid, type: q.inputType ?? "text", "aria-labelledby": `${qid}-title` });
-        if (q.placeholder) input.placeholder = q.placeholder;
+        if (q.placeholder) input.placeholder = textOf(q.placeholder);
         input.value = typeof value === "string" ? value : "";
         input.addEventListener("input", () => set(input.value));
         wrap.append(input);
@@ -490,7 +472,7 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
       }
       case "comment": {
         const ta = h(doc, "textarea", { id: qid, rows: String(q.rows ?? 4), "aria-labelledby": `${qid}-title` });
-        if (q.placeholder) ta.placeholder = q.placeholder;
+        if (q.placeholder) ta.placeholder = textOf(q.placeholder);
         ta.value = typeof value === "string" ? value : "";
         ta.addEventListener("input", () => set(ta.value));
         wrap.append(ta);
@@ -787,11 +769,11 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
     const list = h(doc, "datalist", { id: `${qid}-list` });
     for (const c of q.choices) list.append(h(doc, "option", { value: c.label }));
     const input = h(doc, "input", { id: qid, type: "text", list: list.id, autocomplete: "off", "aria-labelledby": `${qid}-title` });
-    const labelOf = (v: unknown) => q.choices.find((c) => c.value === v)?.label ?? "";
+    const labelOf = (v: unknown) => textOf(q.choices.find((c) => c.value === v)?.label);
     input.value = labelOf(b.get(model.snapshot));
     // Only a label that matches a choice sets the answer; anything else clears it.
     input.addEventListener("input", () => {
-      const match = q.choices.find((c) => c.label.toLowerCase() === input.value.trim().toLowerCase());
+      const match = q.choices.find((c) => textOf(c.label).toLowerCase() === input.value.trim().toLowerCase());
       b.set(match ? match.value : undefined);
     });
     wrap.append(input, list);
@@ -814,7 +796,7 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
     const add = () => {
       const text = input.value.trim();
       if (!text) return;
-      const match = q.choices.find((c) => c.label.toLowerCase() === text.toLowerCase() || c.value === text);
+      const match = q.choices.find((c) => textOf(c.label).toLowerCase() === text.toLowerCase() || c.value === text);
       const value = match ? match.value : q.allowCustom ? text : undefined;
       if (value === undefined) return;
       input.value = "";

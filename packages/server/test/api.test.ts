@@ -591,3 +591,25 @@ describe("signatures", () => {
     expect((await app.request(entry.url)).headers.get("content-type")).toBe("image/png");
   });
 });
+
+describe("localized surveys", () => {
+  const multi = {
+    schemaVersion: 1,
+    id: "multi",
+    title: { en: "Feedback", de: "Rückmeldung" },
+    locales: ["en", "de"],
+    pages: [{ id: "p1", elements: [{ id: "name", type: "text", title: { en: "Name", de: "Name" }, required: true }] }],
+  };
+
+  it("stores every translation, lists the default title and answers in the respondent's language", async () => {
+    expect((await send("POST", "/surveys", multi)).status).toBe(201);
+    expect((await (await send("GET", "/surveys/multi")).json()).title).toEqual({ en: "Feedback", de: "Rückmeldung" });
+    expect((await (await send("GET", "/surveys")).json()).items[0].title).toBe("Feedback");
+    const res = await app.request("/surveys/multi/responses", {
+      method: "POST",
+      body: JSON.stringify({ answers: {} }),
+      headers: { "content-type": "application/json", "accept-language": "de-AT,de;q=0.9,en;q=0.5" },
+    });
+    expect((await res.json()).issues[0].message).toBe("Diese Frage ist erforderlich.");
+  });
+});

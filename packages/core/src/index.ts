@@ -36,6 +36,34 @@ export {
 } from "./expression.js";
 export { fileToDataUrl } from "./files.js";
 export { pipeText, formatAnswer, formatComputed, type PipeOptions } from "./piping.js";
+export {
+  addLocalePack,
+  detectLocale,
+  labelsFor,
+  message,
+  BUILTIN_LOCALES,
+  ENGLISH_LABELS,
+  ENGLISH_MESSAGES,
+  type Labels,
+  type LocalePack,
+  type MessageKey,
+  type Messages,
+} from "./i18n.js";
+export {
+  translationTable,
+  setTranslations,
+  markReviewed,
+  addLocale,
+  exportTranslations,
+  importTranslations,
+  parseTranslations,
+  translateSurvey,
+  samePlaceholders,
+  type TranslationRow,
+  type TranslationResult,
+  type TranslationFormat,
+  type TranslateFn,
+} from "./translations.js";
 export { parseMarkdown, parseInline, isSafeHref, type MarkdownBlock, type MarkdownInline } from "./markdown.js";
 export {
   registerQuestionType,

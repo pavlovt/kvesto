@@ -289,3 +289,72 @@ describe("preview layout", () => {
     ui.editor.destroy();
   });
 });
+
+describe("translations in the editor", () => {
+  const multi: SurveyInput = {
+    schemaVersion: 1,
+    id: "m",
+    title: { en: "Hello", de: "Hallo" },
+    locales: ["en", "de"],
+    pages: [{ id: "p1", elements: [{ id: "name", type: "text", title: { en: "Name", de: "Name" } }, { id: "c", type: "text", title: "City" }] }],
+  };
+  const mount = (translate?: (t: Record<string, string>) => Record<string, string>) => {
+    const target = document.createElement("div");
+    document.body.append(target);
+    const changes: Survey[] = [];
+    const editor = mountEditor(target, { survey: multi, preview: false, onchange: (s) => changes.push(s), ...(translate ? { translate } : {}) });
+    flushSync();
+    const $ = <T extends Element = HTMLElement>(sel: string) => target.querySelector<T>(sel)!;
+    const click = (text: string) => {
+      [...target.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.trim() === text)!.click();
+      flushSync();
+    };
+    return { target, editor, changes, $, click, last: () => changes.at(-1)! };
+  };
+
+  it("keeps other languages when the default text is edited", () => {
+    const ui = mount();
+    ui.$<HTMLElement>('[data-outline="name"] .kv-outline-select').click();
+    flushSync();
+    const title = [...ui.target.querySelectorAll<HTMLLabelElement>(".kv-props label")].find((l) => l.textContent?.trim().startsWith("Title"))!.querySelector("input")!;
+    expect(title.value).toBe("Name");
+    title.value = "Full name";
+    title.dispatchEvent(new Event("input", { bubbles: true }));
+    flushSync();
+    expect(ui.last().pages[0]!.elements[0]).toMatchObject({ title: { en: "Full name", de: "Name" } });
+    expect(ui.$('[data-outline="name"]').textContent).toContain("Full name");
+    ui.editor.destroy();
+  });
+
+  it("lists texts per language, edits them, drafts the missing ones with AI and marks them reviewed", async () => {
+    const ui = mount((texts) => Object.fromEntries(Object.entries(texts).map(([k, v]) => [k, `DE ${v}`])));
+    ui.click("Translations");
+    const rows = () => [...ui.target.querySelectorAll<HTMLTableRowElement>(".kv-translations-table tbody tr")];
+    expect(rows().map((r) => r.querySelector(".kv-translations-key")!.textContent)).toEqual(["survey.title", "name.title", "c.title"]);
+    expect(rows()[2]!.classList.contains("kv-translations-missing")).toBe(true);
+    expect(ui.$(".kv-translations-stats").textContent).toBe("1 missing · 0 to review");
+
+    ui.click("Translate missing with AI");
+    await new Promise((r) => setTimeout(r, 0));
+    flushSync();
+    expect(ui.last().pages[0]!.elements[1]).toMatchObject({ title: { en: "City", de: "DE City" } });
+    expect(ui.last().translationsToReview).toEqual({ de: ["c.title"] });
+    expect(rows()[2]!.querySelector(".kv-translations-flag")).not.toBeNull();
+    ui.click("Looks right");
+    expect(ui.last().translationsToReview).toBeUndefined();
+
+    const field = rows()[0]!.querySelector("textarea")!;
+    field.value = "Servus";
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+    flushSync();
+    expect(ui.last().title).toEqual({ en: "Hello", de: "Servus" });
+
+    // A language can be added.
+    const add = ui.$<HTMLInputElement>('.kv-translations-add input');
+    add.value = "fr";
+    add.dispatchEvent(new Event("input", { bubbles: true }));
+    ui.click("Add language");
+    expect(ui.last().locales).toEqual(["en", "de", "fr"]);
+    ui.editor.destroy();
+  });
+});

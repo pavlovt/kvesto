@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Choice } from "@kvesto/core";
+  import { textOf, withText, type Choice } from "@kvesto/core";
 
   let {
     items,
@@ -7,11 +7,14 @@
     noun = "option",
     min = 1,
     images = false,
+    defaultLocale = "en",
   }: {
     items: (Choice & { imageUrl?: string })[];
     onchange: (items: (Choice & { imageUrl?: string })[]) => void;
     /** Also edit an image URL per entry (image choices). */
     images?: boolean;
+    /** Labels may be translated: the field edits this locale's text and keeps the others. */
+    defaultLocale?: string;
     /** What one entry is called, for button labels ("option", "row", "column"). */
     noun?: string;
     /** Fewest entries; remove buttons are disabled below it. */
@@ -40,9 +43,9 @@
     each items as item, i (i) {
       .kv-choice-row {
         input.kv-choice-label(
-          value={item.label}
+          value={textOf(item.label, defaultLocale, defaultLocale)}
           aria-label="{noun} {i + 1} label"
-          oninput={(e) => edit(i, { label: e.currentTarget.value })}
+          oninput={(e) => edit(i, { label: (withText(item.label, defaultLocale, e.currentTarget.value, defaultLocale) ?? "") as string })}
         )
         input.kv-choice-value(
           value={item.value}

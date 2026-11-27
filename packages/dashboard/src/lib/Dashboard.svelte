@@ -6,6 +6,8 @@
     storage: Pick<SurveyStorage, "listSurveys" | "loadSurvey" | "listResponses">;
     /** Open this survey's results first instead of the list. */
     surveyId?: string;
+    /** Show survey texts in this locale. Default: each survey's default locale. */
+    locale?: string;
   }
 </script>
 
@@ -13,7 +15,7 @@
   import SurveyList from "./SurveyList.svelte";
   import SurveyResults from "./SurveyResults.svelte";
 
-  let { storage, surveyId }: DashboardProps = $props();
+  let { storage, surveyId, locale }: DashboardProps = $props();
 
   // svelte-ignore state_referenced_locally
   let selected = $state<string | null>(surveyId ?? null);
@@ -23,7 +25,7 @@
   .kv-dashboard {
     if selected {
       p > button.kv-dash-back type=button onclick={() => (selected = null)} '← All surveys'
-      SurveyResults storage={storage} surveyId={selected}
+      SurveyResults storage={storage} surveyId={selected} locale={locale}
     } else {
       h1 'Surveys'
       SurveyList storage={storage} onselect={(id) => (selected = id)}

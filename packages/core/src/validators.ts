@@ -1,6 +1,7 @@
-import type { AnswerValue, Answers, CustomValidator, Question, RangeValidator, Validator } from "@kvesto/schema";
+import { textOf, type AnswerValue, type Answers, type CustomValidator, type Question, type RangeValidator, type Validator } from "@kvesto/schema";
 import { isEmptyAnswer } from "./logic.js";
 import { evaluateExpressionCondition, type EvaluateOptions } from "./expression.js";
+import { bounds, message, type MessageKey } from "./i18n.js";
 
 export interface CustomValidatorContext {
   question: Question;
@@ -50,29 +51,21 @@ function between(n: number, min: number | undefined, max: number | undefined): b
   return (min === undefined || n >= min) && (max === undefined || n <= max);
 }
 
-/** "at least 2", "at most 5", "between 2 and 5". */
-function bounds(min: number | string | undefined, max: number | string | undefined, unit = ""): string {
-  const u = unit ? ` ${unit}` : "";
-  if (min !== undefined && max !== undefined) return min === max ? `exactly ${min}${u}` : `between ${min} and ${max}${u}`;
-  if (min !== undefined) return `at least ${min}${u}`;
-  return `at most ${max}${u}`;
-}
-
-function checkRange(question: Question, value: AnswerValue, v: RangeValidator): string | null {
+function checkRange(question: Question, value: AnswerValue, v: RangeValidator, L: string | undefined): string | null {
   if (question.type === "text" && question.inputType === "date") {
-    if (typeof value !== "string") return "Enter a date.";
+    if (typeof value !== "string") return message(L, "date");
     const min = v.min as string | undefined;
     const max = v.max as string | undefined;
     // YYYY-MM-DD strings compare correctly as text.
     if ((min === undefined || value >= min) && (max === undefined || value <= max)) return null;
-    if (min !== undefined && max !== undefined) return `Enter a date between ${min} and ${max}.`;
-    return min !== undefined ? `Enter a date on or after ${min}.` : `Enter a date on or before ${max}.`;
+    if (min !== undefined && max !== undefined) return message(L, "dateBetween", { min, max });
+    return min !== undefined ? message(L, "dateMin", { min }) : message(L, "dateMax", { max: max! });
   }
   const n = typeof value === "number" ? value : typeof value === "string" && value.trim() !== "" ? Number(value) : NaN;
-  if (Number.isNaN(n)) return "Enter a number.";
+  if (Number.isNaN(n)) return message(L, "number");
   const min = v.min as number | undefined;
   const max = v.max as number | undefined;
-  return between(n, min, max) ? null : `Enter a number ${bounds(min, max)}.`;
+  return between(n, min, max) ? null : message(L, "numberRange", { bounds: bounds(L, min, max) });
 }
 
 function countOf(question: Question, value: AnswerValue): number {
@@ -82,11 +75,11 @@ function countOf(question: Question, value: AnswerValue): number {
   return Array.isArray(value) ? value.length : 0;
 }
 
-function countUnit(question: Question, n: number | undefined): string {
+function countUnit(question: Question, n: number | undefined): MessageKey {
   const one = n === 1;
-  if (question.type === "file") return one ? "file" : "files";
-  if (question.type === "matrix") return one ? "row" : "rows";
-  return one ? "option" : "options";
+  if (question.type === "file") return one ? "unitFile" : "unitFiles";
+  if (question.type === "matrix") return one ? "unitRow" : "unitRows";
+  return one ? "unitOption" : "unitOptions";
 }
 
 function runCustom(
@@ -95,14 +88,15 @@ function runCustom(
   v: CustomValidator,
   custom: CustomValidators | undefined,
   answers: Answers,
+  L?: string,
 ): string | null {
   const fn = custom?.[v.name];
   // Never pass silently: an answer that can't be checked is not accepted.
   if (!fn) return `This answer can't be checked (unknown validator "${v.name}").`;
   const result = fn(value, { question, options: v.options ?? {}, answers });
   if (result === true || result === null) return null;
-  if (typeof result === "string") return v.message ?? result;
-  return v.message ?? "This answer is not valid.";
+  if (typeof result === "string") return v.message ? textOf(v.message, L) : result;
+  return v.message ? textOf(v.message, L) : message(L, "invalid");
 }
 
 /** One validator against a non-empty answer that already has the right shape. */
@@ -113,35 +107,36 @@ function runValidator(
   custom: CustomValidators | undefined,
   answers: Answers,
   expression?: EvaluateOptions,
+  L?: string,
 ): string | null {
-  const fail = (fallback: string) => v.message ?? fallback;
+  const fail = (fallback: string) => (v.message ? textOf(v.message, L) : fallback);
   switch (v.type) {
     case "pattern":
       return typeof value === "string" && compile(v.pattern, v.flags).test(value)
         ? null
-        : fail("Enter a value in the expected format.");
+        : fail(message(L, "format"));
     case "length": {
       const n = typeof value === "string" ? [...value].length : 0;
-      return between(n, v.min, v.max) ? null : fail(`Enter ${bounds(v.min, v.max, "characters")}.`);
+      return between(n, v.min, v.max) ? null : fail(message(L, "length", { bounds: bounds(L, v.min, v.max) }));
     }
     case "email":
-      return typeof value === "string" && EMAIL.test(value) ? null : fail("Enter a valid email address.");
+      return typeof value === "string" && EMAIL.test(value) ? null : fail(message(L, "email"));
     case "url":
-      return typeof value === "string" && isHttpUrl(value) ? null : fail("Enter a valid web address (http or https).");
+      return typeof value === "string" && isHttpUrl(value) ? null : fail(message(L, "url"));
     case "range": {
-      const err = checkRange(question, value, v);
+      const err = checkRange(question, value, v, L);
       return err ? fail(err) : null;
     }
     case "count": {
       const n = countOf(question, value);
       if (between(n, v.min, v.max)) return null;
-      const verb = question.type === "file" ? "Attach" : question.type === "matrix" ? "Answer" : "Choose";
-      return fail(`${verb} ${bounds(v.min, v.max, countUnit(question, v.max ?? v.min))}.`);
+      const verb = message(L, question.type === "file" ? "verbAttach" : question.type === "matrix" ? "verbAnswer" : "verbChoose");
+      return fail(message(L, "count", { verb, bounds: bounds(L, v.min, v.max), unit: message(L, countUnit(question, v.max ?? v.min)) }));
     }
     case "expression":
-      return evaluateExpressionCondition(v.expr, answers, expression ?? {}) ? null : fail("This answer is not valid.");
+      return evaluateExpressionCondition(v.expr, answers, expression ?? {}) ? null : fail(message(L, "invalid"));
     case "custom":
-      return runCustom(question, value, v, custom, answers);
+      return runCustom(question, value, v, custom, answers, L);
   }
 }
 
@@ -155,10 +150,12 @@ export function runValidators(
     answers: Answers;
     /** Functions, variables and the repeat item for `expression` rules. */
     expression?: EvaluateOptions;
+    /** Locale of the messages. Default English. */
+    locale?: string;
   },
 ): string | null {
   for (const v of validators) {
-    const err = runValidator(question, value, v, context.custom, context.answers, context.expression);
+    const err = runValidator(question, value, v, context.custom, context.answers, context.expression, context.locale);
     if (err) return err;
   }
   return null;

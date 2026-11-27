@@ -45,6 +45,21 @@ export interface CreateAppOptions {
   questionTypes?: QuestionTypeDefinition[];
 }
 
+/** The first Accept-Language tag the survey is translated into, else its default locale. */
+function preferredLocale(header: string | undefined, survey: Survey): string | undefined {
+  const offered = new Set([survey.defaultLocale ?? "en", ...(survey.locales ?? [])]);
+  const tags = (header ?? "")
+    .split(",")
+    .map((part) => part.split(";")[0]!.trim())
+    .filter(Boolean);
+  for (const tag of tags) {
+    if (offered.has(tag)) return tag;
+    const lang = tag.split("-")[0]!;
+    if (offered.has(lang)) return lang;
+  }
+  return survey.defaultLocale;
+}
+
 /** Types a browser may show inline. Anything else is served as a download, so an uploaded page can't run as this origin. */
 const INLINE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp", "application/pdf", "text/plain"]);
 
@@ -158,6 +173,8 @@ export function createApp(options: CreateAppOptions) {
     const { issues, answers } = validateAnswers(survey, input.answers, {
       validators: options.validators,
       functions: options.functions,
+      // Messages in the respondent's language when the survey has it (the first Accept-Language tag).
+      locale: preferredLocale(c.req.header("accept-language"), survey),
     });
     if (issues.length) {
       return c.json(

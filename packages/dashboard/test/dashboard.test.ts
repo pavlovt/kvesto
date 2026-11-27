@@ -140,3 +140,23 @@ describe("custom question types", () => {
     unregisterQuestionType("x-mood");
   });
 });
+
+describe("localized surveys", () => {
+  it("shows titles and labels in the chosen locale", async () => {
+    const storage = memoryStorage();
+    const saved = await storage.saveSurvey({
+      schemaVersion: 1,
+      id: "multi",
+      title: { en: "Feedback", de: "Rückmeldung" },
+      pages: [{ id: "p", elements: [{ id: "c", type: "single-choice", title: { en: "Colour", de: "Farbe" }, choices: [{ value: "r", label: { en: "Red", de: "Rot" } }] }] }],
+    } as never);
+    await storage.saveResponse(saved.id, { answers: { c: "r" } });
+    const target = document.createElement("div");
+    const dash = mountDashboard(target, { storage, surveyId: "multi", locale: "de" });
+    await settle();
+    expect(target.querySelector("h1")?.textContent).toBe("Rückmeldung");
+    expect(target.textContent).toContain("Farbe");
+    expect(target.textContent).toContain("Rot");
+    dash.destroy();
+  });
+});

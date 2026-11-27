@@ -1,4 +1,5 @@
 import {
+  localizeSurvey,
   type Element,
   allQuestions,
   fileRules,
@@ -22,6 +23,7 @@ import { fileToDataUrl } from "./files.js";
 import { evaluateCondition, isEmptyAnswer, repeatItems, resolveLogic, visibleElements, type LogicOptions, type SurveyLogic } from "./logic.js";
 import { surveyVariables, unknownFunctions, type EvaluateOptions, type ExpressionFunctions } from "./expression.js";
 import { pipeText } from "./piping.js";
+import { message } from "./i18n.js";
 import { checkQuestionTypes } from "./question-types.js";
 import { defaultAnswer, itemKey, validateAnswer, validateFile, validateRepeat, validationTargets } from "./validate.js";
 import type { CustomValidators } from "./validators.js";
@@ -45,6 +47,12 @@ export interface CreateSurveyOptions {
   functions?: ExpressionFunctions;
   /** The clock for `today()` and `age()` in expressions. Default: the system clock. */
   now?: () => Date;
+  /**
+   * The locale to show the survey in, such as "de" or "pt-BR". Missing
+   * translations fall back to the language, then the survey's `defaultLocale`.
+   * Default: the survey's `defaultLocale`, or "en".
+   */
+  locale?: string;
 }
 
 export interface CompletionResult {
@@ -110,7 +118,10 @@ export type Listener = (state: SurveyState) => void;
  * wrapped easily in React, Vue or plain JS.
  */
 export class SurveyModel {
+  /** The survey with every text in `locale`. */
   readonly survey: Survey;
+  /** The locale texts are shown in. */
+  readonly locale: string;
   private state: SurveyState;
   private listeners = new Set<Listener>();
   /** Repeating panels by id, and which repeating panel each inner question belongs to. */
@@ -128,7 +139,10 @@ export class SurveyModel {
   private readonly triggerState: boolean[] = [];
 
   constructor(private readonly options: CreateSurveyOptions) {
-    this.survey = migrateSurvey(options.survey);
+    const source = migrateSurvey(options.survey);
+    this.locale = options.locale ?? source.defaultLocale ?? "en";
+    // Every display text resolved for the locale once, so everything below sees plain strings.
+    this.survey = localizeSurvey(source, this.locale);
     const typeProblems = checkQuestionTypes(this.survey);
     if (typeProblems.length) throw new Error(typeProblems.join("; "));
     const missing = unknownFunctions(this.survey, options.functions);
@@ -417,10 +431,10 @@ export class SurveyModel {
       return false;
     };
     if (current().length + list.length > q.maxFiles) {
-      return fail(q.maxFiles === 1 ? "Attach only one file." : `Attach at most ${q.maxFiles} files.`);
+      return fail(q.maxFiles === 1 ? message(this.locale, "fileOne") : message(this.locale, "fileMax", { max: q.maxFiles }));
     }
     for (const f of list) {
-      const err = validateFile(q, f);
+      const err = validateFile(q, f, this.locale);
       if (err) return fail(err);
     }
     this.update({ uploading: [...this.state.uploading, questionId] });
@@ -432,7 +446,7 @@ export class SurveyModel {
       this.setValue(questionId, [...current(), ...uploaded]);
       return true;
     } catch (err) {
-      return fail(`Upload failed: ${err instanceof Error ? err.message : String(err)}`);
+      return fail(message(this.locale, "uploadFailed", { error: err instanceof Error ? err.message : String(err) }));
     } finally {
       const rest = [...this.state.uploading];
       rest.splice(rest.indexOf(questionId), 1);
@@ -463,6 +477,7 @@ export class SurveyModel {
             validators: this.options.validators,
             answers: logic.answers,
             expression: this.expression,
+            locale: this.locale,
           })
         : null;
       if (err) {
@@ -473,7 +488,7 @@ export class SurveyModel {
     for (const panel of repeats) {
       for (const k of Object.keys(errors)) if (k === panel.id || k.startsWith(`${panel.id}.`)) delete errors[k];
       if (!logic.visiblePanels.has(panel.id)) continue;
-      for (const issue of validateRepeat(panel, this.state.answers[panel.id], logic, { validators: this.options.validators, expression: this.expression })) {
+      for (const issue of validateRepeat(panel, this.state.answers[panel.id], logic, { validators: this.options.validators, expression: this.expression, locale: this.locale })) {
         errors[issue.questionId] = issue.message;
         ok = false;
       }
@@ -527,6 +542,7 @@ export class SurveyModel {
             validators: this.options.validators,
             answers: logic.answers,
             expression: this.expression,
+            locale: this.locale,
           })
         : null;
       if (err) {
@@ -537,7 +553,7 @@ export class SurveyModel {
     for (const panel of repeats) {
       for (const k of Object.keys(errors)) if (k === panel.id || k.startsWith(`${panel.id}.`)) delete errors[k];
       if (!logic.visiblePanels.has(panel.id)) continue;
-      for (const issue of validateRepeat(panel, this.state.answers[panel.id], logic, { validators: this.options.validators, expression: this.expression })) {
+      for (const issue of validateRepeat(panel, this.state.answers[panel.id], logic, { validators: this.options.validators, expression: this.expression, locale: this.locale })) {
         errors[issue.questionId] = issue.message;
         ok = false;
       }

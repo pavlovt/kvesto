@@ -1,7 +1,10 @@
 <script lang="ts" module>
   import type { Survey, SurveyResponse, SurveyStorage } from "@kvesto/core";
 
-  export type SurveyResultsProps =
+  export type SurveyResultsProps = {
+    /** Show the survey's texts in this locale (falling back to its default). Default: the survey's default locale. */
+    locale?: string;
+  } & (
     | {
         /** Load the survey and its responses from storage. Needs `loadSurvey` and `listResponses`. */
         storage: Pick<SurveyStorage, "loadSurvey" | "listResponses">;
@@ -15,11 +18,12 @@
         responses: SurveyResponse[];
         storage?: never;
         surveyId?: never;
-      };
+      }
+  );
 </script>
 
 <script lang="ts">
-  import { summarizeResponses, type GridCellSummary, type QuestionSummary } from "@kvesto/core";
+  import { localizeSurvey, summarizeResponses, type GridCellSummary, type QuestionSummary } from "@kvesto/core";
 
   let props: SurveyResultsProps = $props();
 
@@ -44,7 +48,9 @@
       .finally(() => (loading = false));
   });
 
-  const survey = $derived(props.survey ?? loaded?.survey ?? null);
+  const source = $derived(props.survey ?? loaded?.survey ?? null);
+  // Every text in the chosen locale, so the markup below only sees plain strings.
+  const survey = $derived(source ? localizeSurvey(source, props.locale) : null);
   const responses = $derived(props.responses ?? loaded?.responses ?? []);
   const summary = $derived<QuestionSummary[]>(survey ? summarizeResponses(survey, responses) : []);
   // Panels around a question, as "Outer / Inner"; untitled panels are left out.
