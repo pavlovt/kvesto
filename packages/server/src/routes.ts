@@ -125,6 +125,7 @@ export const submitResponse = createRoute({
     403: error("The survey is not open"),
     404: error("Survey not found"),
     409: error("The survey is full, this respondent answered already, or the same answers were just sent"),
+    413: error("The response's files are over the response quota"),
     429: error("Too many requests (see Retry-After)"),
   },
 });
@@ -143,6 +144,7 @@ export const updateResponse = createRoute({
     403: error("Wrong resume token, or the survey is not open"),
     404: error("Response not found"),
     409: error("The response is already complete, or the survey is full"),
+    413: error("The response's files are over the response quota"),
     429: error("Too many requests (see Retry-After)"),
   },
 });
@@ -307,9 +309,10 @@ export const uploadFile = createRoute({
   },
   responses: {
     201: json(FileAnswer, "Stored file"),
-    400: error("Not a file question, or the file breaks the question's rules"),
+    400: error("Not a file question, the file breaks the question's rules, or its content doesn't match its type"),
     404: error("Survey not found"),
-    413: error("File larger than the server allows"),
+    413: error("File larger than the server allows, or the survey's storage is full"),
+    422: error("Refused by the file scanner"),
   },
 });
 
@@ -318,12 +321,17 @@ export const getFile = createRoute({
   path: "/surveys/{id}/files/{fileId}",
   tags: ["Files"],
   summary: "Download an uploaded file",
-  request: { params: FileParams },
+  description: "With signed file URLs on, `expires` and `signature` are required, and an expired link answers 403.",
+  request: {
+    params: FileParams,
+    query: z.object({ expires: z.string().max(20).optional(), signature: z.string().max(100).optional() }),
+  },
   responses: {
     200: {
       content: { "application/octet-stream": { schema: z.string().openapi({ type: "string", format: "binary" }) } },
       description: "The file's bytes, with its original content type",
     },
+    403: error("The link has expired or isn't signed"),
     404: error("Not found"),
   },
 });

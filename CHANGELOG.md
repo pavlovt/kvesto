@@ -61,6 +61,7 @@ All packages (`kvesto`, `@kvesto/schema`, `core`, `server`, `editor`, `dashboard
 - Security baseline: `SECURITY.md`, a threat model, CodeQL, OpenSSF Scorecard, Dependabot, `pnpm audit --prod` in CI, and GitHub Actions pinned to commit SHAs with least-privilege permissions (M33).
 - Hardened HTTP defaults: secure headers and request ids on every response, errors without internals, CORS split into respondent routes (`cors`, default `*`) and admin routes (`adminCors`, default none), body size limits, and `SURVEY_LIMITS` / `ANSWER_LIMITS` enforced by the schema and checked before parsing (M34). **Breaking:** browsers on other origins need `adminCors` to call the admin routes, and documents over the limits are refused.
 - Rate limiting and spam protection: `createApp({ rateLimit })` with per-address budgets, 429 and `Retry-After`, a pluggable store and trusted-proxy handling; `settings.antiSpam` with a honeypot, a minimum time to complete (signed start token), CAPTCHA verification (`verifyChallenge`, Turnstile, hCaptcha and reCAPTCHA helpers) and duplicate detection (M35).
+- Upload hardening: real file types read from the bytes (disguised files and polyglots refused), safe file names, SVG/HTML/XML never inline, survey and response quotas, `app.uploads.sweep()` for unused uploads, a `scanFile` hook, and optional expiring signed file URLs (M36).
 
 ## 0.2.0
 

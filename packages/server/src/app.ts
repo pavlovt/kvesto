@@ -50,7 +50,26 @@ import type { RespondentRecord, SurveyRepository } from "./repository.js";
 import * as routes from "./routes.js";
 import { guardOutboundUrl } from "./outbound.js";
 import { EMBED_JS, HOSTED_CSP, hostedAssets, hostedPage, PAGE_CSS, RUN_JS } from "./hosted.js";
+import { checkUploadType, fileUrlValid, safeFileName, signFileUrl } from "./uploads.js";
 import { createWebhookDispatcher, newWebhookSecret, type WebhookEvent, type WebhookOptions } from "./webhooks.js";
+
+export interface UploadOptions {
+  /** Bytes all of a survey's uploads may take. Default: no limit. */
+  surveyQuota?: number;
+  /** Bytes the files of one response may take. Default: no limit. */
+  responseQuota?: number;
+  /** Files no response refers to are deleted by `app.uploads.sweep()` once they are this old. Default one day. */
+  orphanAfterSeconds?: number;
+  /** Run `sweep()` this often (in seconds). Default: never on its own. */
+  sweepEverySeconds?: number;
+  /**
+   * Scan each upload (antivirus). Return true to keep it, or false or a reason to refuse it (422). Throwing refuses it
+   * too, as a server error.
+   */
+  scanFile?: (file: { name: string; type: string; size: number; surveyId: string; questionId: string }, bytes: Uint8Array) => boolean | string | Promise<boolean | string>;
+  /** Hand out signed file URLs that stop working after this many seconds, instead of permanent ones. */
+  signedUrls?: { ttlSeconds: number };
+}
 
 export interface CreateAppOptions {
   repository: SurveyRepository;
@@ -84,6 +103,8 @@ export interface CreateAppOptions {
    * set one when several servers share the work or restarts are common.
    */
   signingSecret?: string;
+  /** Upload limits and checks beyond each question's `accept` and `maxSize`. */
+  uploads?: UploadOptions;
   /** Serve /openapi.json and the /docs UI. Default true. */
   docs?: boolean;
   /** Largest accepted upload in bytes, whatever a question allows. Default 10 MB. */
@@ -444,6 +465,61 @@ export function createApp(options: CreateAppOptions) {
   };
   const DUPLICATE = { error: "The same answers were just submitted", reason: "duplicate" as const };
 
+  // ── Uploads ──
+  const FILE_URL = /\/surveys\/([^/?]+)\/files\/([^/?]+)(?:\?[^#]*)?$/;
+  /** A file's URL, signed for `uploads.signedUrls.ttlSeconds` when that is on. */
+  const fileUrl = (url: string, surveyId: string, fileId: string) => {
+    const ttl = options.uploads?.signedUrls?.ttlSeconds;
+    return ttl ? `${url.split("?")[0]}?${signFileUrl(signingSecret, surveyId, fileId, Math.floor(Date.now() / 1000) + ttl)}` : url;
+  };
+  /** The same answers with every file URL of this server signed again, for admins reading them later. */
+  const resignFiles = <T extends SurveyResponse>(response: T): T => {
+    if (!options.uploads?.signedUrls) return response;
+    const visit = (v: unknown): unknown => {
+      if (Array.isArray(v)) return v.map(visit);
+      if (!v || typeof v !== "object") return v;
+      const o = v as Record<string, unknown>;
+      const m = typeof o.url === "string" ? FILE_URL.exec(o.url) : null;
+      if (m && m[1] === response.surveyId) return { ...o, url: fileUrl(o.url as string, m[1]!, decodeURIComponent(m[2]!)) };
+      return Object.fromEntries(Object.entries(o).map(([k, x]) => [k, visit(x)]));
+    };
+    return { ...response, answers: visit(response.answers) as Answers };
+  };
+  /** Bytes the files in these answers take (this server's files by their stored size, data: URLs by length). */
+  const answerFileBytes = async (surveyId: string, answers: Answers) => {
+    const ids: string[] = [];
+    let inline = 0;
+    const visit = (v: unknown) => {
+      if (Array.isArray(v)) return v.forEach(visit);
+      if (!v || typeof v !== "object") return;
+      const o = v as Record<string, unknown>;
+      if (typeof o.url === "string") {
+        const m = FILE_URL.exec(o.url);
+        if (m && m[1] === surveyId) ids.push(decodeURIComponent(m[2]!));
+        else if (o.url.startsWith("data:")) inline += Math.floor(o.url.length * 0.75);
+        return;
+      }
+      Object.values(o).forEach(visit);
+    };
+    visit(answers);
+    const sizes = await repo.fileSizes(surveyId, [...new Set(ids)]);
+    return inline + Object.values(sizes).reduce((a, b) => a + b, 0);
+  };
+  const overResponseQuota = async (surveyId: string, answers: Answers) => {
+    const quota = options.uploads?.responseQuota;
+    return quota !== undefined && (await answerFileBytes(surveyId, answers)) > quota
+      ? { error: `The files of one response are limited to ${formatBytes(quota)}` }
+      : null;
+  };
+  const uploads = {
+    /** Delete files that no response refers to and that are older than `orphanAfterSeconds`. Returns how many. */
+    sweep: () => repo.deleteOrphanFiles(new Date(Date.now() - (options.uploads?.orphanAfterSeconds ?? 86_400) * 1000).toISOString()),
+  };
+  if (options.uploads?.sweepEverySeconds) {
+    const timer = setInterval(() => void uploads.sweep().catch((e) => console.error("[kvesto] removing unused uploads failed", e)), options.uploads.sweepEverySeconds * 1000);
+    (timer as { unref?: () => void }).unref?.();
+  }
+
   // Request body sizes, and document limits checked on the raw JSON before it is parsed (so hostile nesting
   // can't exhaust the stack in validation).
   const tooLarge = (bytes: number) =>
@@ -598,6 +674,8 @@ export function createApp(options: CreateAppOptions) {
     const checked = check(survey, input.answers, partial || timedOut(survey, input.meta), c.req.header("accept-language"), hidden);
     if ("bad" in checked) return c.json(checked.bad, 400);
     if (!partial && (await isDuplicate(c, survey, checked.answers))) return c.json(DUPLICATE, 409);
+    const overQuota = await overResponseQuota(id, checked.answers);
+    if (overQuota) return c.json(overQuota, 413);
     // Answers to questions hidden by conditional logic are dropped, as the core runtime does.
     const { status: _status, ...given } = withoutBrowserId(input);
     const rest = withQuiz(survey, withHidden(given, hidden), checked.answers, hidden, partial);
@@ -649,6 +727,8 @@ export function createApp(options: CreateAppOptions) {
     const checked = check(survey, input.answers, partial || timedOut(survey, meta), c.req.header("accept-language"), hidden);
     if ("bad" in checked) return c.json(checked.bad, 400);
     if (!partial && (await isDuplicate(c, survey, checked.answers))) return c.json(DUPLICATE, 409);
+    const overQuota = await overResponseQuota(id, checked.answers);
+    if (overQuota) return c.json(overQuota, 413);
     const updated = await repo.updateResponse(
       id,
       responseId,
@@ -700,19 +780,37 @@ export function createApp(options: CreateAppOptions) {
       return c.json({ error: "Not a file question", issues: [{ path: ["questionId"], message: `No file question "${questionId}"` }] }, 400);
     }
     if (file.size > maxFileSize) return c.json({ error: `Files are limited to ${formatBytes(maxFileSize)}` }, 413);
-    const message = validateFile(fileRules(question), file);
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    // The real type, from the first bytes: a mismatch with the declared type (or a polyglot) is refused.
+    const sniffed = checkUploadType(file.type, bytes);
+    if ("error" in sniffed) return c.json({ error: sniffed.error, issues: [{ path: ["file"], message: sniffed.error }] }, 400);
+    const name = safeFileName(file.name);
+    const checked = { name, type: sniffed.type, size: bytes.byteLength };
+    const message = validateFile(fileRules(question), checked);
     if (message) return c.json({ error: message, issues: [{ path: ["file"], message }] }, 400);
+    const quota = options.uploads?.surveyQuota;
+    if (quota !== undefined && (await repo.fileBytes(id)) + checked.size > quota) {
+      return c.json({ error: `This survey's file storage is full (${formatBytes(quota)})` }, 413);
+    }
+    if (options.uploads?.scanFile) {
+      const verdict = await options.uploads.scanFile({ ...checked, surveyId: id, questionId }, bytes);
+      if (verdict !== true) {
+        const reason = typeof verdict === "string" && verdict ? verdict : "The file was refused by the virus scanner";
+        return c.json({ error: reason, issues: [{ path: ["file"], message: reason }] }, 422);
+      }
+    }
 
-    const stored = await repo.saveFile(
-      { surveyId: id, questionId, name: file.name || "file", type: file.type, size: file.size },
-      new Uint8Array(await file.arrayBuffer()),
-    );
+    const stored = await repo.saveFile({ surveyId: id, questionId, ...checked }, bytes);
     const base = c.req.url.split("?")[0]!.replace(/\/+$/, "");
-    return c.json({ name: stored.name, type: stored.type, size: stored.size, url: `${base}/${stored.id}` }, 201);
+    return c.json({ name: stored.name, type: stored.type, size: stored.size, url: fileUrl(`${base}/${stored.id}`, id, stored.id) }, 201);
   });
 
   app.openapi(routes.getFile, async (c) => {
     const { id, fileId } = c.req.valid("param");
+    if (options.uploads?.signedUrls) {
+      const { expires, signature } = c.req.valid("query");
+      if (!fileUrlValid(signingSecret, id, fileId, expires, signature)) return c.json({ error: "This file link has expired" }, 403);
+    }
     const found = await repo.loadFile(id, fileId);
     if (!found) return c.json({ error: "File not found" }, 404);
     const { file, data } = found;
@@ -753,7 +851,7 @@ export function createApp(options: CreateAppOptions) {
     // A page at a time, so a large survey is never one huge query.
     for (let after: { createdAt: string; id: string } | undefined; ; ) {
       const page = await repo.listResponsesPage(id, { limit: 500, offset: 0, ...filter, ...(after ? { after } : {}) });
-      all.push(...page);
+      all.push(...page.map(resignFiles));
       if (page.length < 500) break;
       after = page.at(-1)!;
     }
@@ -838,7 +936,7 @@ export function createApp(options: CreateAppOptions) {
     const [items, total] = await Promise.all([repo.listResponsesPage(id, { limit, offset, ...filter, ...(after ? { after } : {}) }), repo.countResponses(id, filter)]);
     const last = items.at(-1);
     const more = items.length === limit && last;
-    return c.json({ items, total, limit, offset, ...(more ? { nextCursor: encodeCursor(last) } : {}) }, 200);
+    return c.json({ items: items.map(resignFiles), total, limit, offset, ...(more ? { nextCursor: encodeCursor(last) } : {}) }, 200);
   });
 
   if (options.docs !== false) {
@@ -860,7 +958,7 @@ export function createApp(options: CreateAppOptions) {
   }
 
   // `app.webhooks.flush()` sends what is due now (tests, graceful shutdown); `stop()` ends the retry timers.
-  return Object.assign(app, { webhooks: dispatcher });
+  return Object.assign(app, { webhooks: dispatcher, uploads });
 }
 
 export type KvestoApp = ReturnType<typeof createApp>;

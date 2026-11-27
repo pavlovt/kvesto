@@ -2,6 +2,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { apiKeyAuth, createApp, createSqliteDb, drizzleRepository, openAccess, type KvestoAction } from "../src/index.js";
 import { unregisterQuestionType } from "@kvesto/core";
 
+/** `size` bytes that start with the PNG signature, so the server sees a real PNG. */
+const pngBytes = (size: number) => {
+  const bytes = new Uint8Array(size).fill(7);
+  bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].slice(0, size));
+  return bytes;
+};
+
 const survey = {
   schemaVersion: 1,
   id: "feedback",
@@ -161,7 +168,7 @@ describe("files", () => {
     form.set("file", file);
     return app.request(`http://kvesto.test/surveys/${surveyId}/files`, { method: "POST", body: form });
   };
-  const png = (size = 10, name = "shot.png") => new File([new Uint8Array(size).fill(7)], name, { type: "image/png" });
+  const png = (size = 10, name = "shot.png") => new File([pngBytes(size)], name, { type: "image/png" });
 
   beforeEach(async () => {
     await send("POST", "/surveys", uploads);
@@ -178,7 +185,7 @@ describe("files", () => {
     expect(got.status).toBe(200);
     expect(got.headers.get("content-type")).toBe("image/png");
     expect(got.headers.get("x-content-type-options")).toBe("nosniff");
-    expect(new Uint8Array(await got.arrayBuffer())).toEqual(new Uint8Array(10).fill(7));
+    expect(new Uint8Array(await got.arrayBuffer())).toEqual(pngBytes(10));
 
     const saved = await send("POST", "/surveys/uploads/responses", { answers: { kind: "bug", shot: [entry] } });
     expect(saved.status).toBe(201);
@@ -345,7 +352,7 @@ describe("access control", () => {
   const upload = (key?: string) => {
     const form = new FormData();
     form.set("questionId", "shot");
-    form.set("file", new File([new Uint8Array(10)], "a.png", { type: "image/png" }));
+    form.set("file", new File([pngBytes(10)], "a.png", { type: "image/png" }));
     return app.request("/surveys/uploads/files", { method: "POST", body: form, headers: key ? { authorization: `Bearer ${key}` } : {} });
   };
 
@@ -594,7 +601,7 @@ describe("signatures", () => {
       return app.request("http://kvesto.test/surveys/signed/files", { method: "POST", body: form });
     };
     expect((await upload(new File(["x"], "s.jpg", { type: "image/jpeg" }))).status).toBe(400);
-    const res = await upload(new File([new Uint8Array(8)], "signature.png", { type: "image/png" }));
+    const res = await upload(new File([pngBytes(8)], "signature.png", { type: "image/png" }));
     expect(res.status).toBe(201);
     const entry = await res.json();
     expect((await send("POST", "/surveys/signed/responses", { answers: { sig: [entry] } })).status).toBe(201);

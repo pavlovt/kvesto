@@ -29,6 +29,41 @@ KVESTO_ADMIN_ORIGINS=https://admin.example.com npx kvesto-server  # sites that m
 - Outbound requests (webhooks) go only to public HTTPS addresses, checked again after DNS resolution, with no
   redirects followed.
 
+## Uploads
+
+Every upload's real type is read from its first bytes. A file whose content doesn't match its declared type (HTML
+sent as a PNG, a program as a JPEG) is refused, and so is an image or PDF with markup near its start (a polyglot).
+File names lose path parts, control characters and bidi overrides. SVG, HTML and XML are always served as downloads.
+
+```ts
+createApp({
+  repository,
+  uploads: {
+    surveyQuota: 500 * 1024 * 1024, // bytes for all of a survey's files (413 when full)
+    responseQuota: 50 * 1024 * 1024, // bytes for the files of one response
+    orphanAfterSeconds: 86_400, // app.uploads.sweep() deletes older files that no response refers to
+    sweepEverySeconds: 3600, // run the sweep on its own
+    scanFile: async (file, bytes) => (await clamav.scan(bytes)).clean || "Refused by the virus scanner",
+    signedUrls: { ttlSeconds: 3600 }, // links stop working after an hour
+  },
+});
+```
+
+Files that a partial response refers to are kept too, so a respondent can come back to them. With `signedUrls`, the
+upload returns a link with `expires` and `signature`, an expired or unsigned link answers 403, and the response list
+and the CSV export sign every file link again, so admins always get working ones.
+
+A ClamAV `scanFile` with the `clamscan` package:
+
+```ts
+import NodeClam from "clamscan";
+const clam = await new NodeClam().init({ clamdscan: { host: "127.0.0.1", port: 3310 } });
+const scanFile = async (_file, bytes) => {
+  const { isInfected, viruses } = await clam.scanStream(Readable.from(Buffer.from(bytes)));
+  return isInfected ? `Infected: ${viruses.join(", ")}` : true;
+};
+```
+
 ## Rate limits and spam
 
 ```ts

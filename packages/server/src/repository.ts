@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, count, desc, eq, gte, lt, lte, or, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, lt, lte, or, sql } from "drizzle-orm";
 import type { SurveyStorage, SurveySummary } from "@kvesto/core";
 import { textOf, type ResponseInput, type Survey, type SurveyResponse } from "@kvesto/schema";
 
@@ -101,6 +101,12 @@ export interface SurveyRepository extends Required<Omit<SurveyStorage, "uploadFi
   /** Store an uploaded file's bytes (limits are already checked by the API). */
   saveFile(file: Omit<StoredFile, "id" | "createdAt">, data: Uint8Array): Promise<StoredFile>;
   loadFile(surveyId: string, fileId: string): Promise<{ file: StoredFile; data: Uint8Array } | null>;
+  /** Bytes of all the files uploaded to a survey. */
+  fileBytes(surveyId: string): Promise<number>;
+  /** The sizes of these files of a survey, by id (missing ids are left out). */
+  fileSizes(surveyId: string, fileIds: string[]): Promise<Record<string, number>>;
+  /** Delete files uploaded before `before` (an ISO time) that no response refers to. Returns how many. */
+  deleteOrphanFiles(before: string): Promise<number>;
 }
 
 function toResponse(row: typeof responses.$inferSelect): SurveyResponse {
@@ -309,6 +315,32 @@ export function drizzleRepository(db: KvestoDb): SurveyRepository {
       const file: StoredFile = { ...input, id: randomUUID(), createdAt: now() };
       await db.insert(files).values({ ...file, data }).run();
       return file;
+    },
+    async fileBytes(surveyId) {
+      const row = await db.select({ n: sql<number>`coalesce(sum(${files.size}), 0)` }).from(files).where(eq(files.surveyId, surveyId)).get();
+      return Number(row?.n ?? 0);
+    },
+    async fileSizes(surveyId, fileIds) {
+      if (!fileIds.length) return {};
+      const rows = await db
+        .select({ id: files.id, size: files.size })
+        .from(files)
+        .where(and(eq(files.surveyId, surveyId), inArray(files.id, fileIds)))
+        .all();
+      return Object.fromEntries(rows.map((r) => [r.id, r.size]));
+    },
+    async deleteOrphanFiles(before) {
+      // A response refers to a file through its URL, which ends in the file id.
+      const result = await db
+        .delete(files)
+        .where(
+          and(
+            lt(files.createdAt, before),
+            sql`not exists (select 1 from ${responses} where ${responses.surveyId} = ${files.surveyId} and instr(${responses.answers}, ${files.id}) > 0)`,
+          ),
+        )
+        .run();
+      return result.changes;
     },
     async loadFile(surveyId, fileId) {
       const row = await db

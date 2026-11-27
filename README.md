@@ -621,7 +621,10 @@ The server sends secure headers, allows any origin only on the respondent routes
 may call the admin routes), and refuses oversized documents and answers; see the
 [server README](packages/server/README.md#safe-defaults).
 Uploads are checked against the question's `accept` and `maxSize` and a server-wide cap (`createApp({ maxFileSize })`,
-10 MB by default), stored in the database, and served back as downloads unless they are images, PDF or plain text.
+10 MB by default), and their real type is read from their first bytes: a file whose content doesn't match its type,
+or an image with a page hidden in it, is refused. Names are cleaned, and files are served back as downloads unless
+they are raster images, PDF or plain text (never SVG, HTML or XML inline). Quotas, a virus-scan hook, clean-up of
+unused uploads and expiring file links are in the [server README](packages/server/README.md#uploads).
 To mount the API inside an existing
 Hono app (and add your own auth middleware in front of it):
 
