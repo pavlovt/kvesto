@@ -19,7 +19,7 @@
 </script>
 
 <script lang="ts">
-  import { summarizeResponses, type QuestionSummary } from "@kvesto/core";
+  import { summarizeResponses, type GridCellSummary, type QuestionSummary } from "@kvesto/core";
 
   let props: SurveyResultsProps = $props();
 
@@ -50,6 +50,13 @@
   // Panels around a question, as "Outer / Inner"; untitled panels are left out.
   const groupLabel = (item: QuestionSummary | undefined) =>
     item ? item.panels.flatMap((p) => (p.title ? [p.title] : [])).join(" / ") : "";
+  // A grid cell column in a few words: the average, the counts, or how many filled it in.
+  const cellText = (cell: GridCellSummary) => {
+    if (!cell.answered) return "–";
+    if (cell.average !== undefined) return `avg ${cell.average.toFixed(1)}`;
+    if (cell.counts) return cell.counts.filter((c) => c.count).map((c) => `${c.label} ${c.count}`).join(" · ");
+    return `${cell.answered} answered`;
+  };
   const pct = (count: number, total: number) => (total ? Math.round((count / total) * 100) : 0);
   // Ranking bars: first place fills the bar, last place leaves it empty.
   const rankScore = (avg: number, n: number) => (n > 1 && avg > 0 ? Math.round(((n - avg) / (n - 1)) * 100) : 0);
@@ -97,6 +104,26 @@
                     th '{row.label}'
                     each row.counts as cell (cell.value) {
                       td.kv-dash-num.kv-dash-heat style="--share: {pct(cell.count, row.answered)}%" title="{pct(cell.count, row.answered)}%" '{cell.count}'
+                    }
+                  }
+                }
+              }
+            }
+          }
+          if item.grid {
+            .kv-dash-matrix-scroll > table.kv-dash-matrix {
+              thead > tr {
+                th ''
+                each item.question.type === "grid" ? item.question.columns : [] as col (col.value) {
+                  th '{col.label}'
+                }
+              }
+              tbody {
+                each item.grid as row (row.value) {
+                  tr {
+                    th '{row.label}'
+                    each row.columns as cell (cell.value) {
+                      td '{cellText(cell)}'
                     }
                   }
                 }

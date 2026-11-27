@@ -458,6 +458,7 @@ These do not block the first milestones, but should be settled before the one th
 | M3 · Validators | Done (unreleased) |
 | M4 · Panels | Done (unreleased) |
 | M5 · Repeating panels | Done (unreleased). Not yet: nested repeats, file questions inside repeats |
-| M6 – M32 | Planned |
+| M6 · Grid questions | Done (unreleased). Not yet: respondent-added rows |
+| M7 – M32 | Planned |
 
 Update this table as milestones land, with the release they shipped in.

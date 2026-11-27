@@ -45,3 +45,7 @@
 .kv-ranking-item button, .kv-ranking-keep, .kv-file-remove { font: inherit; cursor: pointer; }
 .kv-ranking-keep { justify-self: start; }
 .kv-files { margin: 0; padding-left: 1.2rem; }
+.kv-grid { border-collapse: collapse; }
+.kv-grid th, .kv-grid td { padding: 0.3rem 0.5rem; text-align: left; }
+.kv-grid tbody th { font-weight: normal; }
+.kv-grid input, .kv-grid select { font: inherit; padding: 0.3rem 0.45rem; min-width: 6rem; }

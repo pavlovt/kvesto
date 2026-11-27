@@ -4,6 +4,8 @@ import {
   type Panel,
   type FileAnswer,
   type FileQuestion,
+  type GridAnswer,
+  type GridQuestion,
   type MatrixAnswer,
   type MatrixQuestion,
   type Question,
@@ -342,6 +344,9 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
       case "matrix":
         wrap.append(renderMatrix(q, qid, value, b));
         break;
+      case "grid":
+        wrap.append(renderGrid(q, qid, value, b));
+        break;
       case "ranking":
         refresh = renderRanking(q, wrap, b);
         break;
@@ -404,6 +409,68 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
           set(Object.keys(next).length ? next : undefined);
         });
         tr.append(h(doc, "td", {}, h(doc, "label", { class: "kv-matrix-cell" }, input)));
+      }
+      body.append(tr);
+    }
+    table.append(body);
+    return h(doc, "div", { class: "kv-matrix-scroll" }, table);
+  }
+
+  /** A table with one input per cell; each column has its own input type. */
+  function renderGrid(q: GridQuestion, qid: string, value: AnswerValue | undefined, b: Binding) {
+    const current = (): GridAnswer => {
+      const v = b.get(model.snapshot);
+      return v && typeof v === "object" && !Array.isArray(v) ? (v as GridAnswer) : {};
+    };
+    const initial = value && typeof value === "object" && !Array.isArray(value) ? (value as GridAnswer) : {};
+    const setCell = (row: string, col: string, cell: string | number | boolean | undefined) => {
+      const next: GridAnswer = { ...current() };
+      const cells = { ...(next[row] ?? {}) };
+      if (cell === undefined || cell === "") delete cells[col];
+      else cells[col] = cell;
+      if (Object.keys(cells).length) next[row] = cells;
+      else delete next[row];
+      b.set(Object.keys(next).length ? next : undefined);
+    };
+    const table = h(doc, "table", { class: "kv-grid", "aria-labelledby": `${qid}-title` });
+    const headRow = h(doc, "tr", {}, h(doc, "td", {}));
+    for (const col of q.columns) headRow.append(h(doc, "th", { scope: "col" }, col.label));
+    table.append(h(doc, "thead", {}, headRow));
+    const body = h(doc, "tbody");
+    for (const row of q.rows) {
+      const tr = h(doc, "tr", {}, h(doc, "th", { scope: "row" }, row.label));
+      for (const col of q.columns) {
+        const label = `${row.label}: ${col.label}`;
+        const cell = initial[row.value]?.[col.value];
+        let input: HTMLInputElement | HTMLSelectElement;
+        if (col.cellType === "dropdown" || col.cellType === "boolean") {
+          const options =
+            col.cellType === "dropdown"
+              ? (col.choices ?? [])
+              : [
+                  { value: "true", label: labels.yes },
+                  { value: "false", label: labels.no },
+                ];
+          const select = h(doc, "select", { "aria-label": label }, h(doc, "option", { value: "" }, ""));
+          for (const o of options) select.append(h(doc, "option", { value: o.value }, o.label));
+          select.value = cell === undefined ? "" : String(cell);
+          select.addEventListener("change", () =>
+            setCell(row.value, col.value, col.cellType === "boolean" ? (select.value === "" ? undefined : select.value === "true") : select.value),
+          );
+          input = select;
+        } else {
+          const field = h(doc, "input", { type: col.cellType === "number" ? "number" : "text", "aria-label": label });
+          field.value = cell === undefined ? "" : String(cell);
+          field.addEventListener("input", () => {
+            const raw = field.value;
+            if (col.cellType !== "number") return setCell(row.value, col.value, raw);
+            const n = raw.trim() === "" ? undefined : Number(raw);
+            setCell(row.value, col.value, n !== undefined && Number.isFinite(n) ? n : undefined);
+          });
+          input = field;
+        }
+        input.dataset.cell = `${row.value}.${col.value}`;
+        tr.append(h(doc, "td", {}, input));
       }
       body.append(tr);
     }

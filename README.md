@@ -126,6 +126,7 @@ React, Vue or Svelte instead of using the bundled renderer.
 | `rating` | number | `min` (default 1) to `max` (default 5) |
 | `boolean` | true / false | optional `labelTrue`, `labelFalse` |
 | `matrix` | `{ row: column }` | `rows` × `columns` grid; `multiple: true` allows several columns per row (`{ row: [columns] }`); `required` means every row |
+| `grid` | `{ row: { column: value } }` | `rows` × `columns`, each column with a `cellType` (text, number, dropdown with `choices`, boolean), optional `required` and `validators` |
 | `ranking` | choice values, best first | |
 | `file` | `[{ name, type, size, url }]` | `accept`, `maxSize` (bytes), `maxFiles` (default 1) |
 

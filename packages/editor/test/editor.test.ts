@@ -34,7 +34,7 @@ describe("mountEditor", () => {
     const survey = { schemaVersion: 1 as const, id: "s", title: "S", pages: [{ id: "p", elements: [] }] };
     mountEditor(target, { survey, preview: false, onchange: (s) => changes.push(s) });
     flushSync();
-    expect(target.querySelectorAll("button")).toHaveLength(12); // one per question type, panel and repeating panel; no Save without storage
+    expect(target.querySelectorAll("button")).toHaveLength(13); // one per question type, panel and repeating panel; no Save without storage
 
     const rating = [...target.querySelectorAll("button")].find((b) => b.textContent === "rating")!;
     rating.click();

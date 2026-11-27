@@ -1,11 +1,30 @@
 import { repeatItems } from "./logic.js";
-import { allQuestions, walkElements, type AnswerValue, type FileAnswer, type Question, type Survey, type SurveyResponse } from "@kvesto/schema";
+import { allQuestions, walkElements, type AnswerValue, type GridAnswer, type MatrixAnswer, type FileAnswer, type Question, type Survey, type SurveyResponse } from "@kvesto/schema";
 
 export interface MatrixRowSummary {
   value: string;
   label: string;
   answered: number;
   counts: { value: string; label: string; count: number }[];
+}
+
+/** One cell column of a grid row. */
+export interface GridCellSummary {
+  value: string;
+  label: string;
+  answered: number;
+  /** Number columns. */
+  average?: number;
+  /** Dropdown and boolean columns. */
+  counts?: { value: string; label: string; count: number }[];
+}
+
+export interface GridRowSummary {
+  value: string;
+  label: string;
+  /** Responses (or items) with anything filled in this row. */
+  answered: number;
+  columns: GridCellSummary[];
 }
 
 export interface RankingSummary {
@@ -38,6 +57,8 @@ export interface QuestionSummary {
   samples?: string[];
   /** For matrix questions: column counts per row. */
   matrix?: MatrixRowSummary[];
+  /** For grid questions: per row, a summary of each column. */
+  grid?: GridRowSummary[];
   /** For ranking questions: items ordered by average rank, best first. */
   ranking?: RankingSummary[];
   /** For file questions: the most recent files, and how many were uploaded in total. */
@@ -107,8 +128,8 @@ export function summarizeResponses(survey: Survey, responses: SurveyResponse[], 
         case "matrix":
           summary.matrix = question.rows.map((row) => {
             const cells = values
-              .map((v) => (v && typeof v === "object" && !Array.isArray(v) ? v[row.value] : undefined))
-              .filter((c) => c !== undefined);
+              .map((v) => (v && typeof v === "object" && !Array.isArray(v) ? (v as MatrixAnswer)[row.value] : undefined))
+              .filter((c): c is string | string[] => typeof c === "string" || Array.isArray(c));
             const counts = new Map(question.columns.map((c) => [c.value, 0]));
             for (const cell of cells) {
               for (const c of Array.isArray(cell) ? cell : [cell]) if (counts.has(c)) counts.set(c, counts.get(c)! + 1);
@@ -118,6 +139,36 @@ export function summarizeResponses(survey: Survey, responses: SurveyResponse[], 
               label: row.label,
               answered: cells.length,
               counts: question.columns.map((c) => ({ value: c.value, label: c.label, count: counts.get(c.value)! })),
+            };
+          });
+          break;
+        case "grid":
+          summary.grid = question.rows.map((row) => {
+            const cellsOf = values
+              .map((v) => (v && typeof v === "object" && !Array.isArray(v) ? (v as GridAnswer)[row.value] : undefined))
+              .filter((c): c is GridAnswer[string] => Boolean(c) && typeof c === "object");
+            return {
+              value: row.value,
+              label: row.label,
+              answered: cellsOf.filter((c) => Object.values(c).some((x) => x !== "")).length,
+              columns: question.columns.map((col) => {
+                const cells = cellsOf.map((c) => c[col.value]).filter((x) => x !== undefined && x !== "");
+                const column: GridCellSummary = { value: col.value, label: col.label, answered: cells.length };
+                if (col.cellType === "number") {
+                  const nums = cells.filter((x): x is number => typeof x === "number");
+                  if (nums.length) column.average = nums.reduce((a, b) => a + b, 0) / nums.length;
+                } else if (col.cellType === "dropdown" || col.cellType === "boolean") {
+                  const options =
+                    col.cellType === "dropdown"
+                      ? (col.choices ?? [])
+                      : [
+                          { value: "true", label: "Yes" },
+                          { value: "false", label: "No" },
+                        ];
+                  column.counts = options.map((o) => ({ ...o, count: cells.filter((x) => String(x) === o.value).length }));
+                }
+                return column;
+              }),
             };
           });
           break;

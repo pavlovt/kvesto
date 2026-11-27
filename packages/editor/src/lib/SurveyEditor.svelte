@@ -33,6 +33,7 @@
     "matrix",
     "ranking",
     "file",
+    "grid",
   ];
 
   // The `survey` prop is only the starting point; edits live in `source`.
@@ -90,7 +91,20 @@
                   { value: "agree", label: "Agree" },
                 ],
               }
-            : type === "file"
+            : type === "grid"
+              ? {
+                  ...base,
+                  type,
+                  rows: [
+                    { value: "row1", label: "Item 1" },
+                    { value: "row2", label: "Item 2" },
+                  ],
+                  columns: [
+                    { value: "name", label: "Name", cellType: "text" as const },
+                    { value: "amount", label: "Amount", cellType: "number" as const },
+                  ],
+                }
+              : type === "file"
               ? { ...base, type, maxFiles: 1, maxSize: 5 * 1024 * 1024 }
               : { ...base, type },
     );

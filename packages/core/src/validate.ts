@@ -1,4 +1,5 @@
 import {
+  gridCellQuestion,
   panelQuestions,
   walkElements,
   type AnswerValue,
@@ -21,6 +22,13 @@ export interface ValidateOptions {
   /** All answers, passed to custom validators that compare questions. */
   answers?: Answers;
 }
+
+const cellTypeHint = {
+  text: "expected text.",
+  number: "enter a number.",
+  dropdown: "choose one of the options.",
+  boolean: "choose yes or no.",
+} as const;
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
@@ -75,14 +83,14 @@ export function validateFile(question: FileQuestion, file: { name: string; type:
 export function validateAnswer(question: Question, value: AnswerValue | undefined, options: ValidateOptions = {}): string | null {
   const required = options.required ?? question.required ?? false;
   if (isEmptyAnswer(value)) return required ? "This question is required." : null;
-  const shapeError = checkShape(question, value!, required);
+  const shapeError = checkShape(question, value!, required, options);
   if (shapeError) return shapeError;
   return question.validators?.length
     ? runValidators(question, value!, question.validators, { custom: options.validators, answers: options.answers ?? {} })
     : null;
 }
 
-function checkShape(question: Question, value: AnswerValue, required: boolean): string | null {
+function checkShape(question: Question, value: AnswerValue, required: boolean, options: ValidateOptions): string | null {
   switch (question.type) {
     case "text":
     case "comment":
@@ -120,6 +128,46 @@ function checkShape(question: Question, value: AnswerValue, required: boolean): 
       if (required) {
         const missing = question.rows.filter((r) => isEmptyAnswer(value[r.value] as AnswerValue | undefined));
         if (missing.length) return `Answer every row (missing: ${missing.map((r) => r.label).join(", ")}).`;
+      }
+      return null;
+    }
+    case "grid": {
+      if (!isRecord(value)) return "Expected one set of answers per row.";
+      const rows = new Map(question.rows.map((r) => [r.value, r.label]));
+      const columns = new Map(question.columns.map((c) => [c.value, c]));
+      for (const [row, cells] of Object.entries(value)) {
+        if (!rows.has(row)) return `Unknown row "${row}".`;
+        if (!isRecord(cells)) return `Expected answers for row "${rows.get(row)}".`;
+        for (const [col, cell] of Object.entries(cells)) {
+          const column = columns.get(col);
+          if (!column) return `Unknown column "${col}".`;
+          if (isEmptyAnswer(cell as AnswerValue)) continue;
+          const ok =
+            column.cellType === "number"
+              ? typeof cell === "number" && Number.isFinite(cell)
+              : column.cellType === "boolean"
+                ? typeof cell === "boolean"
+                : column.cellType === "dropdown"
+                  ? typeof cell === "string" && (column.choices ?? []).some((c) => c.value === cell)
+                  : typeof cell === "string";
+          if (!ok) return `${rows.get(row)}, ${column.label}: ${cellTypeHint[column.cellType]}`;
+          const err = column.validators?.length
+            ? runValidators(gridCellQuestion(question, column), cell as AnswerValue, column.validators, {
+                custom: options.validators,
+                answers: options.answers ?? {},
+              })
+            : null;
+          if (err) return `${rows.get(row)}, ${column.label}: ${err}`;
+        }
+        const filled = Object.values(cells).some((c) => !isEmptyAnswer(c as AnswerValue));
+        for (const column of question.columns) {
+          if (filled && column.required && isEmptyAnswer(cells[column.value] as AnswerValue | undefined)) {
+            return `${rows.get(row)}: ${column.label} is required.`;
+          }
+        }
+      }
+      if (required && !Object.values(value).some((cells) => isRecord(cells) && Object.values(cells).some((c) => !isEmptyAnswer(c as AnswerValue)))) {
+        return "This question is required.";
       }
       return null;
     }

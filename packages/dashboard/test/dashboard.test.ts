@@ -85,4 +85,34 @@ describe("mountDashboard", () => {
     const groups = [...target.querySelectorAll(".kv-dash-group")].map((g) => g.textContent);
     expect(groups).toEqual(["Group one"]);
   });
+
+  it("shows grid questions as a table of column summaries", async () => {
+    const storage = memoryStorage();
+    const g: SurveyInput = {
+      schemaVersion: 1,
+      id: "g",
+      title: "G",
+      pages: [
+        {
+          id: "p",
+          elements: [
+            {
+              id: "d",
+              type: "grid",
+              title: "Devices",
+              rows: [{ value: "phone", label: "Phone" }],
+              columns: [{ value: "years", label: "Years", cellType: "number" }],
+            },
+          ],
+        },
+      ],
+    };
+    await storage.saveSurvey(g as never);
+    await storage.saveResponse("g", { answers: { d: { phone: { years: 2 } } } });
+    await storage.saveResponse("g", { answers: { d: { phone: { years: 4 } } } });
+    const target = document.createElement("div");
+    mountDashboard(target, { storage, surveyId: "g" });
+    await settle();
+    expect(target.querySelector(".kv-dash-matrix tbody td")?.textContent).toBe("avg 3.0");
+  });
 });

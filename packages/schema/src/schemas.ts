@@ -239,6 +239,32 @@ export const MatrixQuestionSchema = z.object({
   multiple: z.boolean().optional(),
 });
 
+/** One column of a grid question: what kind of input each cell of the column has. */
+export const GridColumnSchema = z.object({
+  value: z.string().min(1),
+  label: RequiredDisplayTextSchema,
+  /** The input in each cell. */
+  cellType: z.enum(["text", "number", "dropdown", "boolean"]),
+  /** The options of a `dropdown` column. */
+  choices: z.array(ChoiceSchema).min(1).optional(),
+  /** Every row the respondent fills in must have this column too. */
+  required: z.boolean().optional(),
+  /** Rules for each non-empty cell (pattern and length for text, range for number). */
+  validators: z.array(ValidatorSchema).optional(),
+});
+
+/**
+ * A grid of inputs: each row is a statement, each column an input of its own type.
+ * Answer: `{ [rowValue]: { [columnValue]: string | number | boolean } }`.
+ * `required` means at least one row filled in; a `required` column must be filled in every row that is.
+ */
+export const GridQuestionSchema = z.object({
+  ...questionBase,
+  type: z.literal("grid"),
+  rows: z.array(ChoiceSchema).min(1),
+  columns: z.array(GridColumnSchema).min(1),
+});
+
 /** Order a list of choices. Answer: every choice value, most preferred first. */
 export const RankingQuestionSchema = z.object({
   ...questionBase,
@@ -272,6 +298,7 @@ export const QuestionSchema = z.discriminatedUnion("type", [
   MatrixQuestionSchema,
   RankingQuestionSchema,
   FileQuestionSchema,
+  GridQuestionSchema,
 ]);
 
 /**
@@ -360,6 +387,25 @@ export const PageSchema = z.object({
   /** Questions and panels, in order. */
   elements: z.array(ElementSchema),
 });
+
+/**
+ * A grid cell as a stand-alone question, so cell values can be validated
+ * with the same rules as questions: text and number cells become text
+ * questions (`inputType: "number"`), dropdowns dropdowns, booleans booleans.
+ */
+export function gridCellQuestion(grid: { id: string }, column: GridColumn): Question {
+  const base = { id: `${grid.id}.${column.value}`, title: column.label, ...(column.validators ? { validators: column.validators } : {}) };
+  switch (column.cellType) {
+    case "text":
+      return { ...base, type: "text" };
+    case "number":
+      return { ...base, type: "text", inputType: "number" };
+    case "dropdown":
+      return { ...base, type: "dropdown", choices: column.choices ?? [] };
+    case "boolean":
+      return { ...base, type: "boolean" };
+  }
+}
 
 /** Is `validator` meaningful for `question`? Returns the reason when not. */
 export function validatorProblem(question: Question, validator: Validator): string | null {
@@ -498,6 +544,25 @@ export const SurveySchema = z
           ctx.addIssue({ code: "custom", path: [...path, "columns"], message: "Column values must be unique" });
         }
       }
+      if (q.type === "grid") {
+        if (!uniqueValues(q.rows)) ctx.addIssue({ code: "custom", path: [...path, "rows"], message: "Row values must be unique" });
+        if (!uniqueValues(q.columns)) {
+          ctx.addIssue({ code: "custom", path: [...path, "columns"], message: "Column values must be unique" });
+        }
+        q.columns.forEach((col, ci) => {
+          const cpath = [...path, "columns", ci];
+          if (col.cellType === "dropdown" && !col.choices) {
+            ctx.addIssue({ code: "custom", path: [...cpath, "choices"], message: "A dropdown column needs choices" });
+          }
+          if (col.choices && !uniqueValues(col.choices)) {
+            ctx.addIssue({ code: "custom", path: [...cpath, "choices"], message: "Choice values must be unique" });
+          }
+          col.validators?.forEach((v, vi) => {
+            const problem = validatorProblem(gridCellQuestion(q, col), v);
+            if (problem) ctx.addIssue({ code: "custom", path: [...cpath, "validators", vi], message: problem });
+          });
+        });
+      }
       if (q.type === "rating" && q.min > q.max) {
         ctx.addIssue({ code: "custom", path: [...path, "max"], message: "max must be at least min" });
       }
@@ -533,6 +598,9 @@ export const FileAnswerSchema = z.object({
 /** A matrix answer: row value → column value (or values with `multiple`). */
 export const MatrixAnswerSchema = z.record(z.string(), z.union([z.string(), z.array(z.string())]));
 
+/** A grid answer: row value → column value → cell value. */
+export const GridAnswerSchema = z.record(z.string(), z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])));
+
 export const ItemAnswerValueSchema = z.union([
   z.string(),
   z.number(),
@@ -540,6 +608,7 @@ export const ItemAnswerValueSchema = z.union([
   z.array(z.string()),
   z.array(FileAnswerSchema),
   MatrixAnswerSchema,
+  GridAnswerSchema,
   z.null(),
 ]);
 
@@ -562,6 +631,7 @@ export const AnswerValueSchema = z.union([
   z.array(z.string()),
   z.array(FileAnswerSchema),
   MatrixAnswerSchema,
+  GridAnswerSchema,
   RepeatAnswerSchema,
   z.null(),
 ]);
@@ -587,6 +657,9 @@ export type RankingQuestion = z.infer<typeof RankingQuestionSchema>;
 export type FileQuestion = z.infer<typeof FileQuestionSchema>;
 export type FileAnswer = z.infer<typeof FileAnswerSchema>;
 export type MatrixAnswer = z.infer<typeof MatrixAnswerSchema>;
+export type GridAnswer = z.infer<typeof GridAnswerSchema>;
+export type GridQuestion = z.infer<typeof GridQuestionSchema>;
+export type GridColumn = z.infer<typeof GridColumnSchema>;
 export type Question = z.infer<typeof QuestionSchema>;
 export type QuestionType = Question["type"];
 export type Page = z.infer<typeof PageSchema>;
