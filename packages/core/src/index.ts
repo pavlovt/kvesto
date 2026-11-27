@@ -32,6 +32,7 @@ export {
   type ExpressionFunctions,
 } from "./expression.js";
 export { fileToDataUrl } from "./files.js";
+export { pipeText, formatAnswer, type PipeOptions } from "./piping.js";
 export { summarizeResponses, type QuestionSummary, type PanelHeading, type MatrixRowSummary, type GridRowSummary, type GridCellSummary, type RankingSummary } from "./summary.js";
 export type { SurveyStorage, SurveySummary } from "./storage.js";
 export { memoryStorage } from "./adapters/memory.js";

@@ -6,6 +6,7 @@
  */
 import { z } from "zod";
 import { walkElements } from "./elements.js";
+import { textPlaceholders } from "./placeholders.js";
 import { ExpressionError, MAX_EXPRESSION_LENGTH, expressionRefs, parseExpression, type ExpressionRef } from "./expression.js";
 
 export const SURVEY_SCHEMA_VERSION = 1 as const;
@@ -507,6 +508,8 @@ export const SurveySchema = z
     title: RequiredDisplayTextSchema,
     description: DisplayTextSchema.optional(),
     pages: z.array(PageSchema).min(1),
+    /** Shown after the respondent submits. Takes answer placeholders such as `{name}`. */
+    completedText: DisplayTextSchema.optional(),
   })
   .superRefine((survey, ctx) => {
     // Questions seen so far, in survey order (conditions may only look back), with the repeating panel they are in.
@@ -572,6 +575,22 @@ export const SurveySchema = z
       return out;
     };
 
+    // Every question id, so placeholders can tell a question from other text in braces.
+    const questionIds = new Set<string>();
+    walkElements(survey, (el) => void (el.type !== "panel" && questionIds.add(el.id)));
+    /** Answer placeholders in display text may only refer to earlier questions. Braces around anything else are plain text. */
+    const checkText = (
+      text: string | undefined,
+      path: (string | number)[],
+      earlierOnly: Set<string>,
+      repeat: string | undefined,
+      { itemRefs = true } = {},
+    ) => {
+      if (!text || !text.includes("{")) return;
+      const refs = textPlaceholders(text).filter((r) => questionIds.has(r.name) && (itemRefs || r.scope !== "item"));
+      for (const message of refProblems(refs, earlierOnly, repeat)) ctx.addIssue({ code: "custom", path, message });
+    };
+
     const elementIds = new Set<string>();
     let pageIndex = -1;
     walkElements(survey, (el, at) => {
@@ -580,11 +599,14 @@ export const SurveySchema = z
         // A page condition can only use questions from earlier pages.
         const page = survey.pages[pageIndex]!;
         checkCondition(page.visibleIf, ["pages", pageIndex, "visibleIf"], new Set(seen.keys()), undefined);
+        checkText(page.title, ["pages", pageIndex, "title"], new Set(seen.keys()), undefined);
       }
       const path = at.path;
       const earlier = new Set(seen.keys());
       const repeat = repeatOf(at.panels);
       checkCondition(el.visibleIf, [...path, "visibleIf"], earlier, repeat);
+      checkText(el.title, [...path, "title"], earlier, repeat);
+      checkText(el.description, [...path, "description"], earlier, repeat);
       if (elementIds.has(el.id)) {
         ctx.addIssue({ code: "custom", path: [...path, "id"], message: `Duplicate element id "${el.id}"` });
       }
@@ -595,6 +617,8 @@ export const SurveySchema = z
             ctx.addIssue({ code: "custom", path: [...path, "repeat"], message: "Repeating panels cannot be nested" });
           }
           repeats.add(el.id);
+          // `{$item.q}` in an item title may use any question of the item.
+          checkText(el.repeat.itemTitle, [...path, "repeat", "itemTitle"], earlier, repeat, { itemRefs: false });
           const { min, max } = el.repeat;
           if (min !== undefined && max !== undefined && min > max) {
             ctx.addIssue({ code: "custom", path: [...path, "repeat", "max"], message: "max must be at least min" });
@@ -610,6 +634,7 @@ export const SurveySchema = z
       if ("choices" in q && !uniqueValues(q.choices)) {
         ctx.addIssue({ code: "custom", path: [...path, "choices"], message: "Choice values must be unique" });
       }
+      if ("choices" in q) q.choices.forEach((c, ci) => checkText(c.label, [...path, "choices", ci, "label"], earlier, repeat));
       if (q.type === "matrix") {
         if (!uniqueValues(q.rows)) ctx.addIssue({ code: "custom", path: [...path, "rows"], message: "Row values must be unique" });
         if (!uniqueValues(q.columns)) {
@@ -652,8 +677,13 @@ export const SurveySchema = z
     survey.pages.forEach((page, pi) => {
       if (page.elements.length === 0) {
         checkCondition(page.visibleIf, ["pages", pi, "visibleIf"], new Set(seen.keys()), undefined);
+        checkText(page.title, ["pages", pi, "title"], new Set(seen.keys()), undefined);
       }
     });
+    // The survey's title and description come before every question; the completion text after all of them.
+    checkText(survey.title, ["title"], new Set(), undefined);
+    checkText(survey.description, ["description"], new Set(), undefined);
+    checkText(survey.completedText, ["completedText"], new Set(seen.keys()), undefined);
   });
 
 /** One uploaded file, as stored in an answer. */

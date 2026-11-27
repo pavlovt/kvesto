@@ -5,6 +5,7 @@
   import ChoiceList from "./ChoiceList.svelte";
   import ConditionBuilder from "./ConditionBuilder.svelte";
   import ValidatorList from "./ValidatorList.svelte";
+  import { conditionSources } from "../doc/conditions.js";
 
   let { doc, docState: view }: { doc: SurveyDocument; docState: DocumentState } = $props();
 
@@ -73,6 +74,15 @@
     const cols = el.columns as Loose[];
     set("columns", [...cols, { value: `col${cols.length + 1}`, label: `Column ${cols.length + 1}`, cellType: "text" }]);
   }
+  /** Earlier questions whose answer can be piped into this element's title: `{id}`, or `{$item.id}` in the same repeat item. */
+  const pipeSources = $derived(el ? conditionSources(view.survey, { element: el.id }) : []);
+  function insertAnswer(select: HTMLSelectElement) {
+    const source = pipeSources.find((s) => s.id === select.value);
+    select.value = "";
+    if (!el || !source) return;
+    const title = `${el.title ?? ""}${el.title ? " " : ""}{${source.scope ? "$item." : ""}${source.id}}`;
+    doc.updateElement(el.id, { title });
+  }
   const inputTypes = ["text", "email", "number", "date", "url", "tel"];
   const cellTypes = ["text", "number", "dropdown", "boolean"];
 </script>
@@ -121,6 +131,14 @@
       label {
         span 'Title'
         input value={el.title ?? ""} oninput={(e) => (el.type === "panel" ? set("title", e.currentTarget.value) : setTitle(e.currentTarget.value))}
+      }
+      if pipeSources.length {
+        select.kv-props-pipe aria-label="Insert an earlier answer into the title" onchange={(e) => insertAnswer(e.currentTarget)} {
+          option value="" 'Insert an answer…'
+          each pipeSources as s (s.id) {
+            option value={s.id} '{s.label}{s.scope ? " (same item)" : ""}'
+          }
+        }
       }
       label {
         span 'Description'

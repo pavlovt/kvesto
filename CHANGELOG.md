@@ -7,6 +7,8 @@ All six packages (`kvesto`, `@kvesto/schema`, `core`, `server`, `editor`, `dashb
 - Expressions (M11): `{ "expr": "{age} >= 18 and {role} = 'dev'" }` conditions, a safe parser and evaluator with
   built-in functions, and custom functions through `createSurvey({ functions })` and `createApp({ functions })`.
   The editor's logic builder can write expressions.
+- Answer piping (M12): `{questionId}` placeholders in titles, descriptions, choice labels and the new
+  `completedText`, rendered as text; `{{` escapes a brace. The editor can insert an earlier answer into a title.
 
 ## 0.2.0
 

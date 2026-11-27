@@ -275,6 +275,17 @@ describe("logic builder in the property panel", () => {
     ui.editor.destroy();
   });
 
+  it("inserts an earlier answer into a title", () => {
+    const ui = setup();
+    ui.select("nick");
+    const pipe = ui.$<HTMLSelectElement>(".kv-props .kv-props-pipe");
+    expect([...pipe.options].map((o) => o.value)).toEqual(["", "role", "age"]);
+    ui.choose(pipe, "role");
+    expect(ui.find("nick")!.title).toBe("Nickname {role}");
+    expect(pipe.value).toBe("");
+    ui.editor.destroy();
+  });
+
   it("checks expression syntax and references in the model", () => {
     expect(expressionError("{a} +")).toMatch(/Unexpected end/);
     expect(expressionError("{a} + 1")).toBeNull();

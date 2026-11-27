@@ -18,6 +18,7 @@ import type { SurveyStorage } from "./storage.js";
 import { fileToDataUrl } from "./files.js";
 import { repeatItems, resolveLogic, visibleElements, type SurveyLogic } from "./logic.js";
 import { unknownFunctions, type ExpressionFunctions } from "./expression.js";
+import { pipeText } from "./piping.js";
 import { itemKey, validateAnswer, validateFile, validateRepeat, validationTargets } from "./validate.js";
 import type { CustomValidators } from "./validators.js";
 
@@ -147,6 +148,18 @@ export class SurveyModel {
 
   isRequired(questionId: string): boolean {
     return this.state.logic.requiredQuestions.has(questionId);
+  }
+
+  /**
+   * Display text with `{questionId}` placeholders filled from the current
+   * answers (hidden questions pipe as empty). For custom renderers; the
+   * bundled renderer does this itself. `item` is a repeating panel item, for
+   * `{$item.q}`: `{ panel: "children", index: 0 }`.
+   */
+  text(raw: string, item?: { panel: string; index: number }): string {
+    const { logic } = this.state;
+    const itemAnswers = item ? logic.items[item.panel]?.[item.index]?.answers : undefined;
+    return pipeText(raw, this.survey, logic.answers, itemAnswers ? { item: itemAnswers } : {});
   }
 
   private question(questionId: string): Question {

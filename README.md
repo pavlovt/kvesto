@@ -222,6 +222,21 @@ createApp({ repository, authorize, functions });          // on the server
 A survey that calls a function the runner or the server doesn't have is refused when it is loaded or saved, and an
 expression that fails while it runs counts as false.
 
+#### Answer piping
+
+Titles, descriptions, choice labels, page and panel titles, repeat item titles and the survey's `completedText` can
+show earlier answers with `{questionId}` placeholders, updated as the respondent types:
+
+```json
+{ "id": "why", "type": "comment", "title": "Why did you pick {color}, {name}?" }
+```
+
+Choices show their labels, lists are joined with commas, `{matrix.row}` and `{grid.row.column}` pick one part, and
+inside a repeating panel `{$item.q}` is the same item's answer (so `"itemTitle": "Child {n}: {$item.name}"` works).
+A question hidden by logic pipes as empty. Piped answers are always inserted as text, never as HTML. A placeholder
+may only name an earlier question; braces around anything that isn't a question id stay as written, and `{{` and
+`}}` give literal braces. For a custom UI, `model.text(raw)` does the same.
+
 #### Validators
 
 Any question takes a `validators` list. Each rule runs on a non-empty answer, in order, in the runner and on the

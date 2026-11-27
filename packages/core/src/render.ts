@@ -1,4 +1,5 @@
 import {
+  type Answers,
   type AnswerValue,
   type Element,
   type Panel,
@@ -14,6 +15,7 @@ import {
 import { createSurvey, type CreateSurveyOptions, type SurveyModel, type SurveyState } from "./model.js";
 import { repeatItems } from "./logic.js";
 import { formatBytes, itemKey } from "./validate.js";
+import { pipeText } from "./piping.js";
 
 export interface RenderOptions {
   /** Text overrides for the built-in buttons and messages. */
@@ -70,6 +72,8 @@ interface Binding {
   set(value: AnswerValue | undefined): void;
   visible(state: SurveyState): boolean;
   required(state: SurveyState): boolean;
+  /** Inside a repeating panel: the item's answers, for `{$item.q}` placeholders. */
+  item?: (state: SurveyState) => Answers | undefined;
 }
 
 /** A rendered question: its element, plus a hook to refresh it from new state. */
@@ -95,6 +99,25 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
   let renderedPage = -1;
   let renderedStatus: SurveyState["status"] | null = null;
   let views: QuestionView[] = [];
+  /** Refreshers for display text with answer placeholders, on the current page (or the repeat item being built). */
+  let texts: ((state: SurveyState) => void)[] = [];
+
+  const pipeOptions = { yes: labels.yes, no: labels.no };
+  /**
+   * Display text, with `{questionId}` placeholders filled from the answers and
+   * kept up to date as they change. Always text, never HTML.
+   */
+  const txt = (raw: string, item?: (s: SurveyState) => Answers | undefined): Node | string => {
+    if (!raw.includes("{") && !raw.includes("}")) return raw;
+    const node = doc.createTextNode("");
+    const refresh = (s: SurveyState) => {
+      const next = pipeText(raw, s.survey, s.logic.answers, { ...pipeOptions, item: item?.(s) });
+      if (node.data !== next) node.data = next;
+    };
+    refresh(model.snapshot);
+    texts.push(refresh);
+    return node;
+  };
 
   const onSubmit = (e: Event) => {
     e.preventDefault();
@@ -107,7 +130,8 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
   const unsubscribe = model.subscribe((state) => {
     if (state.status === "completed") {
       if (renderedStatus !== "completed") {
-        root.replaceChildren(h(doc, "p", { class: "kv-completed", role: "status" }, labels.completed));
+        const done = pipeText(state.survey.completedText ?? labels.completed, state.survey, state.logic.answers, pipeOptions);
+        root.replaceChildren(h(doc, "p", { class: "kv-completed", role: "status" }, done));
       }
       renderedStatus = state.status;
       return;
@@ -117,6 +141,7 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
       renderedPage = state.pageIndex;
     }
     for (const v of views) v.update(state);
+    for (const t of texts) t(state);
     const submit = root.querySelector<HTMLButtonElement>(".kv-next");
     if (submit) {
       submit.disabled = state.status === "submitting" || state.uploading.length > 0;
@@ -134,12 +159,13 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
 
   function renderPage(state: SurveyState) {
     const parts: Node[] = [];
-    if (state.visiblePageIndex === 0) {
-      parts.push(h(doc, "h2", { class: "kv-title" }, state.survey.title));
-      if (state.survey.description) parts.push(h(doc, "p", { class: "kv-description" }, state.survey.description));
-    }
-    if (state.page.title) parts.push(h(doc, "h3", { class: "kv-page-title" }, state.page.title));
     views = [];
+    texts = [];
+    if (state.visiblePageIndex === 0) {
+      parts.push(h(doc, "h2", { class: "kv-title" }, txt(state.survey.title)));
+      if (state.survey.description) parts.push(h(doc, "p", { class: "kv-description" }, txt(state.survey.description)));
+    }
+    if (state.page.title) parts.push(h(doc, "h3", { class: "kv-page-title" }, txt(state.page.title)));
     parts.push(...state.page.elements.map((el) => renderElement(el, state)));
 
     const nav = h(doc, "div", { class: "kv-nav" });
@@ -169,8 +195,8 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
     }
     if (el.repeat) return renderRepeat(el, state);
     const wrap = h(doc, "fieldset", { class: "kv-panel", "data-panel": el.id });
-    if (el.title) wrap.append(h(doc, "legend", { class: "kv-panel-title" }, el.title));
-    if (el.description) wrap.append(h(doc, "p", { class: "kv-panel-description" }, el.description));
+    if (el.title) wrap.append(h(doc, "legend", { class: "kv-panel-title" }, txt(el.title)));
+    if (el.description) wrap.append(h(doc, "p", { class: "kv-panel-description" }, txt(el.description)));
     const body = h(doc, "div", { class: "kv-panel-body" });
     for (const child of el.elements) body.append(renderElement(child, state));
     wrap.append(body);
@@ -186,8 +212,8 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
   function renderRepeat(panel: Panel, state: SurveyState): El {
     const repeat = panel.repeat ?? {};
     const wrap = h(doc, "fieldset", { class: "kv-panel kv-repeat", "data-panel": panel.id });
-    if (panel.title) wrap.append(h(doc, "legend", { class: "kv-panel-title" }, panel.title));
-    if (panel.description) wrap.append(h(doc, "p", { class: "kv-panel-description" }, panel.description));
+    if (panel.title) wrap.append(h(doc, "legend", { class: "kv-panel-title" }, txt(panel.title)));
+    if (panel.description) wrap.append(h(doc, "p", { class: "kv-panel-description" }, txt(panel.description)));
     const list = h(doc, "div", { class: "kv-repeat-items" });
     const add = h(doc, "button", { type: "button", class: "kv-repeat-add" }, repeat.addLabel ?? labels.addItem);
     add.addEventListener("click", () => model.addItem(panel.id));
@@ -195,14 +221,20 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
     wrap.append(list, add, err);
 
     let itemViews: QuestionView[] = [];
+    let itemTexts: ((state: SurveyState) => void)[] = [];
     let renderedCount = -1;
     const build = (s: SurveyState) => {
       const items = repeatItems(s.answers[panel.id]);
       itemViews = [];
+      // Texts inside items are refreshed by this panel, and dropped with the items when they are rebuilt.
+      const pageTexts = texts;
+      texts = itemTexts = [];
       list.replaceChildren(
         ...items.map((_, index) => {
           const item = h(doc, "div", { class: "kv-repeat-item", "data-item": String(index) });
-          const title = (repeat.itemTitle ?? labels.itemTitle).replaceAll("{n}", String(index + 1));
+          const itemAnswers = (st: SurveyState) => st.logic.items[panel.id]?.[index]?.answers;
+          const rawTitle = (repeat.itemTitle ?? labels.itemTitle).replaceAll("{n}", String(index + 1));
+          const title = pipeText(rawTitle, s.survey, s.logic.answers, { ...pipeOptions, item: itemAnswers(s) });
           const remove = h(
             doc,
             "button",
@@ -210,13 +242,13 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
             repeat.removeLabel ?? labels.removeItem,
           );
           remove.addEventListener("click", () => model.removeItem(panel.id, index));
-          item.append(h(doc, "div", { class: "kv-repeat-item-head" }, h(doc, "span", { class: "kv-repeat-item-title" }, title), remove));
+          item.append(h(doc, "div", { class: "kv-repeat-item-head" }, h(doc, "span", { class: "kv-repeat-item-title" }, txt(rawTitle, itemAnswers)), remove));
           const logicOf = (st: SurveyState) => st.logic.items[panel.id]?.[index];
           const renderChild = (el: Element): El => {
             if (el.type === "panel") {
               const box = h(doc, "fieldset", { class: "kv-panel", "data-panel": el.id });
-              if (el.title) box.append(h(doc, "legend", { class: "kv-panel-title" }, el.title));
-              if (el.description) box.append(h(doc, "p", { class: "kv-panel-description" }, el.description));
+              if (el.title) box.append(h(doc, "legend", { class: "kv-panel-title" }, txt(el.title, itemAnswers)));
+              if (el.description) box.append(h(doc, "p", { class: "kv-panel-description" }, txt(el.description, itemAnswers)));
               const body = h(doc, "div", { class: "kv-panel-body" });
               for (const c of el.elements) body.append(renderChild(c));
               box.append(body);
@@ -229,6 +261,7 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
               set: (v) => model.setItemValue(panel.id, index, el.id, v),
               visible: (st) => Boolean(logicOf(st)?.visibleQuestions.has(el.id)),
               required: (st) => Boolean(logicOf(st)?.requiredQuestions.has(el.id)),
+              item: itemAnswers,
             });
             itemViews.push(view);
             return view.el;
@@ -239,6 +272,7 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
           return item;
         }),
       );
+      texts = pageTexts;
     };
 
     views.push({
@@ -256,6 +290,7 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
         err.textContent = s.errors[panel.id] ?? "";
         err.hidden = !s.errors[panel.id];
         for (const v of itemViews) v.update(s);
+        for (const t of itemTexts) t(s);
       },
     });
     return wrap;
@@ -265,11 +300,11 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
     const value = b.get(state);
     const qid = `kv-${model.survey.id}-${b.key}`;
     const wrap = h(doc, "fieldset", { class: `kv-question kv-question--${q.type}`, "data-question": q.id, "data-key": b.key });
-    const legend = h(doc, "legend", { class: "kv-question-title", id: `${qid}-title` }, q.title);
+    const legend = h(doc, "legend", { class: "kv-question-title", id: `${qid}-title` }, txt(q.title, b.item));
     const star = h(doc, "span", { class: "kv-required", "aria-hidden": "true" }, " *");
     legend.append(star);
     wrap.append(legend);
-    if (q.description) wrap.append(h(doc, "p", { class: "kv-question-description" }, q.description));
+    if (q.description) wrap.append(h(doc, "p", { class: "kv-question-description" }, txt(q.description, b.item)));
 
     const set = b.set;
     const current = () => b.get(model.snapshot);
@@ -294,7 +329,7 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
       }
       case "dropdown": {
         const select = h(doc, "select", { id: qid, "aria-labelledby": `${qid}-title` }, h(doc, "option", { value: "" }, ""));
-        for (const c of q.choices) select.append(h(doc, "option", { value: c.value }, c.label));
+        for (const c of q.choices) select.append(h(doc, "option", { value: c.value }, txt(c.label, b.item)));
         select.value = typeof value === "string" ? value : "";
         select.addEventListener("change", () => set(select.value || null));
         wrap.append(select);
@@ -314,7 +349,7 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
             else picked.delete(c.value);
             set(q.choices.map((x) => x.value).filter((x) => picked.has(x)));
           });
-          wrap.append(h(doc, "label", { class: "kv-choice" }, input, ` ${c.label}`));
+          wrap.append(h(doc, "label", { class: "kv-choice" }, input, " ", txt(c.label, b.item)));
         }
         break;
       }
@@ -514,7 +549,7 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
       rendered = key;
       list.replaceChildren(
         ...items.map((value, i) => {
-          const label = labelOf.get(value)!;
+          const label = pipeText(labelOf.get(value)!, state.survey, state.logic.answers, { ...pipeOptions, item: b.item?.(state) });
           const up = h(doc, "button", { type: "button", class: "kv-ranking-up", "aria-label": `${labels.moveUp}: ${label}` }, "↑");
           const down = h(doc, "button", { type: "button", class: "kv-ranking-down", "aria-label": `${labels.moveDown}: ${label}` }, "↓");
           up.disabled = i === 0;
