@@ -16,6 +16,7 @@ import { createSurvey, type CreateSurveyOptions, type SurveyModel, type SurveySt
 import { repeatItems } from "./logic.js";
 import { formatBytes, itemKey } from "./validate.js";
 import { formatComputed, pipeText } from "./piping.js";
+import { questionType } from "./question-types.js";
 
 export interface RenderOptions {
   /** Text overrides for the built-in buttons and messages. */
@@ -428,6 +429,21 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
       case "file":
         refresh = renderFile(q, qid, wrap);
         break;
+      default: {
+        // A registered custom type draws itself; without a renderer it gets a plain text input.
+        const def = questionType(q.type);
+        if (def?.render) {
+          const view = def.render({ question: q, value, setValue: set, document: doc, id: qid, labelId: `${qid}-title` });
+          wrap.append(view.element);
+          if (view.update) refresh = (s) => view.update!(b.get(s));
+        } else {
+          const input = h(doc, "input", { id: qid, type: "text", "aria-labelledby": `${qid}-title` });
+          input.value = typeof value === "string" ? value : "";
+          input.addEventListener("input", () => set(input.value));
+          wrap.append(input);
+          refresh = syncText(input, b);
+        }
+      }
     }
 
     const err = h(doc, "p", { class: "kv-error", role: "alert", hidden: "" });

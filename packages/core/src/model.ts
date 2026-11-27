@@ -19,6 +19,7 @@ import { fileToDataUrl } from "./files.js";
 import { evaluateCondition, isEmptyAnswer, repeatItems, resolveLogic, visibleElements, type LogicOptions, type SurveyLogic } from "./logic.js";
 import { surveyVariables, unknownFunctions, type EvaluateOptions, type ExpressionFunctions } from "./expression.js";
 import { pipeText } from "./piping.js";
+import { checkQuestionTypes } from "./question-types.js";
 import { defaultAnswer, itemKey, validateAnswer, validateFile, validateRepeat, validationTargets } from "./validate.js";
 import type { CustomValidators } from "./validators.js";
 
@@ -109,6 +110,8 @@ export class SurveyModel {
 
   constructor(private readonly options: CreateSurveyOptions) {
     this.survey = migrateSurvey(options.survey);
+    const typeProblems = checkQuestionTypes(this.survey);
+    if (typeProblems.length) throw new Error(typeProblems.join("; "));
     const missing = unknownFunctions(this.survey, options.functions);
     if (missing.length) {
       throw new Error(`The survey's expressions call unknown functions: ${missing.join(", ")}. Register them with createSurvey({ functions }).`);

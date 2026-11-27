@@ -13,6 +13,6 @@ export {
   type ElementPosition,
   type RunOptions,
 } from "./doc/document.js";
-export { PALETTE, QUESTION_TYPES, newElement, type PaletteKind } from "./doc/factory.js";
+export { PALETTE, QUESTION_TYPES, newElement, palette, type PaletteKind } from "./doc/factory.js";
 export { canDropInto, describeTarget, dropTargets, type DropTarget } from "./doc/positions.js";
 export { conditionSources, describeCondition, operatorsFor, type ConditionOwner, type ConditionSource } from "./doc/conditions.js";

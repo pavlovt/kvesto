@@ -1,6 +1,6 @@
 import { flushSync } from "svelte";
 import { describe, expect, it } from "vitest";
-import type { Survey, SurveyInput } from "@kvesto/core";
+import { registerQuestionType, unregisterQuestionType, type Survey, type SurveyInput } from "@kvesto/core";
 import { mountEditor } from "../src/lib/index.js";
 
 const survey: SurveyInput = {
@@ -226,5 +226,17 @@ describe("triggers in the editor", () => {
     flushSync();
     expect(ui.last().triggers).toBeUndefined();
     ui.editor.destroy();
+  });
+});
+
+describe("custom question types in the editor", () => {
+  it("adds a registered type from the palette with its defaults", () => {
+    registerQuestionType({ type: "x-stars", label: "stars", editorDefaults: { max: 3 } });
+    const ui = setup(false);
+    ui.$$<HTMLButtonElement>(".kv-editor-palette button").find((b) => b.textContent?.trim() === "stars")!.click();
+    flushSync();
+    expect(ui.last().pages[0]!.elements.at(-1)).toMatchObject({ type: "x-stars", max: 3 });
+    ui.editor.destroy();
+    unregisterQuestionType("x-stars");
   });
 });

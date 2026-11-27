@@ -22,7 +22,7 @@
   import SurveyPreview from "./SurveyPreview.svelte";
   import { starterSurvey } from "./starter.js";
   import { SurveyDocument } from "./doc/document.js";
-  import { PALETTE, newElement, type PaletteKind } from "./doc/factory.js";
+  import { newElement, palette, type PaletteKind } from "./doc/factory.js";
   import Outline from "./panels/Outline.svelte";
   import PropertyPanel from "./panels/PropertyPanel.svelte";
   import { OutlineDrag } from "./panels/drag.svelte.js";
@@ -80,6 +80,8 @@
     }
   }
 
+  // Read once: custom question types are registered before the editor is mounted.
+  const paletteItems = palette();
   function add(kind: PaletteKind) {
     if (drag.consumeClick()) return;
     if (sourceError) {
@@ -149,7 +151,7 @@
     }
     .kv-editor-palette {
       span.kv-editor-muted 'Add:'
-      each PALETTE as item (item.kind) {
+      each paletteItems as item (item.kind) {
         button(
           type=button
           title={tab === "design" ? "Click to add, or drag into the outline" : "Click to add"}

@@ -14,6 +14,8 @@ All six packages (`kvesto`, `@kvesto/schema`, `core`, `server`, `editor`, `dashb
   `enableIf` and `resetIf`. Numeric text now compares as numbers in expressions.
 - Triggers (M14): survey `triggers` that set or copy a value, skip to a page or submit when a condition becomes
   true, with an editor for them in the survey settings.
+- Custom question types (M15): `registerQuestionType` with a schema, validation, a renderer, a dashboard summary
+  and editor defaults; `x-*` types in surveys, `createApp({ questionTypes })` on the server.
 
 ## 0.2.0
 

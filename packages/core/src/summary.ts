@@ -1,4 +1,5 @@
 import { repeatItems } from "./logic.js";
+import { questionType } from "./question-types.js";
 import { allQuestions, walkElements, type AnswerValue, type GridAnswer, type MatrixAnswer, type FileAnswer, type Question, type Survey, type SurveyResponse } from "@kvesto/schema";
 
 export interface MatrixRowSummary {
@@ -199,6 +200,13 @@ export function summarizeResponses(survey: Survey, responses: SurveyResponse[], 
           summary.fileCount = all.length;
           summary.files = all.slice(-sampleSize).reverse();
           break;
+        }
+        default: {
+          // A registered custom type: its own summary, or the latest answers.
+          const def = questionType(question.type);
+          const custom = def?.summarize?.(question, values as AnswerValue[]);
+          if (custom) Object.assign(summary, custom);
+          else summary.samples = values.slice(-sampleSize).reverse().map((v) => (typeof v === "object" ? JSON.stringify(v) : String(v)));
         }
       }
       return summary;

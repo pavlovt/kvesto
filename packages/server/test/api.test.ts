@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { apiKeyAuth, createApp, createSqliteDb, drizzleRepository, openAccess, type KvestoAction } from "../src/index.js";
+import { unregisterQuestionType } from "@kvesto/core";
 
 const survey = {
   schemaVersion: 1,
@@ -538,5 +539,31 @@ describe("calculated values", () => {
   it("refuses a variable cycle", async () => {
     const bad = { ...calc, id: "cyc", variables: [{ name: "a1", expr: "{b1}" }, { name: "b1", expr: "{a1}" }] };
     expect((await send("POST", "/surveys", bad)).status).toBe(400);
+  });
+});
+
+describe("custom question types", () => {
+  const stars = {
+    schemaVersion: 1,
+    id: "stars",
+    title: "Stars",
+    pages: [{ id: "p1", elements: [{ id: "s", type: "x-stars", title: "Stars", max: 3 }] }],
+  };
+  const starsType = {
+    type: "x-stars" as const,
+    validate: (q: { max?: unknown }, v: unknown) => (typeof v === "number" && v >= 1 && v <= Number(q.max) ? null : "Pick 1 to max stars."),
+  };
+
+  it("refuses a survey with an unknown type, then validates answers with the registered type", async () => {
+    unregisterQuestionType("x-stars");
+    const res = await send("POST", "/surveys", stars);
+    expect(res.status).toBe(400);
+    expect(JSON.stringify(await res.json())).toContain('unknown question type \\"x-stars\\"');
+
+    app = createApp({ repository: drizzleRepository(createSqliteDb(":memory:")), authorize: openAccess, questionTypes: [starsType] });
+    expect((await send("POST", "/surveys", stars)).status).toBe(201);
+    expect((await send("POST", "/surveys/stars/responses", { answers: { s: 5 } })).status).toBe(400);
+    expect((await send("POST", "/surveys/stars/responses", { answers: { s: 2 } })).status).toBe(201);
+    unregisterQuestionType("x-stars");
   });
 });

@@ -369,7 +369,20 @@ export const TriggerSchema = z.object({ when: ConditionSchema, action: TriggerAc
 export type Trigger = z.infer<typeof TriggerSchema>;
 export type TriggerAction = z.infer<typeof TriggerActionSchema>;
 
-export const QuestionSchema = z.discriminatedUnion("type", [
+/** The type name of a custom question type: `x-` and then lower-case letters, digits and dashes. */
+export const CustomQuestionTypeSchema = z.templateLiteral(["x-", z.string().regex(/^[a-z0-9][a-z0-9-]*$/)]);
+export type CustomQuestionType = z.infer<typeof CustomQuestionTypeSchema>;
+
+/**
+ * A question of a type registered by the host with `registerQuestionType`
+ * (`"type": "x-signature"`). Its own fields are checked against the
+ * registered schema when the survey is loaded; here only the common fields are.
+ */
+export const CustomQuestionSchema = z.looseObject({ ...questionBase, type: CustomQuestionTypeSchema });
+export type CustomQuestion = z.infer<typeof CustomQuestionSchema>;
+
+/** The built-in question types. */
+export const BuiltinQuestionSchema = z.discriminatedUnion("type", [
   TextQuestionSchema,
   CommentQuestionSchema,
   SingleChoiceQuestionSchema,
@@ -383,6 +396,13 @@ export const QuestionSchema = z.discriminatedUnion("type", [
   GridQuestionSchema,
   ComputedQuestionSchema,
 ]);
+
+export const QuestionSchema = z.union([BuiltinQuestionSchema, CustomQuestionSchema]);
+
+/** Is this a question of a registered custom type (`x-…`)? */
+export function isCustomQuestion(q: { type: string }): q is CustomQuestion {
+  return q.type.startsWith("x-");
+}
 
 /**
  * A group of elements with an optional title, shown as one block. Panels can
@@ -756,10 +776,10 @@ export const SurveySchema = z
       if (repeat && q.type === "file") {
         ctx.addIssue({ code: "custom", path: [...path, "type"], message: "File questions are not supported in repeating panels yet" });
       }
-      if ("choices" in q && !uniqueValues(q.choices)) {
+      if (!isCustomQuestion(q) && "choices" in q && !uniqueValues(q.choices)) {
         ctx.addIssue({ code: "custom", path: [...path, "choices"], message: "Choice values must be unique" });
       }
-      if ("choices" in q) q.choices.forEach((c, ci) => checkText(c.label, [...path, "choices", ci, "label"], earlier, repeat));
+      if (!isCustomQuestion(q) && "choices" in q) q.choices.forEach((c, ci) => checkText(c.label, [...path, "choices", ci, "label"], earlier, repeat));
       if (q.type === "matrix") {
         if (!uniqueValues(q.rows)) ctx.addIssue({ code: "custom", path: [...path, "rows"], message: "Row values must be unique" });
         if (!uniqueValues(q.columns)) {
@@ -913,6 +933,7 @@ export type GridAnswer = z.infer<typeof GridAnswerSchema>;
 export type GridQuestion = z.infer<typeof GridQuestionSchema>;
 export type GridColumn = z.infer<typeof GridColumnSchema>;
 export type Question = z.infer<typeof QuestionSchema>;
+export type BuiltinQuestion = z.infer<typeof BuiltinQuestionSchema>;
 export type QuestionType = Question["type"];
 export type Page = z.infer<typeof PageSchema>;
 export type Survey = z.infer<typeof SurveySchema>;

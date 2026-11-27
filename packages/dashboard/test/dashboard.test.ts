@@ -1,6 +1,6 @@
 import { flushSync } from "svelte";
 import { describe, expect, it } from "vitest";
-import { memoryStorage, type SurveyInput } from "@kvesto/core";
+import { memoryStorage, registerQuestionType, unregisterQuestionType, type SurveyInput } from "@kvesto/core";
 import { mountDashboard } from "../src/lib/index.js";
 
 const survey: SurveyInput = {
@@ -114,5 +114,29 @@ describe("mountDashboard", () => {
     mountDashboard(target, { storage, surveyId: "g" });
     await settle();
     expect(target.querySelector(".kv-dash-matrix tbody td")?.textContent).toBe("avg 3.0");
+  });
+});
+
+describe("custom question types", () => {
+  it("shows the summary a registered type produces", async () => {
+    registerQuestionType({
+      type: "x-mood",
+      summarize: (_q, values) => ({ counts: [{ value: "happy", label: "Happy faces", count: values.filter((v) => v === "happy").length }] }),
+    });
+    const storage = memoryStorage();
+    const saved = await storage.saveSurvey({
+      schemaVersion: 1,
+      id: "mood",
+      title: "Mood",
+      pages: [{ id: "p", elements: [{ id: "m", type: "x-mood", title: "Mood" }] }],
+    } as never);
+    await storage.saveResponse(saved.id, { answers: { m: "happy" } });
+    await storage.saveResponse(saved.id, { answers: { m: "sad" } });
+    const target = document.createElement("div");
+    const dash = mountDashboard(target, { storage, surveyId: "mood" });
+    await settle();
+    expect(target.textContent).toContain("Happy faces");
+    dash.destroy();
+    unregisterQuestionType("x-mood");
   });
 });

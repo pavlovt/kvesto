@@ -3,13 +3,16 @@ import { Scalar } from "@scalar/hono-api-reference";
 import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import {
+  checkQuestionTypes,
   findElement,
+  registerQuestionType,
   formatBytes,
   unknownFunctions,
   validateAnswers,
   validateFile,
   type CustomValidators,
   type ExpressionFunctions,
+  type QuestionTypeDefinition,
   type Survey,
 } from "@kvesto/core";
 import { openAccess, type Authorize, type KvestoAction } from "./auth.js";
@@ -34,6 +37,11 @@ export interface CreateAppOptions {
   validators?: CustomValidators;
   /** Functions surveys' expressions may call, by name: the same ones the runner uses. */
   functions?: ExpressionFunctions;
+  /**
+   * Custom question types (`x-…`), registered with `registerQuestionType`: the same ones the runner uses, so
+   * surveys using them can be saved and their answers are validated with the type's `validate`.
+   */
+  questionTypes?: QuestionTypeDefinition[];
 }
 
 /** Types a browser may show inline. Anything else is served as a download, so an uploaded page can't run as this origin. */
@@ -47,6 +55,7 @@ const INLINE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/web
  */
 export function createApp(options: CreateAppOptions) {
   const repo = options.repository;
+  for (const type of options.questionTypes ?? []) registerQuestionType(type);
   const maxFileSize = options.maxFileSize ?? 10 * 1024 * 1024;
   const app = new OpenAPIHono({
     defaultHook: (result, c) => {
@@ -98,12 +107,12 @@ export function createApp(options: CreateAppOptions) {
 
   /** A 400 body when the survey calls expression functions this server doesn't have, so they can't silently fail later. */
   const missingFunctions = (survey: Survey) => {
-    const missing = unknownFunctions(survey, options.functions);
-    return missing.length
-      ? {
-          error: "Invalid survey JSON",
-          issues: missing.map((name) => ({ path: [] as (string | number)[], message: `Unknown expression function "${name}"` })),
-        }
+    const messages = [
+      ...unknownFunctions(survey, options.functions).map((name) => `Unknown expression function "${name}"`),
+      ...checkQuestionTypes(survey),
+    ];
+    return messages.length
+      ? { error: "Invalid survey JSON", issues: messages.map((message) => ({ path: [] as (string | number)[], message })) }
       : null;
   };
 

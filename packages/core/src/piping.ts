@@ -2,7 +2,7 @@
  * Answer piping: `{questionId}` placeholders in display text, filled with the
  * current answer. The result is plain text, never HTML.
  */
-import { allQuestions, replacePlaceholders, type Answers, type Question, type Survey } from "@kvesto/schema";
+import { allQuestions, isCustomQuestion, replacePlaceholders, type Answers, type Question, type Survey } from "@kvesto/schema";
 
 export interface PipeOptions {
   /** Answers of the current item of a repeating panel, for `{$item.q}`. */
@@ -47,7 +47,7 @@ export function formatAnswer(question: Question | undefined, value: unknown, pat
     return typeof v === "object" ? "" : String(v);
   }
   if (question?.type === "computed") return formatComputed(question, value);
-  if (question && "choices" in question) {
+  if (question && !isCustomQuestion(question) && "choices" in question) {
     const label = (c: unknown) => question.choices.find((x) => x.value === c)?.label ?? String(c);
     return Array.isArray(value) ? value.map(label).join(", ") : label(value);
   }

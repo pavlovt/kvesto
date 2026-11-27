@@ -13,6 +13,7 @@ import {
 } from "@kvesto/schema";
 import { isEmptyAnswer, repeatItems, resolveLogic, type LogicOptions, type SurveyLogic } from "./logic.js";
 import { runValidators, type CustomValidators } from "./validators.js";
+import { questionType } from "./question-types.js";
 import { compileExpression, evaluateNode, isEmptyValue, surveyVariables, toAnswerValue, type EvaluateOptions } from "./expression.js";
 
 export interface ValidateOptions {
@@ -203,6 +204,12 @@ function checkShape(question: Question, value: AnswerValue, required: boolean, o
         value.every((v) => typeof v === "string" && expected.includes(v)) &&
         new Set(value as string[]).size === value.length;
       return ok ? null : "Rank every item exactly once.";
+    }
+    default: {
+      // A registered custom type (`x-…`).
+      const def = questionType(question.type);
+      if (!def) return `This answer can't be checked (unknown question type "${question.type}").`;
+      return def.validate?.(question, value) ?? null;
     }
     case "file": {
       if (!Array.isArray(value) || !value.every(isFileAnswer)) return "Expected uploaded files.";

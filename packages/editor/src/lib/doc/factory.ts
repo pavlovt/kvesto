@@ -1,4 +1,4 @@
-import type { ElementInput, QuestionType, SurveyInput } from "@kvesto/core";
+import { isCustomQuestion, questionType, registeredQuestionTypes, type ElementInput, type QuestionType, type SurveyInput } from "@kvesto/core";
 import { usedIds } from "./document.js";
 
 /** What the palette can add: every question type, plus panels and repeating panels. */
@@ -25,6 +25,12 @@ export const PALETTE: readonly { kind: PaletteKind; label: string }[] = [
   { kind: "repeat", label: "repeating panel" },
 ];
 
+/** The built-in palette plus every custom question type registered so far. */
+export function palette(): { kind: PaletteKind; label: string }[] {
+  const custom = registeredQuestionTypes().map((t) => ({ kind: t.type as PaletteKind, label: t.label ?? t.type }));
+  return [...PALETTE.slice(0, QUESTION_TYPES.length), ...custom, ...PALETTE.slice(QUESTION_TYPES.length)];
+}
+
 const firstFree = (survey: SurveyInput, prefix: string, start: number) => {
   const ids = usedIds(survey);
   let n = start;
@@ -49,6 +55,9 @@ export function newElement(kind: PaletteKind, survey: SurveyInput): ElementInput
   const count = usedIds(survey).size - survey.pages.length;
   const n = firstFree(survey, "q", count + 1);
   const base = { id: `q${n}`, title: `Question ${n}` };
+  if (isCustomQuestion({ type: kind })) {
+    return { ...base, ...questionType(kind)?.editorDefaults, type: kind } as ElementInput;
+  }
   switch (kind) {
     case "single-choice":
     case "multiple-choice":

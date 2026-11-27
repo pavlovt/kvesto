@@ -307,6 +307,35 @@ createApp({ repository, authorize, validators });          // on the server
 
 A `custom` validator whose function isn't registered never passes, so a missing registration can't let bad data in.
 
+#### Custom question types
+
+Register a type once, then use it in surveys as `"type": "x-…"`:
+
+```ts
+import { registerQuestionType, z } from "@kvesto/core";
+
+registerQuestionType({
+  type: "x-colour",
+  label: "colour",                                             // name in the editor palette
+  schema: z.looseObject({ palette: z.array(z.string()).optional() }), // checks the question's JSON
+  validate: (question, value) => (/^#[0-9a-f]{6}$/.test(String(value)) ? null : "Pick a colour."),
+  render: ({ value, setValue, document, id, labelId }) => {
+    const input = document.createElement("input");
+    Object.assign(input, { type: "color", id, value: value ?? "#000000" });
+    input.setAttribute("aria-labelledby", labelId);
+    input.addEventListener("input", () => setValue(input.value));
+    return { element: input, update: (v) => (input.value = v ?? "#000000") };
+  },
+  summarize: (question, values) => ({ samples: values.map(String) }),  // dashboard
+  editorDefaults: { palette: ["#ff0000"] },                            // new questions from the palette
+});
+```
+
+Register the same types on the server (`createApp({ questionTypes: [colour] })`) so answers are validated there
+too. A survey that uses an unregistered type, or breaks a type's `schema`, is refused when it is loaded or saved.
+Without `render` the runner shows a text input; without `validate` any answer is accepted; without `summarize` the
+dashboard lists the latest answers.
+
 #### File uploads
 
 Files are stored by the storage adapter's optional `uploadFile` as soon as the respondent picks them. `httpStorage`
