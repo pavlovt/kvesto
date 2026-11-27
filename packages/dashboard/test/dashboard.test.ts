@@ -160,3 +160,34 @@ describe("localized surveys", () => {
     dash.destroy();
   });
 });
+
+describe("partial responses", () => {
+  it("shows the completion rate and drop-off, and leaves partials out of the results unless asked", async () => {
+    const survey = {
+      schemaVersion: 1,
+      id: "funnel",
+      title: "Funnel",
+      pages: [{ id: "p", elements: [{ id: "a", type: "rating", title: "First", min: 1, max: 5 }, { id: "b", type: "rating", title: "Second", min: 1, max: 5 }] }],
+    };
+    const responses = [
+      { id: "1", surveyId: "funnel", createdAt: "", status: "complete", answers: { a: 5, b: 5 } },
+      { id: "2", surveyId: "funnel", createdAt: "", status: "partial", answers: { a: 1 } },
+      { id: "3", surveyId: "funnel", createdAt: "", status: "partial", answers: {} },
+    ];
+    const { mount } = await import("svelte");
+    const { SurveyResults } = await import("../src/lib/index.js");
+    const target = document.createElement("div");
+    const view = mount(SurveyResults, { target, props: { survey: survey as never, responses: responses as never } });
+    flushSync();
+    expect(target.textContent).toContain("1 responses");
+    expect(target.textContent).toContain("1 of 3 started responses were completed (33%)");
+    expect([...target.querySelectorAll(".kv-dash-dropoff .kv-dash-num")].map((n) => n.textContent)).toEqual(["2", "1"]);
+    const toggle = target.querySelector<HTMLInputElement>(".kv-dash-toggle input")!;
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event("change", { bubbles: true }));
+    flushSync();
+    expect(target.textContent).toContain("3 responses");
+    const { unmount } = await import("svelte");
+    unmount(view);
+  });
+});

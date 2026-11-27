@@ -1,4 +1,4 @@
-import type { FileAnswer, ResponseInput, Survey, SurveyResponse } from "@kvesto/schema";
+import type { Answers, FileAnswer, ResponseInput, Survey, SurveyResponse } from "@kvesto/schema";
 
 export interface SurveySummary {
   id: string;
@@ -20,10 +20,28 @@ export interface SurveySummary {
  * `uploadFile` is optional too. Without it, files attached to file questions
  * are embedded in the answer as base64 `data:` URLs.
  */
+/** Unfinished answers, saved so the respondent can come back. */
+export interface ProgressDraft {
+  answers: Answers;
+  /** The page (and, in the question layout, the step) the respondent was on. */
+  pageIndex: number;
+  stepId?: string | null;
+  /** The resume token of an earlier save, to update the same draft. */
+  token?: string;
+}
+
 export interface SurveyStorage {
   loadSurvey(id: string): Promise<Survey | null>;
   saveSurvey(survey: Survey): Promise<Survey>;
-  saveResponse(surveyId: string, response: ResponseInput): Promise<SurveyResponse>;
+  /**
+   * Store a completed response. With `resumeToken`, the partial response
+   * saved under that token is completed instead of a new one created.
+   */
+  saveResponse(surveyId: string, response: ResponseInput, options?: { resumeToken?: string }): Promise<SurveyResponse>;
+  /** Save unfinished answers and return the token to update or resume them with. */
+  saveProgress?(surveyId: string, draft: ProgressDraft): Promise<{ token: string }>;
+  /** Load the unfinished answers saved under a token, or null. */
+  loadProgress?(surveyId: string, token: string): Promise<ProgressDraft | null>;
   listSurveys?(): Promise<SurveySummary[]>;
   listResponses?(surveyId: string): Promise<SurveyResponse[]>;
   deleteSurvey?(id: string): Promise<void>;

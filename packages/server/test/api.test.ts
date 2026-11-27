@@ -441,6 +441,8 @@ describe("documentation", () => {
         "/surveys",
         "/surveys/{id}",
         "/surveys/{id}/responses",
+        "/surveys/{id}/responses/{responseId}",
+        "/surveys/{id}/responses/{responseId}/resume",
         "/surveys/{id}/files",
         "/surveys/{id}/files/{fileId}",
       ].sort(),
@@ -611,5 +613,85 @@ describe("localized surveys", () => {
       headers: { "content-type": "application/json", "accept-language": "de-AT,de;q=0.9,en;q=0.5" },
     });
     expect((await res.json()).issues[0].message).toBe("Diese Frage ist erforderlich.");
+  });
+});
+
+describe("partial responses", () => {
+  const patch = (rid: string, body: unknown) => send("PATCH", `/surveys/feedback/responses/${rid}`, body);
+  beforeEach(async () => {
+    await send("POST", "/surveys", survey);
+  });
+
+  it("saves progress without required answers and returns a resume token", async () => {
+    const res = await send("POST", "/surveys/feedback/responses", { answers: { score: 7 }, status: "partial" });
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.status).toBe("partial");
+    const [rid, secret] = body.resumeToken.split(".");
+    expect(rid).toBe(body.id);
+    expect(secret).toMatch(/^[\w-]{20,}$/);
+    // Shapes are still checked.
+    expect((await send("POST", "/surveys/feedback/responses", { answers: { score: 99 }, status: "partial" })).status).toBe(400);
+  });
+
+  it("updates, resumes and completes a partial response with its token, and only with it", async () => {
+    const { id, resumeToken } = await (await send("POST", "/surveys/feedback/responses", { answers: { score: 7 }, status: "partial" })).json();
+    expect((await patch(id, { token: `${id}.wrong`, answers: { score: 8 }, status: "partial" })).status).toBe(403);
+    expect((await patch(id, { token: "other.secret", answers: { score: 8 }, status: "partial" })).status).toBe(403);
+    expect((await patch(id, { answers: { score: 8 } })).status).toBe(400);
+
+    const updated = await patch(id, { token: resumeToken, answers: { score: 8 }, status: "partial" });
+    expect(updated.status).toBe(200);
+    expect((await updated.json()).answers).toEqual({ score: 8 });
+
+    const resumed = await send("POST", `/surveys/feedback/responses/${id}/resume`, { token: resumeToken });
+    expect((await resumed.json()).answers).toEqual({ score: 8 });
+    expect((await send("POST", `/surveys/feedback/responses/${id}/resume`, { token: `${id}.nope` })).status).toBe(403);
+
+    // Completing checks everything, required answers included.
+    expect((await patch(id, { token: resumeToken, answers: { score: 8 } })).status).toBe(400);
+    const done = await patch(id, { token: resumeToken, answers: { score: 8, email: "a@b.co" } });
+    expect(done.status).toBe(200);
+    expect((await done.json()).status).toBe("complete");
+    expect((await patch(id, { token: resumeToken, answers: { score: 1, email: "a@b.co" } })).status).toBe(409);
+    expect((await send("POST", `/surveys/feedback/responses/${id}/resume`, { token: resumeToken })).status).toBe(409);
+  });
+
+  it("leaves partial responses out of lists and counts unless asked", async () => {
+    await send("POST", "/surveys/feedback/responses", { answers: { score: 1 }, status: "partial" });
+    await send("POST", "/surveys/feedback/responses", { answers: { email: "a@b.co", score: 2 } });
+    const list = async (q = "") => (await send("GET", `/surveys/feedback/responses${q}`)).json();
+    expect((await list()).total).toBe(1);
+    expect((await list("?status=partial")).total).toBe(1);
+    const all = await list("?status=all");
+    expect(all.total).toBe(2);
+    expect(all.items.map((r: { status: string }) => r.status).sort()).toEqual(["complete", "partial"]);
+    expect(all.items.some((r: Record<string, unknown>) => "resumeToken" in r || "resumeTokenHash" in r)).toBe(false);
+    expect((await (await send("GET", "/surveys")).json()).items[0].responseCount).toBe(1);
+  });
+
+  it("works end to end through httpStorage and the model", async () => {
+    const { createSurvey, httpStorage } = await import("@kvesto/core");
+    const storage = httpStorage({ baseUrl: "http://kvesto.test", fetch: (input, init) => app.request(String(input), init) });
+    const twoPages = { ...survey, id: "two", pages: [survey.pages[0], { id: "p2", elements: [{ id: "more", type: "text", title: "More" }] }] };
+    await send("POST", "/surveys", twoPages);
+    const tokens: string[] = [];
+    const model = createSurvey({ survey: twoPages, storage, onProgress: (t) => tokens.push(t) });
+    model.setValue("email", "a@b.co");
+    expect(model.next()).toBe(true);
+    await new Promise((r) => setTimeout(r, 10));
+    await model.saveProgress();
+    expect(tokens.length).toBeGreaterThan(0);
+    const draft = await storage.loadProgress("two", tokens.at(-1)!);
+    expect(draft).toMatchObject({ answers: { email: "a@b.co" }, pageIndex: 1 });
+
+    const again = createSurvey({ survey: twoPages, storage, resume: draft! });
+    expect(again.snapshot.page.id).toBe("p2");
+    again.setValue("more", "x");
+    const result = await again.complete();
+    expect(result!.saved!.status).toBe("complete");
+    const all = await (await send("GET", "/surveys/two/responses?status=all")).json();
+    expect(all.total).toBe(1);
+    expect(all.items[0].answers).toEqual({ email: "a@b.co", more: "x" });
   });
 });

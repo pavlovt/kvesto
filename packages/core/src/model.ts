@@ -18,7 +18,7 @@ import {
   type SurveyInput,
   type SurveyResponse,
 } from "@kvesto/schema";
-import type { SurveyStorage } from "./storage.js";
+import type { ProgressDraft, SurveyStorage } from "./storage.js";
 import { fileToDataUrl } from "./files.js";
 import { evaluateCondition, isEmptyAnswer, repeatItems, resolveLogic, visibleElements, type LogicOptions, type SurveyLogic } from "./logic.js";
 import { surveyVariables, unknownFunctions, type EvaluateOptions, type ExpressionFunctions } from "./expression.js";
@@ -53,6 +53,20 @@ export interface CreateSurveyOptions {
    * Default: the survey's `defaultLocale`, or "en".
    */
   locale?: string;
+  /**
+   * Continue from saved progress (from `storage.loadProgress`): its answers,
+   * page and token, so the next saves update the same draft and completing
+   * finishes it.
+   */
+  resume?: ProgressDraft;
+  /**
+   * Save progress through `storage.saveProgress` after every page (or step)
+   * change. Default true when the storage can. Call `saveProgress()` yourself
+   * for other moments.
+   */
+  autoSaveProgress?: boolean;
+  /** Called with the resume token after each progress save, e.g. to put it in a "continue later" link. */
+  onProgress?: (token: string) => void;
 }
 
 export interface CompletionResult {
@@ -137,6 +151,9 @@ export class SurveyModel {
   private readonly resetState = new Map<string, boolean>();
   /** The last value of each trigger's condition, so a trigger runs only when its condition becomes true. */
   private readonly triggerState: boolean[] = [];
+  private token: string | undefined;
+  private progressTimer: ReturnType<typeof setTimeout> | undefined;
+  private progressSaving: Promise<string | undefined> = Promise.resolve(undefined);
 
   constructor(private readonly options: CreateSurveyOptions) {
     const source = migrateSurvey(options.survey);
@@ -157,7 +174,8 @@ export class SurveyModel {
     const variables = surveyVariables(this.survey);
     this.logicOptions = { functions: options.functions, now: options.now, ...(variables ? { variables } : {}) };
     this.expression = { ...this.logicOptions };
-    const answers: Answers = { ...(options.initialAnswers ?? {}) };
+    this.token = options.resume?.token;
+    const answers: Answers = { ...(options.initialAnswers ?? {}), ...(options.resume?.answers ?? {}) };
     for (const q of this.topQuestions) {
       if (answers[q.id] === undefined && q.defaultValue !== undefined) answers[q.id] = q.defaultValue as AnswerValue;
     }
@@ -175,6 +193,10 @@ export class SurveyModel {
       uploading: [],
       stepId: null,
     });
+    const resumePage = options.resume?.pageIndex;
+    if (resumePage !== undefined && resumePage > 0 && resumePage < this.survey.pages.length) {
+      this.state = this.compute({ ...this.state, pageIndex: resumePage, stepId: options.resume?.stepId ?? null });
+    }
     // Conditions that already hold at the start don't clear prefilled answers.
     for (const q of this.topQuestions) {
       if (q.resetIf) this.resetState.set(q.id, evaluateCondition(q.resetIf, this.state.logic.answers, undefined, this.logicOptions));
@@ -280,6 +302,42 @@ export class SurveyModel {
       if (!next) return;
       this.state = this.compute({ ...this.state, answers: next });
     }
+  }
+
+  /** The token of the saved progress, once progress has been saved (or resumed). */
+  get resumeToken(): string | undefined {
+    return this.token;
+  }
+
+  /**
+   * Save the answers so far through `storage.saveProgress`, so the respondent
+   * can come back. Returns the resume token, or undefined when the storage
+   * can't save progress. Saves run one after another.
+   */
+  saveProgress(): Promise<string | undefined> {
+    const save = this.options.storage?.saveProgress?.bind(this.options.storage);
+    if (!save || this.state.status !== "running") return Promise.resolve(this.token);
+    this.progressSaving = this.progressSaving
+      .catch(() => undefined)
+      .then(async () => {
+        const { token } = await save(this.survey.id, {
+          answers: { ...this.state.logic.answers },
+          pageIndex: this.state.pageIndex,
+          stepId: this.state.stepId,
+          ...(this.token ? { token: this.token } : {}),
+        });
+        this.token = token;
+        this.options.onProgress?.(token);
+        return token;
+      });
+    return this.progressSaving;
+  }
+
+  /** Save progress soon after a page change, once even when several happen together. */
+  private queueProgress(): void {
+    if (this.options.autoSaveProgress === false || !this.options.storage?.saveProgress) return;
+    clearTimeout(this.progressTimer);
+    this.progressTimer = setTimeout(() => void this.saveProgress().catch(() => undefined), 0);
   }
 
   get snapshot(): SurveyState {
@@ -576,6 +634,7 @@ export class SurveyModel {
     const next = this.state.steps[this.state.stepIndex + 1];
     if (!next) return false;
     this.update({ pageIndex: next.pageIndex, stepId: next.id });
+    this.queueProgress();
     return true;
   }
 
@@ -584,6 +643,7 @@ export class SurveyModel {
     const prev = this.state.steps[this.state.stepIndex - 1];
     if (!prev) return false;
     this.update({ pageIndex: prev.pageIndex, stepId: prev.id });
+    this.queueProgress();
     return true;
   }
 
@@ -592,6 +652,7 @@ export class SurveyModel {
     const nextIndex = this.visiblePageIndexes().find((i) => i > this.state.pageIndex);
     if (nextIndex === undefined) return false;
     this.update({ pageIndex: nextIndex, stepId: null });
+    this.queueProgress();
     return true;
   }
 
@@ -599,6 +660,7 @@ export class SurveyModel {
     const prevIndex = this.visiblePageIndexes().filter((i) => i < this.state.pageIndex).at(-1);
     if (prevIndex === undefined) return false;
     this.update({ pageIndex: prevIndex, stepId: null });
+    this.queueProgress();
     return true;
   }
 
@@ -616,9 +678,16 @@ export class SurveyModel {
       answers: { ...this.state.logic.answers },
       ...(this.options.meta ? { meta: this.options.meta } : {}),
     };
+    clearTimeout(this.progressTimer);
     this.update({ status: "submitting", submitError: null });
     try {
-      const saved = await this.options.storage?.saveResponse(this.survey.id, response);
+      // Let a progress save that is under way finish first, so it can't land after the submission.
+      await this.progressSaving.catch(() => undefined);
+      const saved = await this.options.storage?.saveResponse(
+        this.survey.id,
+        response,
+        ...(this.token ? [{ resumeToken: this.token }] : []),
+      );
       const result: CompletionResult = { surveyId: this.survey.id, response, ...(saved ? { saved } : {}) };
       this.update({ status: "completed" });
       await this.options.onComplete?.(result);

@@ -301,7 +301,7 @@ export function validateRepeat(
   panel: Panel,
   value: AnswerValue | undefined,
   logic: SurveyLogic,
-  options: Pick<ValidateOptions, "validators" | "expression" | "locale"> & { strict?: boolean } = {},
+  options: Pick<ValidateOptions, "validators" | "expression" | "locale"> & { strict?: boolean; partial?: boolean } = {},
 ): AnswerIssue[] {
   const issues: AnswerIssue[] = [];
   const add = (questionId: string, message: string, path: (string | number)[]) => issues.push({ questionId, message, path });
@@ -313,7 +313,7 @@ export function validateRepeat(
   const { min = 0, max } = panel.repeat ?? {};
   const L = options.locale;
   const unit = (n: number) => message(L, n === 1 ? "unitItem" : "unitItems");
-  if (raw.length < min) add(panel.id, message(L, "repeatMin", { n: min, unit: unit(min) }), [panel.id]);
+  if (raw.length < min && !options.partial) add(panel.id, message(L, "repeatMin", { n: min, unit: unit(min) }), [panel.id]);
   if (max !== undefined && raw.length > max) add(panel.id, message(L, "repeatMax", { n: max, unit: unit(max) }), [panel.id]);
 
   const questions = panelQuestions<Element>(panel);
@@ -328,7 +328,7 @@ export function validateRepeat(
     for (const q of questions) {
       if (!il.visibleQuestions.has(q.id)) continue;
       const message = validateAnswer(q, il.answers[q.id], {
-        required: il.requiredQuestions.has(q.id),
+        required: !options.partial && il.requiredQuestions.has(q.id),
         validators: options.validators,
         answers: { ...logic.answers, ...il.answers },
         expression: { ...options.expression, item: il.answers },
@@ -363,7 +363,11 @@ export function validationTargets(elements: readonly Element[]): { questions: Qu
 export function validateAnswers(
   survey: Survey,
   answers: Answers,
-  options: Pick<ValidateOptions, "validators" | "locale"> & LogicOptions = {},
+  options: Pick<ValidateOptions, "validators" | "locale"> &
+    LogicOptions & {
+      /** Saved progress, not a submission: answers are checked, but nothing is required yet. */
+      partial?: boolean;
+    } = {},
 ): { issues: AnswerIssue[]; answers: Answers } {
   const logic = resolveLogic(survey, answers, { functions: options.functions, now: options.now });
   const expression: EvaluateOptions = { functions: options.functions, now: options.now, variables: surveyVariables(survey) };
@@ -382,7 +386,7 @@ export function validateAnswers(
       }
     }
     const error = validateAnswer(q, logic.answers[q.id], {
-      required: logic.requiredQuestions.has(q.id),
+      required: !options.partial && logic.requiredQuestions.has(q.id),
       validators: options.validators,
       answers: logic.answers,
       expression,
@@ -392,7 +396,13 @@ export function validateAnswers(
   }
   for (const panel of repeats) {
     if (!logic.visiblePanels.has(panel.id)) continue;
-    issues.push(...validateRepeat(panel, answers[panel.id], logic, { validators: options.validators, expression, locale: options.locale, strict: true }));
+    issues.push(...validateRepeat(panel, answers[panel.id], logic, {
+        validators: options.validators,
+        expression,
+        locale: options.locale,
+        strict: true,
+        partial: options.partial,
+      }));
   }
   return { issues, answers: logic.answers };
 }

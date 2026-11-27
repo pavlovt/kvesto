@@ -76,8 +76,8 @@ export {
   type QuestionTypeView,
   type CustomSummary,
 } from "./question-types.js";
-export { summarizeResponses, type QuestionSummary, type PanelHeading, type MatrixRowSummary, type GridRowSummary, type GridCellSummary, type RankingSummary } from "./summary.js";
-export type { SurveyStorage, SurveySummary } from "./storage.js";
+export { completionStats, type CompletionStats, summarizeResponses, type QuestionSummary, type PanelHeading, type MatrixRowSummary, type GridRowSummary, type GridCellSummary, type RankingSummary } from "./summary.js";
+export type { ProgressDraft, SurveyStorage, SurveySummary } from "./storage.js";
 export { memoryStorage } from "./adapters/memory.js";
 export { localStorageStorage, type LocalStorageOptions } from "./adapters/local-storage.js";
 export { httpStorage, HttpStorageError, type HttpStorageOptions } from "./adapters/http.js";

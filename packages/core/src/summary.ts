@@ -242,3 +242,38 @@ export function summarizeResponses(survey: Survey, responses: SurveyResponse[], 
       return summary;
     });
 }
+
+/** How many respondents got how far. */
+export interface CompletionStats {
+  /** Responses started: partial and complete. */
+  started: number;
+  completed: number;
+  /** `completed / started`, 0 when nothing was started. */
+  rate: number;
+  /** Per question, in survey order: how many respondents got at least this far (answered it or anything after it). */
+  reached: { id: string; title: string; count: number }[];
+}
+
+/**
+ * Completion rate and drop-off: where partial responses stopped. A response
+ * counts as having reached a question when it answered that question or any
+ * later one.
+ */
+export function completionStats(survey: Survey, responses: SurveyResponse[], locale?: string): CompletionStats {
+  const questions = allQuestions(localizeSurvey(survey, locale));
+  const furthest = responses.map((r) => {
+    let last = -1;
+    questions.forEach((q, i) => {
+      const v = r.answers[q.id];
+      if (v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && v.length === 0)) last = i;
+    });
+    return r.status === "partial" ? last : questions.length - 1;
+  });
+  const completed = responses.filter((r) => r.status !== "partial").length;
+  return {
+    started: responses.length,
+    completed,
+    rate: responses.length ? completed / responses.length : 0,
+    reached: questions.map((q, i) => ({ id: q.id, title: textOf(q.title), count: furthest.filter((f) => f >= i).length })),
+  };
+}

@@ -1,5 +1,5 @@
 import { z } from "@hono/zod-openapi";
-import { FileAnswerSchema, ResponseInputSchema, SurveyResponseSchema, SurveySchema } from "@kvesto/schema";
+import { FileAnswerSchema, ResponseInputSchema, ResponseUpdateSchema, SurveyResponseSchema, SurveySchema } from "@kvesto/schema";
 
 // Zod 4 copies methods onto each schema when it is created, so schemas that @kvesto/schema built before
 // @hono/zod-openapi patched Zod (for example when an app imports `kvesto` before `@kvesto/server`) have no
@@ -17,6 +17,10 @@ export const ResponseInput = named(ResponseInputSchema, "ResponseInput", {
   description: "Answers submitted by a respondent, keyed by question id.",
 });
 export const SurveyResponse = named(SurveyResponseSchema, "SurveyResponse");
+export const ResponseUpdate = named(ResponseUpdateSchema, "ResponseUpdate", {
+  description: "More answers for a partial response, or its submission (status complete), with its resume token.",
+});
+export const ResumeRequest = z.object({ token: z.string().min(1).max(200) }).openapi("ResumeRequest");
 export const FileAnswer = named(FileAnswerSchema, "FileAnswer", {
   description: "An uploaded file as it appears in an answer. Put it in the file question's answer array.",
 });
@@ -71,4 +75,11 @@ export const SurveyIdParam = z.object({
 export const Pagination = z.object({
   limit: z.coerce.number().int().min(1).max(500).default(50).openapi({ param: { name: "limit", in: "query" } }),
   offset: z.coerce.number().int().min(0).default(0).openapi({ param: { name: "offset", in: "query" } }),
+  /** Which responses: completed ones (default), partial ones, or all. */
+  status: z.enum(["complete", "partial", "all"]).default("complete").openapi({ param: { name: "status", in: "query" } }),
+});
+
+export const ResponseParams = z.object({
+  id: z.string().openapi({ param: { name: "id", in: "path" }, example: "customer-feedback" }),
+  responseId: z.string().openapi({ param: { name: "responseId", in: "path" } }),
 });

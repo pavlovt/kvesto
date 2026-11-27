@@ -53,6 +53,8 @@ export function httpStorage(options: HttpStorageOptions): Required<SurveyStorage
   }
 
   const enc = encodeURIComponent;
+  /** The response a resume token belongs to: the token is `responseId.secret`. */
+  const progressPath = (surveyId: string, token: string) => `/surveys/${enc(surveyId)}/responses/${enc(token.split(".")[0]!)}`;
 
   return {
     loadSurvey: (id) => request<Survey>("GET", `/surveys/${enc(id)}`, undefined, true),
@@ -61,10 +63,46 @@ export function httpStorage(options: HttpStorageOptions): Required<SurveyStorage
       await request("DELETE", `/surveys/${enc(id)}`);
     },
     listSurveys: async () => (await request<{ items: SurveySummary[] }>("GET", "/surveys"))!.items,
-    saveResponse: async (surveyId, response) =>
-      (await request<SurveyResponse>("POST", `/surveys/${enc(surveyId)}/responses`, response))!,
-    listResponses: async (surveyId) =>
-      (await request<{ items: SurveyResponse[] }>("GET", `/surveys/${enc(surveyId)}/responses`))!.items,
+    saveResponse: async (surveyId, response, opts) =>
+      opts?.resumeToken
+        ? (await request<SurveyResponse>("PATCH", progressPath(surveyId, opts.resumeToken), {
+            ...response,
+            status: "complete",
+            token: opts.resumeToken,
+          }))!
+        : (await request<SurveyResponse>("POST", `/surveys/${enc(surveyId)}/responses`, response))!,
+    // A partial response on the server; the token is `responseId.secret`, and the secret never goes in a URL.
+    saveProgress: async (surveyId, draft) => {
+      const body = { answers: draft.answers, status: "partial", meta: { progress: { pageIndex: draft.pageIndex, stepId: draft.stepId ?? null } } };
+      if (draft.token) {
+        await request<SurveyResponse>("PATCH", progressPath(surveyId, draft.token), { ...body, token: draft.token });
+        return { token: draft.token };
+      }
+      const created = (await request<SurveyResponse>("POST", `/surveys/${enc(surveyId)}/responses`, body))!;
+      return { token: created.resumeToken! };
+    },
+    loadProgress: async (surveyId, token) => {
+      try {
+        const r = (await request<SurveyResponse>("POST", `${progressPath(surveyId, token)}/resume`, { token }))!;
+        const p = (r.meta?.progress ?? {}) as { pageIndex?: number; stepId?: string | null };
+        return { answers: r.answers, pageIndex: p.pageIndex ?? 0, stepId: p.stepId ?? null, token };
+      } catch (e) {
+        if (e instanceof HttpStorageError && (e.status === 403 || e.status === 404 || e.status === 409)) return null;
+        throw e;
+      }
+    },
+    // Every response, partial ones included, a page at a time.
+    listResponses: async (surveyId) => {
+      const all: SurveyResponse[] = [];
+      for (let offset = 0; ; offset += 500) {
+        const page = (await request<{ items: SurveyResponse[]; total: number }>(
+          "GET",
+          `/surveys/${enc(surveyId)}/responses?status=all&limit=500&offset=${offset}`,
+        ))!;
+        all.push(...page.items);
+        if (page.items.length < 500 || all.length >= page.total) return all;
+      }
+    },
     uploadFile: async (surveyId, questionId, file) => {
       const form = new FormData();
       form.set("questionId", questionId);

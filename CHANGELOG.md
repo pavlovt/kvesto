@@ -28,6 +28,9 @@ All six packages (`kvesto`, `@kvesto/schema`, `core`, `server`, `editor`, `dashb
 - Localization (M20): per-locale display text with `defaultLocale` and `locales`, a `locale` option on the runner and
   dashboard, built-in labels and validation messages in 12 languages, server messages from `Accept-Language`, and an
   editor Translations tab with CSV, XLIFF and JSON import and export and AI drafts through a `translate` hook.
+- Partial responses and resume (M21): `saveProgress` / `loadProgress` on storage adapters, `createSurvey({ resume })`,
+  partial responses on the server with a hashed resume token (`PATCH` and `POST …/resume`), lists that leave partials
+  out unless asked, and completion and drop-off in the dashboard. Database migration `0002_partial_responses`.
 
 ## 0.2.0
 

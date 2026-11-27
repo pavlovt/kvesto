@@ -1,11 +1,13 @@
 import { textOf, type ResponseInput, type Survey, type SurveyResponse } from "@kvesto/schema";
 import { fileToDataUrl } from "../files.js";
-import { newId, type SurveyStorage, type SurveySummary } from "../storage.js";
+import { newId, type ProgressDraft, type SurveyStorage, type SurveySummary } from "../storage.js";
 
 /** Keeps everything in memory. Handy for tests, demos and previews. */
 export function memoryStorage(seed: Survey[] = []): Required<SurveyStorage> {
   const surveys = new Map<string, Survey>(seed.map((s) => [s.id, structuredClone(s)]));
   const responses = new Map<string, SurveyResponse[]>();
+  /** Unfinished answers by `surveyId/token`. */
+  const drafts = new Map<string, ProgressDraft>();
 
   return {
     async loadSurvey(id) {
@@ -27,7 +29,17 @@ export function memoryStorage(seed: Survey[] = []): Required<SurveyStorage> {
         responseCount: responses.get(s.id)?.length ?? 0,
       }));
     },
-    async saveResponse(surveyId: string, input: ResponseInput) {
+    async saveProgress(surveyId, draft) {
+      const token = draft.token && drafts.has(`${surveyId}/${draft.token}`) ? draft.token : newId();
+      drafts.set(`${surveyId}/${token}`, structuredClone({ ...draft, token }));
+      return { token };
+    },
+    async loadProgress(surveyId, token) {
+      const d = drafts.get(`${surveyId}/${token}`);
+      return d ? structuredClone(d) : null;
+    },
+    async saveResponse(surveyId: string, input: ResponseInput, options?: { resumeToken?: string }) {
+      if (options?.resumeToken) drafts.delete(`${surveyId}/${options.resumeToken}`);
       const response: SurveyResponse = {
         ...structuredClone(input),
         id: newId(),

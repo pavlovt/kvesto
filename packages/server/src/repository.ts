@@ -23,11 +23,20 @@ export interface StoredFile {
   createdAt: string;
 }
 
-export interface SurveyRepository extends Required<Omit<SurveyStorage, "uploadFile">> {
+/** Which responses a listing returns. */
+export type ResponseFilter = "complete" | "partial" | "all";
+
+export interface SurveyRepository extends Required<Omit<SurveyStorage, "uploadFile" | "saveProgress" | "loadProgress">> {
   surveyExists(id: string): Promise<boolean>;
   createSurvey(survey: Survey): Promise<Survey>;
-  countResponses(surveyId: string): Promise<number>;
-  listResponsesPage(surveyId: string, opts: { limit: number; offset: number }): Promise<SurveyResponse[]>;
+  countResponses(surveyId: string, status?: ResponseFilter): Promise<number>;
+  listResponsesPage(surveyId: string, opts: { limit: number; offset: number; status?: ResponseFilter }): Promise<SurveyResponse[]>;
+  /** Store a partial response with the hash of its resume token's secret. */
+  savePartialResponse(surveyId: string, input: ResponseInput, tokenHash: string): Promise<SurveyResponse>;
+  /** A response with its token hash, for checking a resume token. */
+  loadResponse(surveyId: string, responseId: string): Promise<{ response: SurveyResponse; tokenHash: string | null } | null>;
+  /** Replace a response's answers and meta, and set its status. */
+  updateResponse(surveyId: string, responseId: string, input: ResponseInput): Promise<SurveyResponse>;
   /** Store an uploaded file's bytes (limits are already checked by the API). */
   saveFile(file: Omit<StoredFile, "id" | "createdAt">, data: Uint8Array): Promise<StoredFile>;
   loadFile(surveyId: string, fileId: string): Promise<{ file: StoredFile; data: Uint8Array } | null>;
@@ -39,9 +48,14 @@ function toResponse(row: typeof responses.$inferSelect): SurveyResponse {
     surveyId: row.surveyId,
     answers: row.answers,
     ...(row.meta ? { meta: row.meta } : {}),
+    status: row.status,
     createdAt: row.createdAt,
+    ...(row.updatedAt ? { updatedAt: row.updatedAt } : {}),
   };
 }
+
+const byStatus = (surveyId: string, status: ResponseFilter = "complete") =>
+  status === "all" ? eq(responses.surveyId, surveyId) : and(eq(responses.surveyId, surveyId), eq(responses.status, status));
 
 export function drizzleRepository(db: KvestoDb): SurveyRepository {
   const now = () => new Date().toISOString();
@@ -81,32 +95,68 @@ export function drizzleRepository(db: KvestoDb): SurveyRepository {
       const rows = await db
         .select({ id: surveys.id, title: surveys.title, updatedAt: surveys.updatedAt, responseCount: count(responses.id) })
         .from(surveys)
-        .leftJoin(responses, eq(responses.surveyId, surveys.id))
+        .leftJoin(responses, and(eq(responses.surveyId, surveys.id), eq(responses.status, "complete")))
         .groupBy(surveys.id)
         .orderBy(desc(surveys.updatedAt))
         .all();
       return rows;
     },
     async saveResponse(surveyId: string, input: ResponseInput) {
+      const ts = now();
       const row = {
         id: randomUUID(),
         surveyId,
         answers: input.answers,
         meta: input.meta ?? null,
-        createdAt: now(),
+        status: "complete" as const,
+        createdAt: ts,
+        updatedAt: ts,
+        resumeTokenHash: null,
       };
       await db.insert(responses).values(row).run();
       return toResponse(row);
     },
-    async countResponses(surveyId) {
-      const row = await db.select({ n: count() }).from(responses).where(eq(responses.surveyId, surveyId)).get();
+    async savePartialResponse(surveyId, input, tokenHash) {
+      const ts = now();
+      const row = {
+        id: randomUUID(),
+        surveyId,
+        answers: input.answers,
+        meta: input.meta ?? null,
+        status: "partial" as const,
+        createdAt: ts,
+        updatedAt: ts,
+        resumeTokenHash: tokenHash,
+      };
+      await db.insert(responses).values(row).run();
+      return toResponse(row);
+    },
+    async loadResponse(surveyId, responseId) {
+      const row = await db
+        .select()
+        .from(responses)
+        .where(and(eq(responses.surveyId, surveyId), eq(responses.id, responseId)))
+        .get();
+      return row ? { response: toResponse(row), tokenHash: row.resumeTokenHash } : null;
+    },
+    async updateResponse(surveyId, responseId, input) {
+      const status = input.status ?? "complete";
+      await db
+        .update(responses)
+        .set({ answers: input.answers, meta: input.meta ?? null, status, updatedAt: now() })
+        .where(and(eq(responses.surveyId, surveyId), eq(responses.id, responseId)))
+        .run();
+      return (await this.loadResponse(surveyId, responseId))!.response;
+    },
+    async countResponses(surveyId, status) {
+      const row = await db.select({ n: count() }).from(responses).where(byStatus(surveyId, status)).get();
       return row?.n ?? 0;
     },
-    async listResponsesPage(surveyId, { limit, offset }) {
+    async listResponsesPage(surveyId, { limit, offset, status }) {
       const rows = await db
         .select()
         .from(responses)
-        .where(eq(responses.surveyId, surveyId))
+        .where(byStatus(surveyId, status))
         .orderBy(desc(responses.createdAt))
         .limit(limit)
         .offset(offset)

@@ -366,6 +366,26 @@ rating answer moves on by itself (`autoAdvance: false` turns that off). Logic st
 it, so hidden questions and pages are skipped. Custom UIs can use `model.nextStep()`, `model.prevStep()`,
 `state.steps` and `state.stepIndex`. `progressBar: true` adds the bar to the page layout too.
 
+#### Saving progress and coming back
+
+With a storage adapter that has `saveProgress`, the runner saves the answers so far after every page (or step) and
+reports a resume token:
+
+```ts
+const model = createSurvey({ survey, storage, onProgress: (token) => rememberSomewhere(token) });
+// later, maybe on another device:
+const draft = await storage.loadProgress(survey.id, token);
+const resumed = createSurvey({ survey, storage, resume: draft! }); // same answers, same page; completing finishes it
+```
+
+`localStorageStorage` keeps one draft per survey in the browser. `httpStorage` saves a partial response on the
+server: `POST /surveys/{id}/responses` with `"status": "partial"` returns a `resumeToken`, which updates or completes
+it with `PATCH /surveys/{id}/responses/{responseId}` and loads it back with `POST …/{responseId}/resume` (the
+token goes in the body, never the URL). Partial answers are checked, but nothing is required until completion, and
+only the token can change a partial response; a completed one can't be changed. Lists and counts leave partial
+responses out unless asked (`?status=partial` or `?status=all`). The dashboard shows the completion rate and where
+people stop, and can include partial responses in the results.
+
 #### Content blocks and images
 
 Pages and panels can also hold elements that show something but take no answer:

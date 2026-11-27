@@ -20,7 +20,12 @@ export const responses = sqliteTable(
       .references(() => surveys.id, { onDelete: "cascade" }),
     answers: text("answers", { mode: "json" }).$type<Answers>().notNull(),
     meta: text("meta", { mode: "json" }).$type<Record<string, unknown>>(),
+    /** "partial" while the respondent is still going, "complete" once submitted. */
+    status: text("status", { enum: ["partial", "complete"] }).notNull().default("complete"),
     createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at"),
+    /** SHA-256 of the secret part of a partial response's resume token. Never the token itself. */
+    resumeTokenHash: text("resume_token_hash"),
   },
   (t) => [index("responses_survey_id_idx").on(t.surveyId, t.createdAt)],
 );

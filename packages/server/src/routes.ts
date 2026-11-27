@@ -7,6 +7,9 @@ import {
   Pagination,
   ResponseInput,
   ResponseList,
+  ResponseParams,
+  ResponseUpdate,
+  ResumeRequest,
   Survey,
   SurveyIdParam,
   SurveyList,
@@ -102,12 +105,46 @@ export const submitResponse = createRoute({
   path: "/surveys/{id}/responses",
   tags: ["Responses"],
   summary: "Submit a response",
-  description: "Answers are validated against the survey's questions with the same rules the core runtime uses.",
+  description:
+    "Answers are validated against the survey's questions with the same rules the core runtime uses. " +
+    'With `status: "partial"` the answers are saved as progress (nothing is required yet) and the reply carries a ' +
+    "`resumeToken` to update, complete or resume them.",
   request: { params: SurveyIdParam, body: { ...json(ResponseInput, "Answers"), required: true } },
   responses: {
     201: json(SurveyResponse, "Stored response"),
     400: error("Answers do not match the survey"),
     404: error("Survey not found"),
+  },
+});
+
+export const updateResponse = createRoute({
+  method: "patch",
+  path: "/surveys/{id}/responses/{responseId}",
+  tags: ["Responses"],
+  summary: "Update or complete a partial response",
+  description: "Needs the response's resume token. A completed response can't be changed.",
+  request: { params: ResponseParams, body: { ...json(ResponseUpdate, "New answers and the resume token"), required: true } },
+  responses: {
+    200: json(SurveyResponse, "Updated response"),
+    400: error("Answers do not match the survey"),
+    403: error("Wrong resume token"),
+    404: error("Response not found"),
+    409: error("The response is already complete"),
+  },
+});
+
+export const resumeResponse = createRoute({
+  method: "post",
+  path: "/surveys/{id}/responses/{responseId}/resume",
+  tags: ["Responses"],
+  summary: "Load a partial response to continue it",
+  description: "The resume token goes in the body, never in the URL, so it doesn't end up in logs.",
+  request: { params: ResponseParams, body: { ...json(ResumeRequest, "The resume token"), required: true } },
+  responses: {
+    200: json(SurveyResponse, "The partial response"),
+    403: error("Wrong resume token"),
+    404: error("Response not found"),
+    409: error("The response is already complete"),
   },
 });
 

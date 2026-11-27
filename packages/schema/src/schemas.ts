@@ -1089,17 +1089,41 @@ export const AnswerValueSchema = z.union([
 
 export const AnswersSchema = z.record(z.string(), AnswerValueSchema);
 
-/** What a client sends when a respondent completes a survey. */
+/** Whether a response was submitted, or saved along the way so the respondent can come back. */
+export const ResponseStatusSchema = z.enum(["partial", "complete"]);
+export type ResponseStatus = z.infer<typeof ResponseStatusSchema>;
+
+/**
+ * What a client sends when a respondent completes a survey, or (with
+ * `status: "partial"`) saves their progress. Partial answers are checked
+ * like complete ones, except that nothing is required yet.
+ */
 export const ResponseInputSchema = z.object({
   answers: AnswersSchema,
   meta: z.record(z.string(), z.unknown()).optional(),
+  /** Default "complete". */
+  status: ResponseStatusSchema.optional(),
 });
+
+/** Updates a partial response: more answers, or (with `status: "complete"`) its submission. */
+export const ResponseUpdateSchema = ResponseInputSchema.extend({
+  /** The resume token returned when the partial response was created. */
+  token: z.string().min(1).max(200),
+});
+export type ResponseUpdate = z.infer<typeof ResponseUpdateSchema>;
 
 /** A stored response. */
 export const SurveyResponseSchema = ResponseInputSchema.extend({
   id: z.string(),
   surveyId: id,
   createdAt: z.string(),
+  /** When a partial response was last saved, or the response completed. */
+  updatedAt: z.string().optional(),
+  /**
+   * Only in the reply that creates a partial response: the secret that
+   * updates, completes or resumes it. Keep it with the respondent.
+   */
+  resumeToken: z.string().optional(),
 });
 
 export type Choice = z.infer<typeof ChoiceSchema>;

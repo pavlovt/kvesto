@@ -1,3 +1,4 @@
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { Scalar } from "@scalar/hono-api-reference";
 import { bodyLimit } from "hono/body-limit";
@@ -14,6 +15,7 @@ import {
   type CustomValidators,
   type ExpressionFunctions,
   type QuestionTypeDefinition,
+  type Answers,
   type Survey,
 } from "@kvesto/core";
 import { openAccess, type Authorize, type KvestoAction } from "./auth.js";
@@ -44,6 +46,9 @@ export interface CreateAppOptions {
    */
   questionTypes?: QuestionTypeDefinition[];
 }
+
+/** The stored form of a resume token's secret. */
+const hashSecret = (secret: string) => createHash("sha256").update(secret).digest("hex");
 
 /** The first Accept-Language tag the survey is translated into, else its default locale. */
 function preferredLocale(header: string | undefined, survey: Survey): string | undefined {
@@ -113,6 +118,14 @@ export function createApp(options: CreateAppOptions) {
   guard("PUT", "/surveys/:id", "survey:write");
   guard("DELETE", "/surveys/:id", "survey:write");
   guard("POST", "/surveys/:id/responses", "response:create");
+  // Respondent actions too: the resume token in the body is what allows them.
+  app.on("PATCH", "/surveys/:id/responses/:responseId", async (c, next) => {
+    const verdict = await authorize(c, { action: "response:create", surveyId: c.req.param("id") });
+    if (verdict instanceof Response) return verdict;
+    if (verdict !== true) return c.json({ error: "Forbidden" }, 403);
+    await next();
+  });
+  guard("POST", "/surveys/:id/responses/:responseId/resume", "response:create");
   guard("GET", "/surveys/:id/responses", "response:read");
   guard("POST", "/surveys/:id/files", "file:upload");
   guard("GET", "/surveys/:id/files/:fileId", "file:read");
@@ -130,6 +143,23 @@ export function createApp(options: CreateAppOptions) {
     return messages.length
       ? { error: "Invalid survey JSON", issues: messages.map((message) => ({ path: [] as (string | number)[], message })) }
       : null;
+  };
+
+  /** Validate answers (partial ones need nothing yet), in the respondent's language when the survey has it. */
+  const check = (survey: Survey, answers: Answers, partial: boolean, acceptLanguage: string | undefined) => {
+    const result = validateAnswers(survey, answers, {
+      validators: options.validators,
+      functions: options.functions,
+      locale: preferredLocale(acceptLanguage, survey),
+      partial,
+    });
+    if (!result.issues.length) return { answers: result.answers };
+    return {
+      bad: {
+        error: "Answers do not match the survey",
+        issues: result.issues.map((i) => ({ path: ["answers", ...i.path], message: i.message })),
+      },
+    };
   };
 
   app.openapi(routes.createSurvey, async (c) => {
@@ -170,23 +200,50 @@ export function createApp(options: CreateAppOptions) {
     const input = c.req.valid("json");
     const survey = await repo.loadSurvey(id);
     if (!survey) return c.json({ error: "Survey not found" }, 404);
-    const { issues, answers } = validateAnswers(survey, input.answers, {
-      validators: options.validators,
-      functions: options.functions,
-      // Messages in the respondent's language when the survey has it (the first Accept-Language tag).
-      locale: preferredLocale(c.req.header("accept-language"), survey),
-    });
-    if (issues.length) {
-      return c.json(
-        {
-          error: "Answers do not match the survey",
-          issues: issues.map((i) => ({ path: ["answers", ...i.path], message: i.message })),
-        },
-        400,
-      );
-    }
+    const partial = input.status === "partial";
+    const checked = check(survey, input.answers, partial, c.req.header("accept-language"));
+    if ("bad" in checked) return c.json(checked.bad, 400);
     // Answers to questions hidden by conditional logic are dropped, as the core runtime does.
-    return c.json(await repo.saveResponse(id, { ...input, answers }), 201);
+    const { status: _status, ...rest } = input;
+    if (!partial) return c.json(await repo.saveResponse(id, { ...rest, answers: checked.answers }), 201);
+    const secret = randomBytes(32).toString("base64url");
+    const saved = await repo.savePartialResponse(id, { ...rest, answers: checked.answers }, hashSecret(secret));
+    return c.json({ ...saved, resumeToken: `${saved.id}.${secret}` }, 201);
+  });
+
+  /** A partial response, if `token` is its resume token. */
+  const partialFor = async (surveyId: string, responseId: string, token: string) => {
+    const found = await repo.loadResponse(surveyId, responseId);
+    if (!found) return { status: 404 as const, error: "Response not found" };
+    const [rid, secret = ""] = token.split(".");
+    const expected = Buffer.from(found.tokenHash ?? "", "hex");
+    const given = Buffer.from(hashSecret(secret), "hex");
+    if (rid !== responseId || !found.tokenHash || expected.length !== given.length || !timingSafeEqual(expected, given)) {
+      return { status: 403 as const, error: "Wrong resume token" };
+    }
+    if (found.response.status !== "partial") return { status: 409 as const, error: "The response is already complete" };
+    return { response: found.response };
+  };
+
+  app.openapi(routes.updateResponse, async (c) => {
+    const { id, responseId } = c.req.valid("param");
+    const { token, ...input } = c.req.valid("json");
+    const survey = await repo.loadSurvey(id);
+    if (!survey) return c.json({ error: "Survey not found" }, 404);
+    const found = await partialFor(id, responseId, token);
+    if (!("response" in found)) return c.json({ error: found.error }, found.status);
+    const partial = input.status === "partial";
+    const checked = check(survey, input.answers, partial, c.req.header("accept-language"));
+    if ("bad" in checked) return c.json(checked.bad, 400);
+    const updated = await repo.updateResponse(id, responseId, { ...input, answers: checked.answers, status: partial ? "partial" : "complete" });
+    return c.json(updated, 200);
+  });
+
+  app.openapi(routes.resumeResponse, async (c) => {
+    const { id, responseId } = c.req.valid("param");
+    const found = await partialFor(id, responseId, c.req.valid("json").token);
+    if (!("response" in found)) return c.json({ error: found.error }, found.status);
+    return c.json(found.response, 200);
   });
 
   app.use(
@@ -238,9 +295,9 @@ export function createApp(options: CreateAppOptions) {
 
   app.openapi(routes.listResponses, async (c) => {
     const { id } = c.req.valid("param");
-    const { limit, offset } = c.req.valid("query");
+    const { limit, offset, status } = c.req.valid("query");
     if (!(await repo.surveyExists(id))) return c.json({ error: "Survey not found" }, 404);
-    const [items, total] = await Promise.all([repo.listResponsesPage(id, { limit, offset }), repo.countResponses(id)]);
+    const [items, total] = await Promise.all([repo.listResponsesPage(id, { limit, offset, status }), repo.countResponses(id, status)]);
     return c.json({ items, total, limit, offset }, 200);
   });
 

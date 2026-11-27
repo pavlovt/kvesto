@@ -23,7 +23,7 @@
 </script>
 
 <script lang="ts">
-  import { localizeSurvey, summarizeResponses, type GridCellSummary, type QuestionSummary } from "@kvesto/core";
+  import { completionStats, localizeSurvey, summarizeResponses, type GridCellSummary, type QuestionSummary } from "@kvesto/core";
 
   let props: SurveyResultsProps = $props();
 
@@ -51,8 +51,13 @@
   const source = $derived(props.survey ?? loaded?.survey ?? null);
   // Every text in the chosen locale, so the markup below only sees plain strings.
   const survey = $derived(source ? localizeSurvey(source, props.locale) : null);
-  const responses = $derived(props.responses ?? loaded?.responses ?? []);
+  const all = $derived(props.responses ?? loaded?.responses ?? []);
+  // Partial responses (saved progress) are left out of the results unless asked for.
+  let includePartial = $state(false);
+  const partials = $derived(all.filter((r) => r.status === "partial").length);
+  const responses = $derived(includePartial ? all : all.filter((r) => r.status !== "partial"));
   const summary = $derived<QuestionSummary[]>(survey ? summarizeResponses(survey, responses) : []);
+  const completion = $derived(survey && partials ? completionStats(survey, all) : null);
   // Panels around a question, as "Outer / Inner"; untitled panels are left out.
   const groupLabel = (item: QuestionSummary | undefined) =>
     item ? item.panels.flatMap((p) => (p.title ? [p.title] : [])).join(" / ") : "";
@@ -77,6 +82,26 @@
     .kv-dash-results {
       h1 '{survey.title}'
       p.kv-dash-muted '{responses.length} responses'
+      if completion {
+        section.kv-dash-card.kv-dash-completion {
+          h2 'Completion'
+          p '{completion.completed} of {completion.started} started responses were completed ({pct(completion.completed, completion.started)}%).'
+          label.kv-dash-toggle {
+            input type=checkbox checked={includePartial} onchange={(e) => (includePartial = e.currentTarget.checked)}
+            span 'Include the {partials} partial {partials === 1 ? "response" : "responses"} in the results'
+          }
+          h3 'Where people stop'
+          ul.kv-dash-dropoff {
+            each completion.reached as q (q.id) {
+              li.kv-dash-bar-row {
+                span.kv-dash-bar-label '{q.title}'
+                .kv-dash-bar > .kv-dash-bar-fill style="width: {pct(q.count, completion.started)}%"
+                span.kv-dash-num title="Reached by {q.count} of {completion.started}" '{q.count}'
+              }
+            }
+          }
+        }
+      }
       each summary as item, i (item.question.id) {
         if groupLabel(item) && groupLabel(item) !== groupLabel(summary[i - 1]) {
           p.kv-dash-group '{groupLabel(item)}'
@@ -179,6 +204,9 @@
   .kv-dash-group { font-weight: 700; font-size: 0.95rem; color: #374151; margin: 1.25rem 0 0.5rem; max-width: 48rem; }
   .kv-dash-card h2 { font-size: 1.05rem; margin: 0 0 0.25rem; }
   .kv-dash-num { text-align: right; font-variant-numeric: tabular-nums; }
+  .kv-dash-dropoff { list-style: none; margin: 0; padding: 0; }
+  .kv-dash-completion h3 { font-size: 0.95rem; margin: 0.75rem 0 0.25rem; }
+  .kv-dash-toggle { display: flex; gap: 0.4rem; align-items: center; font-size: 0.9rem; }
   .kv-dash-bar-row { display: grid; grid-template-columns: 10rem 1fr 3rem; gap: 0.5rem; align-items: center; margin: 0.3rem 0; }
   .kv-dash-bar { background: #eef2ff; border-radius: 999px; height: 0.6rem; overflow: hidden; }
   .kv-dash-bar-fill { background: #2563eb; height: 100%; }

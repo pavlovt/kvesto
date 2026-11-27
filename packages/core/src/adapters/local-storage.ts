@@ -1,6 +1,6 @@
 import { textOf, type Survey, type SurveyResponse } from "@kvesto/schema";
 import { fileToDataUrl } from "../files.js";
-import { newId, type SurveyStorage } from "../storage.js";
+import { newId, type ProgressDraft, type SurveyStorage } from "../storage.js";
 
 export interface LocalStorageOptions {
   /** Key prefix. Default "kvesto". */
@@ -47,7 +47,18 @@ export function localStorageStorage(options: LocalStorageOptions = {}): Required
           : [];
       });
     },
-    async saveResponse(surveyId, input) {
+    // Drafts stay in this browser, one per survey: the token only tells a new draft from an old one.
+    async saveProgress(surveyId, draft) {
+      const token = draft.token ?? newId();
+      write(`progress:${surveyId}`, { ...draft, token });
+      return { token };
+    },
+    async loadProgress(surveyId, token) {
+      const d = read<ProgressDraft | null>(`progress:${surveyId}`, null);
+      return d && d.token === token ? d : null;
+    },
+    async saveResponse(surveyId, input, options) {
+      if (options?.resumeToken) store().removeItem(`${prefix}:progress:${surveyId}`);
       const response: SurveyResponse = { ...input, id: newId(), surveyId, createdAt: new Date().toISOString() };
       write(`responses:${surveyId}`, [...read<SurveyResponse[]>(`responses:${surveyId}`, []), response]);
       return response;
