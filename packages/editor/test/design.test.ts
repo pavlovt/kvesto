@@ -427,6 +427,28 @@ describe("quiz settings in the editor", () => {
   });
 });
 
+describe("availability settings in the editor", () => {
+  it("sets the window, the limit and who may answer", () => {
+    const ui = setup(false);
+    const opens = field(ui, "Opens at");
+    opens.value = "2026-06-01T09:30";
+    opens.dispatchEvent(new Event("change", { bubbles: true }));
+    flushSync();
+    expect(ui.last().settings?.opensAt).toBe(new Date("2026-06-01T09:30").toISOString());
+    ui.type(field(ui, "Maximum responses"), "100");
+    const per = ui.$$<HTMLLabelElement>(".kv-props label").find((l) => l.textContent?.trim().startsWith("One response per"))!.querySelector("select")!;
+    per.value = "respondent";
+    per.dispatchEvent(new Event("change", { bubbles: true }));
+    flushSync();
+    field(ui, "Anonymous").click();
+    flushSync();
+    expect(ui.last().settings).toMatchObject({ maxResponses: 100, oneResponsePer: "respondent", anonymous: true });
+    ui.type(field(ui, "Maximum responses"), "");
+    expect(ui.last().settings?.maxResponses).toBeUndefined();
+    ui.editor.destroy();
+  });
+});
+
 describe("share snippets", () => {
   it("shows link and embed snippets when the server address is known", () => {
     const target = document.createElement("div");

@@ -638,6 +638,26 @@ export const SurveySettingsSchema = z.looseObject({
       ),
     ])
     .optional(),
+  /** When the survey opens (ISO date-time with a zone). Before then it shows `closedMessage` and takes no responses. */
+  opensAt: z.iso.datetime({ offset: true }).optional(),
+  /** When the survey closes (ISO date-time with a zone). */
+  closesAt: z.iso.datetime({ offset: true }).optional(),
+  /** Stop taking responses after this many complete ones. */
+  maxResponses: z.number().int().positive().max(100_000_000).optional(),
+  /**
+   * One response per browser (kept in the browser, so easy to get around) or per respondent (the id the server's
+   * `identifyRespondent` gives, enforced by the server).
+   */
+  oneResponsePer: z.enum(["browser", "respondent"]).optional(),
+  /** Only respondents the server identifies (signed in to the host system) may answer. */
+  requireRespondent: z.boolean().optional(),
+  /** Keep no respondent id with the responses: only a salted hash of it, enough to enforce `oneResponsePer`. */
+  anonymous: z.boolean().optional(),
+  /** Shown instead of the survey when it isn't open, is full, or was already answered. */
+  closedMessage: DisplayTextSchema.optional(),
+}).refine((s) => !s.opensAt || !s.closesAt || Date.parse(s.opensAt) < Date.parse(s.closesAt), {
+  message: "closesAt must be after opensAt",
+  path: ["closesAt"],
 });
 export type SurveySettings = z.infer<typeof SurveySettingsSchema>;
 
@@ -1198,6 +1218,8 @@ export const SurveyResponseSchema = ResponseInputSchema.extend({
    * updates, completes or resumes it. Keep it with the respondent.
    */
   resumeToken: z.string().optional(),
+  /** Who answered, from the server's `identifyRespondent`. Not kept for anonymous surveys. Set by the server only. */
+  respondentId: z.string().max(200).optional(),
 });
 
 export type Choice = z.infer<typeof ChoiceSchema>;

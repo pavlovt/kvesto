@@ -43,6 +43,12 @@ export const ENGLISH_LABELS = {
   typeToSign: "Type your full name to sign",
   /** Announced after a ranking item moves. */
   rankPosition: "{item}: position {n} of {total}",
+  /** Shown instead of the survey when it takes no responses, unless the survey sets `closedMessage`. */
+  closedNotOpen: "This survey isn't open yet.",
+  closedClosed: "This survey is closed.",
+  closedFull: "This survey has all the responses it needs. Thank you!",
+  closedAnswered: "You have already answered this survey. Thank you!",
+  closedSignIn: "Please sign in to answer this survey.",
 };
 export type Labels = typeof ENGLISH_LABELS;
 
@@ -127,6 +133,8 @@ const packs: Record<string, LocalePack> = {
       score: "Вашият резултат: {score} от {max}.", passed: "Издържахте.", failed: "Този път не издържахте.", correctAnswer: "Верен отговор: {answer}", yourAnswer: "Вашият отговор: {answer}", timeLeft: "Оставащо време: {time}", scoreLater: "Резултатът ще ви бъде съобщен по-късно.",
       errorSummary: "Моля, проверете тези отговори:", typeToSign: "Напишете пълното си име, за да подпишете",
       rankPosition: "{item}: позиция {n} от {total}",
+      closedNotOpen: "Анкетата още не е отворена.", closedClosed: "Анкетата е затворена.", closedFull: "Анкетата събра нужните отговори. Благодарим!",
+      closedAnswered: "Вече сте отговорили на тази анкета. Благодарим!", closedSignIn: "Влезте в профила си, за да отговорите.",
     },
     messages: {
       required: "Този въпрос е задължителен.", chooseOne: "Изберете една от възможностите.", chooseMany: "Изберете от възможностите.",
@@ -157,6 +165,8 @@ const packs: Record<string, LocalePack> = {
       score: "Ihre Punktzahl: {score} von {max}.", passed: "Bestanden.", failed: "Diesmal leider nicht bestanden.", correctAnswer: "Richtige Antwort: {answer}", yourAnswer: "Ihre Antwort: {answer}", timeLeft: "Verbleibende Zeit: {time}", scoreLater: "Ihr Ergebnis wird Ihnen später mitgeteilt.",
       errorSummary: "Bitte prüfen Sie diese Antworten:", typeToSign: "Geben Sie zum Unterschreiben Ihren vollen Namen ein",
       rankPosition: "{item}: Platz {n} von {total}",
+      closedNotOpen: "Diese Umfrage ist noch nicht geöffnet.", closedClosed: "Diese Umfrage ist geschlossen.", closedFull: "Diese Umfrage hat alle nötigen Antworten. Danke!",
+      closedAnswered: "Sie haben diese Umfrage bereits beantwortet. Danke!", closedSignIn: "Bitte melden Sie sich an, um die Umfrage zu beantworten.",
     },
     messages: {
       required: "Diese Frage ist erforderlich.", chooseOne: "Wählen Sie eine der Optionen.", chooseMany: "Wählen Sie aus den Optionen.",

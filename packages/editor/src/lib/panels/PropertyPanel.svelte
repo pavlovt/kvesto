@@ -106,6 +106,22 @@
     else settings.quiz = Object.fromEntries(Object.entries(next).filter(([, v]) => v !== undefined));
     doc.updateSurvey({ settings: Object.keys(settings).length ? settings : undefined } as Loose, { mergeKey: "survey.quiz" });
   }
+  /** Set (or with undefined, remove) one of the survey's settings. */
+  function setSetting(key: string, value: unknown) {
+    const settings: Loose = { ...((view.survey as Loose).settings ?? {}) };
+    if (value === undefined) delete settings[key];
+    else settings[key] = value;
+    doc.updateSurvey({ settings: Object.keys(settings).length ? settings : undefined } as Loose, { mergeKey: `survey.settings.${key}` });
+  }
+  const surveySettings = $derived(((view.survey as Loose).settings ?? {}) as Loose);
+  /** An ISO time as a datetime-local value, in this computer's time zone. */
+  function localTime(iso: string | undefined): string {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+  }
+  const isoTime = (local: string) => (local ? new Date(local).toISOString() : undefined);
   /** The correct answer as typed: one value, or several separated by commas for lists. */
   const answerText = (v: unknown) => (Array.isArray(v) ? v.join(", ") : v === undefined || v === null ? "" : String(v));
   const listTypes = ["multiple-choice", "tags", "ranking"];
@@ -194,6 +210,39 @@
           input type=checkbox checked={quiz.releaseScores === "manual"} onchange={(e) => setQuiz({ ...quiz, releaseScores: e.currentTarget.checked ? "manual" : undefined })}
           span 'Release scores by hand, after review'
         }
+      }
+      h3 'Availability'
+      label {
+        span 'Opens at'
+        input type=datetime-local value={localTime(surveySettings.opensAt)} onchange={(e) => setSetting("opensAt", isoTime(e.currentTarget.value))}
+      }
+      label {
+        span 'Closes at'
+        input type=datetime-local value={localTime(surveySettings.closesAt)} onchange={(e) => setSetting("closesAt", isoTime(e.currentTarget.value))}
+      }
+      label {
+        span 'Maximum responses'
+        input type=number min=1 value={surveySettings.maxResponses ?? ""} oninput={(e) => setSetting("maxResponses", num(e.currentTarget.value))}
+      }
+      label {
+        span 'One response per'
+        select value={surveySettings.oneResponsePer ?? ""} onchange={(e) => setSetting("oneResponsePer", e.currentTarget.value || undefined)} {
+          option value="" 'No limit'
+          option value=browser 'Browser'
+          option value=respondent 'Signed-in respondent'
+        }
+      }
+      label.kv-props-check {
+        input type=checkbox checked={Boolean(surveySettings.requireRespondent)} onchange={(e) => setSetting("requireRespondent", e.currentTarget.checked || undefined)}
+        span 'Only signed-in respondents'
+      }
+      label.kv-props-check {
+        input type=checkbox checked={Boolean(surveySettings.anonymous)} onchange={(e) => setSetting("anonymous", e.currentTarget.checked || undefined)}
+        span 'Anonymous: keep no respondent id'
+      }
+      label {
+        span 'Closed message'
+        textarea rows=2 value={tx(surveySettings.closedMessage)} placeholder="This survey is closed." oninput={(e) => setSetting("closedMessage", e.currentTarget.value ? textValue(surveySettings.closedMessage, e.currentTarget.value) : undefined)}
       }
       h3 'Hidden fields'
       p.kv-props-hint 'Values your site passes in (a campaign, a user id), usable in conditions and text. Separate them with commas.'

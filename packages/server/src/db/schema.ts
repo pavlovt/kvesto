@@ -1,4 +1,4 @@
-import { blob, index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { blob, index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import type { Answers, Survey } from "@kvesto/schema";
 
 export const surveys = sqliteTable("surveys", {
@@ -26,8 +26,15 @@ export const responses = sqliteTable(
     updatedAt: text("updated_at"),
     /** SHA-256 of the secret part of a partial response's resume token. Never the token itself. */
     resumeTokenHash: text("resume_token_hash"),
+    /** Who answered, from `identifyRespondent`. Null for anonymous surveys. */
+    respondentId: text("respondent_id"),
+    /** A salted hash of the respondent or browser, for `oneResponsePer`. Unique per survey. */
+    respondentKey: text("respondent_key"),
   },
-  (t) => [index("responses_survey_id_idx").on(t.surveyId, t.createdAt)],
+  (t) => [
+    index("responses_survey_id_idx").on(t.surveyId, t.createdAt),
+    uniqueIndex("responses_respondent_key_idx").on(t.surveyId, t.respondentKey),
+  ],
 );
 
 /** Files uploaded to file questions. Deleted with their survey. */

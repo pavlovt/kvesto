@@ -1,4 +1,5 @@
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import type { Context } from "hono";
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { Scalar } from "@scalar/hono-api-reference";
 import { bodyLimit } from "hono/body-limit";
@@ -6,7 +7,9 @@ import { cors } from "hono/cors";
 import {
   checkQuestionTypes,
   collectHidden,
+  surveyAvailability,
   textOf,
+  type ClosedReason,
   responsesToCsv,
   resolveLogic,
   scoreSurvey,
@@ -25,7 +28,7 @@ import {
   type Survey,
 } from "@kvesto/core";
 import { openAccess, type Authorize, type KvestoAction } from "./auth.js";
-import type { SurveyRepository } from "./repository.js";
+import type { RespondentRecord, SurveyRepository } from "./repository.js";
 import * as routes from "./routes.js";
 import { guardOutboundUrl } from "./outbound.js";
 import { EMBED_JS, HOSTED_CSP, hostedAssets, hostedPage, PAGE_CSS, RUN_JS } from "./hosted.js";
@@ -61,6 +64,33 @@ export interface CreateAppOptions {
    * partial one is saved. For in-process integrations; errors are logged, never shown to the respondent.
    */
   onResponse?: (event: WebhookEvent, response: SurveyResponse, survey: Survey) => void | Promise<void>;
+  /**
+   * Who is answering: a stable id from the host's session or token, or null for nobody. Kept with each response
+   * (as `respondentId`, unless the survey is anonymous), and needed for `settings.requireRespondent` and
+   * `settings.oneResponsePer: "respondent"`.
+   */
+  identifyRespondent?: (c: Context) => string | null | undefined | Promise<string | null | undefined>;
+  /**
+   * The key for the respondent and browser hashes that `oneResponsePer` compares. Set a long random secret so
+   * nobody with the database can test guessed ids against the hashes. Default: a fixed key.
+   */
+  respondentSecret?: string;
+}
+
+const CLOSED: Record<ClosedReason, [401 | 403 | 409, string]> = {
+  "not-open": [403, "This survey isn't open yet"],
+  closed: [403, "This survey is closed"],
+  full: [409, "This survey has all the responses it takes"],
+  answered: [409, "This survey takes one response per person, and there is one already"],
+  "sign-in": [401, "This survey needs a signed-in respondent"],
+};
+const BROWSER_ID = /^[A-Za-z0-9_-]{16,64}$/;
+
+/** The response's meta without `browserId`, which is only used for the hash. */
+function withoutBrowserId<T extends { meta?: Record<string, unknown> }>(input: T): T {
+  if (!input.meta || !("browserId" in input.meta)) return input;
+  const { browserId: _b, ...meta } = input.meta;
+  return { ...input, meta: Object.keys(meta).length ? meta : undefined };
 }
 
 /** The declared hidden fields' values in a response's `meta.hidden`: strings only, cut to 500 characters. */
@@ -176,6 +206,45 @@ export function createApp(options: CreateAppOptions) {
     })();
   };
   for (const type of options.questionTypes ?? []) registerQuestionType(type);
+
+  /**
+   * Whether the survey takes this response now (its availability settings), and who it is from. `creating` for a
+   * new response, `completing` when it is submitted.
+   */
+  const admit = async (
+    c: Context,
+    survey: Survey,
+    meta: Record<string, unknown> | undefined,
+    { creating, completing }: { creating: boolean; completing: boolean },
+  ): Promise<{ respondent: RespondentRecord } | { status: 400 | 401 | 403 | 409; body: { error: string; reason?: ClosedReason } }> => {
+    const s = survey.settings ?? {};
+    const given = options.identifyRespondent ? await options.identifyRespondent(c) : null;
+    const id = typeof given === "string" && given.length > 0 && given.length <= 200 ? given : null;
+    const hash = (kind: string, value: string) =>
+      createHmac("sha256", options.respondentSecret ?? "kvesto-respondent").update(`${survey.id}\0${kind}\0${value}`).digest("hex");
+    let key: string | null = null;
+    if (creating && s.oneResponsePer === "respondent" && id) key = hash("respondent", id);
+    if (creating && s.oneResponsePer === "browser") {
+      const browser = meta?.browserId;
+      if (typeof browser !== "string" || !BROWSER_ID.test(browser)) {
+        return { status: 400, body: { error: "This survey takes one response per browser: send meta.browserId (the runner does)" } };
+      }
+      key = hash("browser", browser);
+    }
+    const counted = s.maxResponses !== undefined && (creating || completing);
+    const available = surveyAvailability(survey, {
+      ...(counted ? { completeResponses: await repo.countResponses(survey.id) } : {}),
+      answered: key ? await repo.hasRespondent(survey.id, key) : false,
+      identified: id !== null,
+    });
+    if (!available.open) {
+      const [status, error] = CLOSED[available.reason];
+      return { status, body: { error, reason: available.reason } };
+    }
+    return { respondent: { id: s.anonymous ? null : id, key } };
+  };
+  /** A second response with the same respondent key, stored at the same moment, fails the unique index. */
+  const duplicate = (e: unknown) => /UNIQUE constraint failed/i.test(String((e as { message?: unknown })?.message ?? e));
   const maxFileSize = options.maxFileSize ?? 10 * 1024 * 1024;
   const app = new OpenAPIHono({
     defaultHook: (result, c) => {
@@ -314,21 +383,30 @@ export function createApp(options: CreateAppOptions) {
     const survey = await repo.loadSurvey(id);
     if (!survey) return c.json({ error: "Survey not found" }, 404);
     const partial = input.status === "partial";
+    const admitted = await admit(c, survey, input.meta, { creating: true, completing: !partial });
+    if (!("respondent" in admitted)) return c.json(admitted.body, admitted.status);
+    const { respondent } = admitted;
     const hidden = hiddenOf(survey, input.meta);
     const checked = check(survey, input.answers, partial || timedOut(survey, input.meta), c.req.header("accept-language"), hidden);
     if ("bad" in checked) return c.json(checked.bad, 400);
     // Answers to questions hidden by conditional logic are dropped, as the core runtime does.
-    const { status: _status, ...given } = input;
+    const { status: _status, ...given } = withoutBrowserId(input);
     const rest = withQuiz(survey, withHidden(given, hidden), checked.answers, hidden, partial);
-    if (!partial) {
-      const saved = await repo.saveResponse(id, { ...rest, answers: checked.answers });
+    try {
+      if (!partial) {
+        const saved = await repo.saveResponse(id, { ...rest, answers: checked.answers }, { respondent });
+        notify(survey, saved);
+        return c.json(saved, 201);
+      }
+      const secret = randomBytes(32).toString("base64url");
+      const saved = await repo.savePartialResponse(id, { ...rest, answers: checked.answers }, hashSecret(secret), respondent);
       notify(survey, saved);
-      return c.json(saved, 201);
+      return c.json({ ...saved, resumeToken: `${saved.id}.${secret}` }, 201);
+    } catch (e) {
+      if (!duplicate(e)) throw e;
+      const [status, error] = CLOSED.answered;
+      return c.json({ error, reason: "answered" as const }, status);
     }
-    const secret = randomBytes(32).toString("base64url");
-    const saved = await repo.savePartialResponse(id, { ...rest, answers: checked.answers }, hashSecret(secret));
-    notify(survey, saved);
-    return c.json({ ...saved, resumeToken: `${saved.id}.${secret}` }, 201);
   });
 
   /** A partial response, if `token` is its resume token. */
@@ -353,7 +431,9 @@ export function createApp(options: CreateAppOptions) {
     const found = await partialFor(id, responseId, token);
     if (!("response" in found)) return c.json({ error: found.error }, found.status);
     const partial = input.status === "partial";
-    const meta = input.meta ?? found.response!.meta;
+    const admitted = await admit(c, survey, input.meta, { creating: false, completing: !partial });
+    if (!("respondent" in admitted)) return c.json(admitted.body, admitted.status);
+    const meta = withoutBrowserId({ meta: input.meta ?? found.response!.meta }).meta;
     const hidden = hiddenOf(survey, meta);
     const checked = check(survey, input.answers, partial || timedOut(survey, meta), c.req.header("accept-language"), hidden);
     if ("bad" in checked) return c.json(checked.bad, 400);

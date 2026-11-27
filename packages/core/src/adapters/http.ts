@@ -73,7 +73,7 @@ export function httpStorage(options: HttpStorageOptions): Required<SurveyStorage
         : (await request<SurveyResponse>("POST", `/surveys/${enc(surveyId)}/responses`, response))!,
     // A partial response on the server; the token is `responseId.secret`, and the secret never goes in a URL.
     saveProgress: async (surveyId, draft) => {
-      const body = { answers: draft.answers, status: "partial", meta: { progress: { pageIndex: draft.pageIndex, stepId: draft.stepId ?? null } } };
+      const body = { answers: draft.answers, status: "partial", meta: { ...draft.meta, progress: { pageIndex: draft.pageIndex, stepId: draft.stepId ?? null } } };
       if (draft.token) {
         await request<SurveyResponse>("PATCH", progressPath(surveyId, draft.token), { ...body, token: draft.token });
         return { token: draft.token };

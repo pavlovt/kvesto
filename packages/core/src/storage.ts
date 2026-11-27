@@ -28,6 +28,8 @@ export interface ProgressDraft {
   stepId?: string | null;
   /** The resume token of an earlier save, to update the same draft. */
   token?: string;
+  /** Extra response meta to send, such as `browserId` for a survey limited to one response per browser. */
+  meta?: Record<string, unknown>;
 }
 
 export interface SurveyStorage {

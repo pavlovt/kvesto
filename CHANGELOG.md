@@ -57,6 +57,7 @@ All packages (`kvesto`, `@kvesto/schema`, `core`, `server`, `editor`, `dashboard
   popup and slide-in modes, link and embed snippets in the editor, and a Playwright test that embeds and completes a
   survey from another origin.
 - JSON Schema interop: `answersJsonSchema(survey)` for checking answers outside Kvesto, and `surveyFromJsonSchema(schema)` to start a survey from an existing schema (M31).
+- Survey availability: `settings.opensAt`, `closesAt`, `maxResponses`, `oneResponsePer`, `requireRespondent`, `anonymous` and `closedMessage`, shown by the runner and enforced by the server, with `identifyRespondent` and hashed respondent keys (M32).
 
 ## 0.2.0
 

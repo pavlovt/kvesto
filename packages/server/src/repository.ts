@@ -66,8 +66,17 @@ export interface StoredDelivery {
   updatedAt: string;
 }
 
+/** Who a response is from: the respondent's id (unless the survey is anonymous) and the hash `oneResponsePer` uses. */
+export interface RespondentRecord {
+  id?: string | null;
+  key?: string | null;
+}
+
 export interface SurveyRepository extends Required<Omit<SurveyStorage, "uploadFile" | "saveProgress" | "loadProgress">> {
+  saveResponse(surveyId: string, input: ResponseInput, opts?: { resumeToken?: string; respondent?: RespondentRecord }): Promise<SurveyResponse>;
   surveyExists(id: string): Promise<boolean>;
+  /** Whether a response with this respondent key exists (any status). */
+  hasRespondent(surveyId: string, key: string): Promise<boolean>;
   createSurvey(survey: Survey): Promise<Survey>;
   countResponses(surveyId: string, filter?: ResponseFilter): Promise<number>;
   listResponsesPage(
@@ -75,7 +84,7 @@ export interface SurveyRepository extends Required<Omit<SurveyStorage, "uploadFi
     opts: { limit: number; offset: number; after?: ResponseCursor } & ResponseFilter,
   ): Promise<SurveyResponse[]>;
   /** Store a partial response with the hash of its resume token's secret. */
-  savePartialResponse(surveyId: string, input: ResponseInput, tokenHash: string): Promise<SurveyResponse>;
+  savePartialResponse(surveyId: string, input: ResponseInput, tokenHash: string, respondent?: RespondentRecord): Promise<SurveyResponse>;
   /** A response with its token hash, for checking a resume token. */
   loadResponse(surveyId: string, responseId: string): Promise<{ response: SurveyResponse; tokenHash: string | null } | null>;
   /** Replace a response's answers and meta, and set its status. */
@@ -103,6 +112,7 @@ function toResponse(row: typeof responses.$inferSelect): SurveyResponse {
     status: row.status,
     createdAt: row.createdAt,
     ...(row.updatedAt ? { updatedAt: row.updatedAt } : {}),
+    ...(row.respondentId ? { respondentId: row.respondentId } : {}),
   };
 }
 
@@ -162,7 +172,7 @@ export function drizzleRepository(db: KvestoDb): SurveyRepository {
         .all();
       return rows;
     },
-    async saveResponse(surveyId: string, input: ResponseInput) {
+    async saveResponse(surveyId: string, input: ResponseInput, opts?: { respondent?: RespondentRecord }) {
       const ts = now();
       const row = {
         id: randomUUID(),
@@ -173,11 +183,13 @@ export function drizzleRepository(db: KvestoDb): SurveyRepository {
         createdAt: ts,
         updatedAt: ts,
         resumeTokenHash: null,
+        respondentId: opts?.respondent?.id ?? null,
+        respondentKey: opts?.respondent?.key ?? null,
       };
       await db.insert(responses).values(row).run();
       return toResponse(row);
     },
-    async savePartialResponse(surveyId, input, tokenHash) {
+    async savePartialResponse(surveyId, input, tokenHash, respondent) {
       const ts = now();
       const row = {
         id: randomUUID(),
@@ -188,6 +200,8 @@ export function drizzleRepository(db: KvestoDb): SurveyRepository {
         createdAt: ts,
         updatedAt: ts,
         resumeTokenHash: tokenHash,
+        respondentId: respondent?.id ?? null,
+        respondentKey: respondent?.key ?? null,
       };
       await db.insert(responses).values(row).run();
       return toResponse(row);
@@ -208,6 +222,14 @@ export function drizzleRepository(db: KvestoDb): SurveyRepository {
         .where(and(eq(responses.surveyId, surveyId), eq(responses.id, responseId)))
         .run();
       return (await this.loadResponse(surveyId, responseId))!.response;
+    },
+    async hasRespondent(surveyId, key) {
+      const row = await db
+        .select({ id: responses.id })
+        .from(responses)
+        .where(and(eq(responses.surveyId, surveyId), eq(responses.respondentKey, key)))
+        .get();
+      return row !== undefined;
     },
     async countResponses(surveyId, filter) {
       const row = await db.select({ n: count() }).from(responses).where(byFilter(surveyId, filter)).get();

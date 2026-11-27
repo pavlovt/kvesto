@@ -440,6 +440,31 @@ only the token can change a partial response; a completed one can't be changed. 
 responses out unless asked (`?status=partial` or `?status=all`). The dashboard shows the completion rate and where
 people stop, and can include partial responses in the results.
 
+#### Availability
+
+```json
+"settings": {
+  "opensAt": "2026-06-01T09:00:00+02:00",
+  "closesAt": "2026-06-30T18:00:00+02:00",
+  "maxResponses": 500,
+  "oneResponsePer": "respondent",
+  "requireRespondent": true,
+  "anonymous": true,
+  "closedMessage": "Thanks, we have all the answers we need."
+}
+```
+
+Outside the window, once `maxResponses` complete responses are in, or when this person has answered already, the
+runner shows `closedMessage` (or a built-in text for the reason) instead of the survey, and the server refuses the
+response with a `reason` of `not-open`, `closed`, `full`, `answered` or `sign-in`. `surveyAvailability(survey, ctx)`
+in the core does the same check for your own code.
+
+`oneResponsePer: "browser"` is remembered in the browser and enforced on the server by a random id the runner
+sends; clearing site data gets around it. `"respondent"` and `requireRespondent` are enforced by the server, with the
+id from `createApp({ identifyRespondent: (c) => … })`, which reads your own session or token and returns a stable id
+(or null). Responses keep it as `respondentId`, except in an `anonymous` survey, where only a salted hash
+(HMAC with `createApp({ respondentSecret })`) is kept, enough to refuse a second response.
+
 #### Themes
 
 The default stylesheet is built on CSS custom properties. Pick a preset or set variables (without `--kv-`):

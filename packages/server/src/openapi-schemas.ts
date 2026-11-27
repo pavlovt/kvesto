@@ -67,6 +67,8 @@ export const ErrorBody = z
     issues: z
       .array(z.object({ path: z.array(z.union([z.string(), z.number()])), message: z.string() }))
       .optional(),
+    /** Why a survey takes no responses: "not-open", "closed", "full", "answered" or "sign-in". */
+    reason: z.enum(["not-open", "closed", "full", "answered", "sign-in"]).optional(),
   })
   .openapi("Error");
 

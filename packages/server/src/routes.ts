@@ -114,12 +114,17 @@ export const submitResponse = createRoute({
   description:
     "Answers are validated against the survey's questions with the same rules the core runtime uses. " +
     'With `status: "partial"` the answers are saved as progress (nothing is required yet) and the reply carries a ' +
-    "`resumeToken` to update, complete or resume them.",
+    "`resumeToken` to update, complete or resume them. The survey's availability settings are enforced: " +
+    "`opensAt`/`closesAt` (403), `maxResponses` and `oneResponsePer` (409), `requireRespondent` (401); the error's " +
+    "`reason` says which. For `oneResponsePer: \"browser\"` send `meta.browserId` (the runner does).",
   request: { params: SurveyIdParam, body: { ...json(ResponseInput, "Answers"), required: true } },
   responses: {
     201: json(SurveyResponse, "Stored response"),
     400: error("Answers do not match the survey"),
+    401: error("The survey needs an identified respondent"),
+    403: error("The survey is not open"),
     404: error("Survey not found"),
+    409: error("The survey is full, or this respondent answered already"),
   },
 });
 
@@ -133,9 +138,10 @@ export const updateResponse = createRoute({
   responses: {
     200: json(SurveyResponse, "Updated response"),
     400: error("Answers do not match the survey"),
-    403: error("Wrong resume token"),
+    401: error("The survey needs an identified respondent"),
+    403: error("Wrong resume token, or the survey is not open"),
     404: error("Response not found"),
-    409: error("The response is already complete"),
+    409: error("The response is already complete, or the survey is full"),
   },
 });
 

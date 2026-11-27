@@ -4,8 +4,8 @@ This is the plan for growing Kvesto from today's skeleton into a full survey too
 Each milestone is meant to be one focused change on `main`: it builds, type-checks and passes tests on its own, and
 can ship in a patch or minor release without waiting for the next one.
 
-> **Where we are now:** M31 (jSON Schema interop) is the latest finished milestone. Next up:
-> M32 (survey availability settings). The [Status](#status) table at the bottom lists every milestone.
+> **Where we are now:** M32 (survey availability settings) is the latest finished milestone. Next up:
+> M33 (security baseline and disclosure process). The [Status](#status) table at the bottom lists every milestone.
 
 Milestones marked **★** are ideas that go beyond the original feature list. They come from looking at how other
 form and survey tools solve the same problems (conversational forms, headless form renderers, open source
@@ -1194,6 +1194,7 @@ Decided:
 | M29 · Webhooks | Done (unreleased). Includes M34's outbound URL guard, brought forward so webhooks never ship without it |
 | M30 · Hosted embeds | Done (unreleased) |
 | M31 · JSON Schema interop | Done (unreleased). Conditional logic is not expressible in JSON Schema, so those questions are optional |
-| M32 – M79 | Planned |
+| M32 · Survey availability settings | Done (unreleased). `oneResponsePer: "browser"` is best effort (a browser id in localStorage); closed messages translated for en, bg, de only |
+| M33 – M79 | Planned |
 
 Update this table as milestones land, with the release they shipped in.

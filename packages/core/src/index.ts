@@ -88,3 +88,4 @@ export { defineSurveyElement, type SurveyElementOptions } from "./element.js";
 export { filterResponses, responseColumns, responseRow, type ResponseColumn, type ResponseFilter } from "./table.js";
 export { exportTable, responsesToCsv, safeCell, type ExportOptions } from "./export.js";
 export { answerSchema, answersJsonSchema, surveyFromJsonSchema } from "./json-schema-interop.js";
+export { surveyAvailability, closedReasonOf, type AvailabilityContext, type ClosedReason } from "./availability.js";

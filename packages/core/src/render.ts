@@ -243,6 +243,15 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
   const clockTimer = model.deadline !== null || model.survey.pages.some((p) => p.timeLimit) ? setInterval(tickClock, 1000) : undefined;
 
   const unsubscribe = model.subscribe((state) => {
+    if (state.status === "closed") {
+      if (renderedStatus !== "closed") {
+        const key = ({ "not-open": "closedNotOpen", closed: "closedClosed", full: "closedFull", answered: "closedAnswered", "sign-in": "closedSignIn" } as const)[state.closedReason ?? "closed"];
+        const text = typeof settings.closedMessage === "string" ? settings.closedMessage : labels[key];
+        root.replaceChildren(h(doc, "p", { class: "kv-closed", role: "status" }, pipeText(text, state.survey, state.logic.answers, pipeOptions)));
+      }
+      renderedStatus = state.status;
+      return;
+    }
     if (state.status === "completed") {
       if (renderedStatus !== "completed") {
         const done = pipeText(state.survey.completedText ?? labels.completed, state.survey, state.logic.answers, {

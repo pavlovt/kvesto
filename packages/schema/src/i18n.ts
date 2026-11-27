@@ -100,6 +100,8 @@ export function mapTexts<S>(survey: S, fn: (text: TextValue, key: string) => Tex
     if (Array.isArray(el.elements)) for (const child of el.elements as Json[]) element(child);
   };
   for (const name of ["title", "description", "completedText"]) field(doc, name, `survey.${name}`);
+  const settings = doc.settings as Json | undefined;
+  if (settings && typeof settings === "object") field(settings, "closedMessage", "survey.closedMessage");
   for (const page of (doc.pages as Json[] | undefined) ?? []) {
     field(page, "title", `page.${String(page.id)}.title`);
     for (const el of (page.elements as Json[] | undefined) ?? []) element(el);

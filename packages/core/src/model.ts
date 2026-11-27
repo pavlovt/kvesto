@@ -1,3 +1,4 @@
+import { answeredInBrowser, browserId, closedReasonOf, rememberAnswered, surveyAvailability, type ClosedReason } from "./availability.js";
 import {
   localizeSurvey,
   type Element,
@@ -71,6 +72,11 @@ export interface CreateSurveyOptions {
   /** Values for the survey's `hiddenFields`, by name. Undeclared names are ignored. */
   hidden?: Record<string, string>;
   /**
+   * Whether this respondent has answered already, for `settings.oneResponsePer`. Default: for "browser", whether
+   * this browser submitted it (remembered in localStorage).
+   */
+  answered?: boolean;
+  /**
    * Also read hidden fields from this URL's query parameters (pass `location.href`). Opt-in, and only
    * declared fields are read. Values passed in `hidden` win.
    */
@@ -117,11 +123,14 @@ export interface SurveyState {
   stepIndex: number;
   /** The element id `nextStep` / `prevStep` last moved to, or null for the first step of the current page. */
   stepId: string | null;
-  status: "running" | "submitting" | "completed";
+  /** "closed" when the survey takes no responses (see `closedReason`). */
+  status: "running" | "submitting" | "completed" | "closed";
   submitError: string | null;
+  /** Why the survey is closed: not open yet, closed, full, already answered, or sign-in needed. */
+  closedReason: ClosedReason | null;
 }
 
-type BaseState = Pick<SurveyState, "answers" | "errors" | "pageIndex" | "status" | "submitError" | "uploading" | "stepId">;
+type BaseState = Pick<SurveyState, "answers" | "errors" | "pageIndex" | "status" | "submitError" | "uploading" | "stepId" | "closedReason">;
 
 /** One screen of the one-question-at-a-time layout. */
 export interface Step {
@@ -200,14 +209,17 @@ export class SurveyModel {
       const min = panel.repeat?.min ?? 0;
       if (answers[id] === undefined && min > 0) answers[id] = Array.from({ length: min }, () => this.newItem(panel));
     }
+    const answered = options.answered ?? (this.survey.settings?.oneResponsePer === "browser" && answeredInBrowser(this.survey.id));
+    const available = surveyAvailability(this.survey, { now: options.now?.(), answered });
     this.state = this.compute({
       answers,
       errors: {},
       pageIndex: 0,
-      status: "running",
+      status: available.open ? "running" : "closed",
       submitError: null,
       uploading: [],
       stepId: null,
+      closedReason: available.open ? null : available.reason,
     });
     const resumePage = options.resume?.pageIndex;
     if (resumePage !== undefined && resumePage > 0 && resumePage < this.survey.pages.length) {
@@ -381,11 +393,13 @@ export class SurveyModel {
     this.progressSaving = this.progressSaving
       .catch(() => undefined)
       .then(async () => {
+        const browser = this.browserMeta();
         const { token } = await save(this.survey.id, {
           answers: { ...this.state.logic.answers },
           pageIndex: this.state.pageIndex,
           stepId: this.state.stepId,
           ...(this.token ? { token: this.token } : {}),
+          ...(browser ? { meta: browser } : {}),
         });
         this.token = token;
         this.options.onProgress?.(token);
@@ -745,6 +759,7 @@ export class SurveyModel {
     const scored = quiz ? this.score() : null;
     const meta: Record<string, unknown> = {
       ...this.options.meta,
+      ...this.browserMeta(),
       ...(Object.keys(this.hidden).length ? { hidden: { ...this.hidden } } : {}),
       // The server recalculates this; it is here for storage that has no server.
       ...(scored ? { quiz: { score: scored.score, max: scored.max, ...(scored.passed !== undefined ? { passed: scored.passed } : {}), ...(timedOut ? { timedOut: true } : {}) } } : {}),
@@ -766,13 +781,24 @@ export class SurveyModel {
         ...(this.token ? [{ resumeToken: this.token }] : []),
       );
       const result: CompletionResult = { surveyId: this.survey.id, response, ...(saved ? { saved } : {}) };
+      if (this.survey.settings?.oneResponsePer) rememberAnswered(this.survey.id);
       this.update({ status: "completed" });
       await this.options.onComplete?.(result);
       return result;
     } catch (err) {
-      this.update({ status: "running", submitError: err instanceof Error ? err.message : String(err) });
+      // The server refused because the survey closed, filled up or was answered already: show that, not an error.
+      const closed = closedReasonOf(err);
+      if (closed) this.update({ status: "closed", closedReason: closed, submitError: null });
+      else this.update({ status: "running", submitError: err instanceof Error ? err.message : String(err) });
       return null;
     }
+  }
+
+  /** `{ browserId }` for a survey limited to one response per browser, so the server can enforce it. */
+  private browserMeta(): { browserId: string } | undefined {
+    if (this.survey.settings?.oneResponsePer !== "browser") return undefined;
+    const id = browserId();
+    return id ? { browserId: id } : undefined;
   }
 
   private update(patch: Partial<BaseState>) {
@@ -808,6 +834,7 @@ export class SurveyModel {
       pageIndex: s.pageIndex,
       status: s.status,
       submitError: s.submitError,
+      closedReason: s.closedReason,
       uploading: s.uploading,
       survey: this.survey,
       page,
