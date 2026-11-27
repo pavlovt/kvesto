@@ -233,11 +233,17 @@ After that the phases can be taken in almost any order; dependencies are listed 
 - **Scope:** survey-level `variables: [{ "name": "total", "expr": "..." }]` usable in conditions, piping and
   validators, an `expression` validator (`{ "type": "expression", "expr": "{end} > {start}" }`), and a read-only
   `computed` question type that shows a calculated value and can store it with the response.
+  Value rules on every question: `defaultValue` (a fixed starting answer) and `defaultExpr` (computed when the
+  question is first shown), `readOnly` and `enableIf` (shown but not editable), and `resetIf` (clear the answer
+  when a condition becomes true, for example when an earlier choice changes). `enableIf` and `resetIf` take the
+  existing JSON conditions, so that part can ship before M11.
 - **Depends on:** M11, M3.
-- **Packages:** schema, core, server, editor palette, dashboard (computed values summarised like numbers).
+- **Packages:** schema, core, server, editor palette and property panel, dashboard (computed values summarised like
+  numbers).
 - **Schema impact:** additive (v1).
 - **Done when:** tests for variable dependency order, cycles rejected by the schema, and server-side recomputation
-  (the server recalculates computed answers rather than trusting the client).
+  (the server recalculates computed answers rather than trusting the client); tests for defaults, `resetIf`
+  clearing an answer, and the server refusing a changed answer to a read-only question.
 
 ### M14 · Triggers
 
@@ -310,11 +316,18 @@ After that the phases can be taken in almost any order; dependencies are listed 
   locale packs: English, Bulgarian, German, French, Spanish, Italian, Portuguese, Dutch, Polish and Russian, plus
   Chinese and Japanese if they need nothing beyond translation (contributions welcome). Validation messages use the same packs. An
   editor translation tab lists every string per locale with missing ones highlighted.
+  - **Translation files:** every string exports to CSV and XLIFF and imports back, keyed by element id and
+    property, with a report of strings that no longer exist, so translators can work outside the editor.
+  - **Machine-translated drafts:** an optional `translate(strings, from, to)` host hook fills a new locale with
+    drafts marked "needs review" until a person confirms them. Kvesto bundles no translation service.
+  - **Formatting and choice of locale:** numbers, dates and piped values are formatted with `Intl` for the active
+    locale; the locale can come from a `lang` URL parameter (opt-in) or the browser's language list.
 - **Depends on:** M1. Easier the earlier it lands, since every later milestone adds strings.
 - **Packages:** schema, core, editor, dashboard (labels in the selected locale).
 - **Schema impact:** additive (v1). A plain string still means "the default locale".
-- **Done when:** render tests in two locales, fallback to the default locale for missing strings, and the editor
-  tab can add a locale.
+- **Done when:** render tests in two locales, fallback to the default locale for missing strings, the editor
+  tab can add a locale, an XLIFF export and import round trip leaves the survey unchanged, and drafts from a mocked
+  `translate` hook stay flagged until reviewed.
 
 ### M21 · ★ Partial responses and resume
 
@@ -353,20 +366,34 @@ After that the phases can be taken in almost any order; dependencies are listed 
 - **Scope:** `correctAnswer` and per-choice `score` on questions, a `settings.quiz` block (show score, show correct
   answers, pass mark) and an optional time limit per survey or page. Scores are also available as variables (M13), so
   assessment-style surveys ("your result: advanced") work without quiz mode. The server recomputes the score.
+  Feedback text per question for a correct and a wrong answer, partial credit on multiple choice (a score per
+  correct choice and an optional penalty per wrong one), and `settings.quiz.releaseScores: "immediately" |
+  "manual"`, so scores can be released after someone has reviewed the open answers.
 - **Depends on:** M13.
-- **Packages:** schema, core, server, dashboard (score distribution).
+- **Packages:** schema, core, server, dashboard (score distribution, manual release).
 - **Schema impact:** additive (v1).
-- **Done when:** scoring tests per question type, timer tests with fake timers, and a server test that ignores a
-  client-sent score.
+- **Done when:** scoring tests per question type including partial credit, timer tests with fake timers, a server
+  test that ignores a client-sent score, and a manual-release round trip.
 
 ### M25 · Accessibility audit
 
 - **Scope:** run axe-core against rendered fixtures in the core render tests and in the editor; fix findings; add
   ARIA patterns for matrix, grid, ranking and the editor tree; document keyboard use. A baseline axe check can be
-  added to CI as early as M1 and kept green from then on.
-- **Packages:** core, editor, dashboard.
-- **Schema impact:** none.
-- **Done when:** no axe violations on the fixtures and an `ACCESSIBILITY.md` with the keyboard map.
+  added to CI as early as M1 and kept green from then on. The target is WCAG 2.2 AA, named in the docs. Beyond
+  what axe finds:
+  - an optional `autocomplete` field on text questions (defaulted for email, tel and the M49 types), so browsers
+    can fill personal data (WCAG 1.3.5);
+  - an error summary at the top of the page after a failed submit, with links that move focus to each field;
+  - targets of at least 24 by 24 CSS pixels (2.5.8), and a sticky navigation bar that never covers the focused
+    field (2.4.11);
+  - a high-contrast theme preset (with M23, or on its own if M25 lands first);
+  - a manual pass with NVDA and VoiceOver over the fixtures before each minor release;
+  - an accessibility conformance report in the VPAT format, updated per minor release, that says what was tested
+    and what is known not to conform.
+- **Packages:** schema (`autocomplete`), core, editor, dashboard.
+- **Schema impact:** additive (v1).
+- **Done when:** no axe violations on the fixtures, an `ACCESSIBILITY.md` with the keyboard map, render tests for
+  the error summary and `autocomplete`, and the conformance report published with the release.
 
 ### M26 · Framework wrappers
 
@@ -433,10 +460,15 @@ After that the phases can be taken in almost any order; dependencies are listed 
 
 - **Scope:** `settings.opensAt`, `settings.closesAt`, `settings.maxResponses` and an optional one-response-per-browser
   flag. The runner shows a closed message; the server refuses submissions outside the window or over the limit.
+  Respondent identity from the host: an optional `identifyRespondent(c)` on `createApp` returns a stable id from the
+  host's session or token, so `settings.oneResponsePer: "browser" | "respondent"` and `settings.requireRespondent`
+  (signed-in respondents only) are enforced by the server, not only in the browser. With `settings.anonymous`
+  (M37) only a salted hash of the id is kept, enough to enforce the limit.
 - **Depends on:** M2.
 - **Packages:** schema, core, server, editor (survey settings).
 - **Schema impact:** additive (v1).
-- **Done when:** API tests for each limit and a runner test for the closed state.
+- **Done when:** API tests for each limit, a second response from the same respondent refused, an anonymous survey
+  that stores only the hash, and a runner test for the closed state.
 
 ---
 
@@ -458,6 +490,7 @@ Effort is rough: **S** is about one milestone-sized change, **M** a few, **L** a
 | M39–M41 | Roles and SSO, audit log, security testing | Turns the server from "API keys" into something a team can run. |
 | M42–M47 | Flow and logic | The most requested survey-design features; most are small. |
 | M48–M73 | The rest | Any order; dependencies are listed per milestone. |
+| M74–M79 | Gaps from the competitive review | See [Beyond M73](#beyond-m73). M74 and M77 are small and can be pulled in early. |
 
 ## Phase 8 · Security and privacy
 
@@ -650,15 +683,17 @@ non-inline types. Regex validators are length-limited (M3). The milestones below
 - **Effort:** M.
 - **Done when:** a concurrency test cannot overfill a quota.
 
-### M47 · End screens and redirects
+### M47 · Start screen, end screens and redirects
 
-- **Scope:** several completion screens chosen by condition, and an optional redirect URL with piped answers and
-  hidden fields (M22). Redirect hosts must be on a per-survey allowlist, so a survey cannot become an open redirect.
+- **Scope:** an optional start screen before the first page (title, description, image, a start button and an
+  estimated time to complete worked out from the visible questions), several completion screens chosen by
+  condition, and an optional redirect URL with piped answers and hidden fields (M22). Redirect hosts must be on a
+  per-survey allowlist, so a survey cannot become an open redirect.
 - **Depends on:** M12.
 - **Packages:** schema, core, editor.
 - **Schema impact:** additive (v1).
 - **Effort:** S.
-- **Done when:** tests for screen selection, URL encoding of piped values, and a refused host.
+- **Done when:** tests for the start screen, screen selection, URL encoding of piped values, and a refused host.
 
 ## Phase 10 · Question types and respondent experience
 
@@ -671,26 +706,33 @@ non-inline types. Regex validators are length-limited (M3). The milestones below
 - **Effort:** S.
 - **Done when:** summary tests for each metric.
 
-### M49 · Date, time, phone and address inputs
+### M49 · Date, time, phone, address and masked inputs
 
 - **Scope:** `date` and `time` with min/max (validated by M3's `range`), `phone` with country codes, and `address`
-  (a multi-text with structured parts and an optional `addressLookup` host hook for autocomplete).
+  (a multi-text with structured parts and an optional `addressLookup` host hook for autocomplete). Input masks on
+  text questions: `mask` of type `pattern` (`"99-999"`), `number` (decimals, thousands separator), `currency` or
+  `date`. A mask only shapes typing: the stored answer is the unmasked value (a number for number and currency
+  masks), so validators and exports never see separators. Masks follow the locale (M20) when one is set.
 - **Depends on:** M15, M17.
 - **Packages:** schema, core, editor, dashboard.
 - **Schema impact:** additive (v1).
 - **Effort:** M.
-- **Done when:** validate, render and summary tests, including time zones for `date`.
+- **Done when:** validate, render and summary tests, including time zones for `date`, and mask tests for typing,
+  pasting, deleting and the stored unmasked value.
 
 ### M50 · Review, display mode and after-submit options
 
 - **Scope:** an optional review page before submit; `mode: "display"` that renders a stored response read-only
   (for host back offices and printing); `settings.allowEdit` so a respondent can edit with their token; an
-  optional emailed copy of the response through a `sendMail` hook on the server.
+  optional emailed copy of the response through a `sendMail` hook on the server. The same hook sends notification
+  emails: a per-survey list of owner addresses told about each completed response (a link to it, with answers only
+  as M37's masking allows), and an autoresponder to an email answer with a custom message.
 - **Depends on:** M21.
 - **Packages:** core, server, schema.
 - **Schema impact:** additive (v1).
 - **Effort:** M.
-- **Done when:** render tests for display mode on every question type, and an edit round trip.
+- **Done when:** render tests for display mode on every question type, an edit round trip, and a test that PII
+  never reaches an owner notification unmasked.
 
 ### M51 · Right-to-left layout
 
@@ -706,12 +748,15 @@ non-inline types. Regex validators are length-limited (M3). The milestones below
 
 - **Scope:** responses are queued in IndexedDB while offline and sent when the connection returns, with an
   idempotency key so a retry never creates a duplicate; a service worker for the hosted page (M30) so a survey can
-  be taken without a connection after the first load.
+  be taken without a connection after the first load. A kiosk mode (`mode: "kiosk"`) for shared devices at events
+  and front desks: the survey restarts after completion, clears the answers after a set time without input (with a
+  warning first), and never offers to resume someone else's draft.
 - **Depends on:** M21, M30.
-- **Packages:** core (an `offlineQueue` storage wrapper), server (idempotency keys).
+- **Packages:** core (an `offlineQueue` storage wrapper, kiosk mode), server (idempotency keys).
 - **Schema impact:** none.
 - **Effort:** M.
-- **Done when:** a Playwright test completes a survey offline and syncs it once.
+- **Done when:** a Playwright test completes a survey offline and syncs it once, and a kiosk test shows that the next
+  respondent never sees the previous one's answers.
 
 ### M53 · Payments and scheduling
 
@@ -748,7 +793,8 @@ non-inline types. Regex validators are length-limited (M3). The milestones below
 
 ### M56 · Invitations and reminders
 
-- **Scope:** contact lists, personal single-use links (tokens stored hashed), a `sendMail` adapter (SMTP example),
+- **Scope:** contact lists, personal single-use links (tokens stored hashed), a `sendMessage` adapter with email
+  (SMTP example) and SMS (one provider example) channels,
   scheduled reminders to people who have not finished, unsubscribe handling, and response rates per list.
 - **Depends on:** M21, M39.
 - **Packages:** server, dashboard.
@@ -759,8 +805,9 @@ non-inline types. Regex validators are length-limited (M3). The milestones below
 ### M57 · In-app targeting
 
 - **Scope:** an `@kvesto/intercept` package that shows a survey when the host app fires an event, a URL matches or a
-  user is in a segment, with sampling, frequency caps and "don't show again". Rules can live in the survey or on
-  the server.
+  user is in a segment, with sampling, frequency caps and "don't show again", plus a global waiting period across
+  all surveys for the same user (for example at most one survey every 14 days) that a survey can override. Rules can
+  live in the survey or on the server.
 - **Depends on:** M26, M22.
 - **Packages:** new package, schema (`targeting`), server (rule evaluation).
 - **Schema impact:** additive (v1).
@@ -781,12 +828,15 @@ non-inline types. Regex validators are length-limited (M3). The milestones below
 ### M59 · Cross-tabs, timing and funnels
 
 - **Scope:** cross-tabulate any two questions, compare segments side by side, time spent per question and page,
-  and a funnel of where people stop (building on M21's drop-off data).
-- **Depends on:** M21, M27.
+  and a funnel of where people stop (building on M21's drop-off data). Significance tests on cross-tabs
+  (chi-square for the table, column-proportion tests marking cells that differ), the base size on every chart, and
+  trends over time for score metrics (M48) by day, week or month.
+- **Depends on:** M21, M27; M48 for score trends.
 - **Packages:** core (`crossTab`), dashboard, core runner (timing in `meta`).
 - **Schema impact:** additive on the response `meta`.
 - **Effort:** M.
-- **Done when:** cross-tab tests for every choice-like type.
+- **Done when:** cross-tab tests for every choice-like type, and test statistics checked against published worked
+  examples.
 
 ### M60 · Open text analysis
 
@@ -801,12 +851,15 @@ non-inline types. Regex validators are length-limited (M3). The milestones below
 ### M61 · Saved and shared reports
 
 - **Scope:** save a dashboard view (filters, charts, cross-tabs) and share it read-only through a scoped, expiring
-  token that can never see PII or raw responses unless granted.
+  token that can never see PII or raw responses unless granted. An anonymity threshold: any breakdown, filter or
+  cross-tab with fewer than N responses (default 5, set per survey) is hidden in shared reports, so a small segment
+  cannot single out a person.
 - **Depends on:** M27, M37, M39.
 - **Packages:** server, dashboard.
 - **Schema impact:** none; database migration.
 - **Effort:** M.
-- **Done when:** API tests that a report token cannot reach anything outside its report.
+- **Done when:** API tests that a report token cannot reach anything outside its report, and that a segment below the
+  threshold is never returned.
 
 ### M62 · Statistical exports
 
@@ -912,12 +965,15 @@ non-inline types. Regex validators are length-limited (M3). The milestones below
 
 - **Scope:** `kvesto validate|lint|serve|export`. Lint rules for things the schema allows but people regret:
   images without alt text, unreachable pages, conditions that can never be true, required questions behind hidden
-  panels, very long surveys.
+  panels, very long surveys. The rules live in core, so the editor runs the same rules live as an issues panel
+  (each issue links to its element), with a few survey-design hints on top: unbalanced rating scales, multiple-choice
+  questions with no "none" or "other" option, and matrices too wide for a phone.
 - **Depends on:** M11 for the logic rules.
-- **Packages:** a new `kvesto` CLI entry.
+- **Packages:** core (rules), a new `kvesto` CLI entry, editor (issues panel).
 - **Schema impact:** none.
 - **Effort:** S–M.
-- **Done when:** each rule has a fixture that triggers it and one that does not.
+- **Done when:** each rule has a fixture that triggers it and one that does not, and the editor and the CLI report the
+  same issues for the same survey.
 
 ### M73 · ★ MCP server
 
@@ -932,6 +988,149 @@ non-inline types. Regex validators are length-limited (M3). The milestones below
 
 ---
 
+# Beyond M73
+
+These come from a review of open-source survey libraries, form builders and hosted survey products
+([docs/competitive-review.md](docs/competitive-review.md)), checked against M1–M73. Most of what that review found
+was already planned; the review's smaller findings were added to existing milestones (M13, M20, M24, M25, M32, M47,
+M49, M50, M52, M56, M57, M59, M61, M72). The milestones below cover what did not fit anywhere: the choice model,
+the parts of the containers that are still missing, field data capture, and what happens to a response after it
+arrives.
+
+## Recommended order after M73
+
+| # | Milestone | Why here |
+| --- | --- | --- |
+| M74–M75 | Choice options, finishing the containers | They change the answer model, so they should land before the editor, dashboard and exports build more on the current shapes. M74 can start right away. |
+| M77 | Test responses | Small, and every later dashboard and analytics milestone is easier to test with generated data. |
+| M76 | Location, scanning and photo capture | Most useful together with offline collection (M52). |
+| M78–M79 | Response management, quality flags | After the table view and filters (M27); M79 also needs the timings from M59. |
+
+## Phase 15 · Answers and capture
+
+### M74 · ★ Choice options and per-choice logic
+
+- **Scope:**
+  - `other: { label?, required? }` on single choice, multiple choice and dropdown adds an "Other" choice with a
+    text box. The choice value stays in the answer as today; the text is stored under the reserved key
+    `<questionId>.other` (question ids cannot contain dots, so it cannot clash). This is the recommended option in
+    "Open decisions".
+  - `exclusive: true` on a choice ("None of the above", "Prefer not to say"): picking it clears the other choices
+    and the other way round, and validation refuses an answer that combines it with anything else.
+  - `selectAll: true` on multiple choice adds a "Select all" control. It is not stored as a value.
+  - `visibleIf` and `enableIf` on single choices and on matrix rows and columns, with the existing JSON conditions.
+    A choice that becomes hidden is removed from the answer, and the server refuses an answer that picks a hidden
+    choice.
+  - Survey-level `choiceLists: { "countries": [...] }`, referenced as `choices: { "list": "countries" }`, so a long
+    list is defined and translated once.
+  - A `columns` layout hint for long choice lists.
+- **Depends on:** M4 (done). Works with M42 (a pinned choice can also be exclusive), M43 and M20.
+- **Packages:** schema, core (logic, validate, render, summary), server (validation through `validateAnswers`),
+  editor (property panel), dashboard ("Other" texts listed under the chart).
+- **Schema impact:** additive (v1). A new reserved answer key, noted in the release notes.
+- **Effort:** M.
+- **Done when:** runner and server tests for exclusive and hidden choices, a render test for "Other" with a required
+  text, a shared list used by two questions, and summaries that list "Other" texts.
+
+### M75 · Finishing the containers
+
+- **Scope:** the parts of repeating panels and grids that are still missing:
+  - repeating panels inside repeating panels, where `scope: "item"` means the innermost item and a new
+    `scope: "parent"` means the enclosing one;
+  - file questions inside repeats, with uploads keyed by item and M36's orphan rules applied to removed items;
+  - respondent-added grid rows (`addRows`, `minRows`, `maxRows`, rows keyed by generated ids);
+  - `layout: "table"` on a repeating panel, which shows each item as a row with one column per question;
+  - `repeat.count`, which sets the number of items from an earlier answer (a number question, or an expression
+    with M11).
+- **Depends on:** M5, M6 (done); M11 for count expressions.
+- **Packages:** schema, core, server, editor, dashboard (nested flattening in summaries, the table view and exports).
+- **Schema impact:** additive (v1). The answer union nests one level deeper, which is a type change for
+  TypeScript users; note it in the release notes.
+- **Effort:** M.
+- **Done when:** validation, logic and summary tests for two levels of repeats, a server round trip with a file
+  inside a repeat, and a keyboard test for adding and removing grid rows.
+
+### M76 · Location, scanning and photo capture
+
+- **Scope:**
+  - A `location` question with `mode: "point" | "path" | "area"`. A point comes from the Geolocation API, with
+    its accuracy and an optional minimum accuracy, or from a pin dropped on a map; paths and areas are drawn on a
+    map. The map comes from a host-provided `mapAdapter`, so the core bundles no map library and calls no tile
+    server. The answer is a GeoJSON geometry plus the accuracy.
+  - A `barcode` question that scans with the BarcodeDetector API where the browser has it, and otherwise falls back
+    to a host `scanBarcode` hook or typed entry. The answer is the text and the barcode format.
+  - Photo capture on file questions: `capture: "environment" | "user"` opens the camera on phones, and an optional
+    `maxImageWidth` downsizes the photo in the browser before upload.
+  - Dashboard: a map of location answers through the same adapter, and GeoJSON export.
+  - Privacy: location answers count as PII by default (M37), and the runner only asks for the position when the
+    question is shown.
+- **Depends on:** M15, M36 (photo uploads), M37; best with M52 (offline).
+- **Packages:** schema, core, dashboard, the optional export package (GeoJSON).
+- **Schema impact:** additive (v1).
+- **Effort:** M.
+- **Done when:** tests with a mocked Geolocation API (refused, too inaccurate, success), a mocked BarcodeDetector
+  plus the typed fallback, the server rejecting invalid GeoJSON, and a downsizing test.
+
+## Phase 16 · Response operations
+
+### M77 · ★ Test responses
+
+- **Scope:** `generateResponses(survey, { count, seed })` in core creates random responses that follow the survey's
+  logic and validators, using the same answer generators as the fuzzers in M41. Responses can carry
+  `meta.test: true`; editor previews and generated responses always do. Summaries, the table view, exports, quotas
+  and availability limits leave test responses out by default (with a toggle to show them), and webhooks only send
+  them when a webhook opts in. `DELETE /surveys/{id}/responses?test=true` removes them all. The editor gets a
+  "Fill with test data" action that submits generated responses to the server as an admin action.
+- **Depends on:** M27 (filters); M11 so generated answers also satisfy expression conditions.
+- **Packages:** core, server, editor, dashboard.
+- **Schema impact:** additive on the response `meta`.
+- **Effort:** S–M.
+- **Done when:** a property test that every generated response passes `validateAnswers` for every fixture, tests
+  that test responses stay out of summaries, quotas and limits, and a bulk delete that leaves real responses alone.
+
+### M78 · ★ Response management and approvals
+
+- **Scope:**
+  - Per response: a review status (`new`, `in-review`, `approved`, `rejected`, plus custom statuses per survey), an
+    assignee, tags and internal notes. They are stored next to the response, not in `answers`, so the response
+    itself does not change. All of them can be filtered on in the table view (M27).
+  - Admin edits: correcting an answer creates a revision (who, when, before and after), validated with
+    `validateAnswers`. The original stays retrievable, and exports can use the original or the current answers.
+    Edits are off unless a survey turns them on.
+  - Approval steps: `settings.workflow: [{ "name", "approvers", "when"? }]`. Each step approves or rejects with a
+    comment, sends notifications through `sendMail` (M50) and a `response.reviewed` webhook, and can send a message
+    back to the respondent.
+  - New actions `response:review` and `response:edit`.
+- **Depends on:** M2, M27, M40 (every change is audited); M39 for users as assignees and approvers; M50 for mail.
+- **Packages:** schema (workflow settings, actions), server (tables, routes, migration), dashboard (review panel).
+- **Schema impact:** additive (v1). New `KvestoAction` values: `apiKeyAuth` treats them as admin-only, and custom
+  `authorize` functions must handle them (noted in the release notes). Database migration on the server.
+- **Effort:** M–L.
+- **Done when:** API tests for each status change and for refusal without the action, a revision round trip that
+  keeps the original, a two-step approval workflow, and an audit entry for every change.
+
+### M79 · ★ Response quality flags
+
+- **Scope:** the server computes flags for each completed response and stores them in `meta.quality`:
+  - `speeder`: completed in less than a set fraction of the survey's median time (timings from M59);
+  - `straightline`: the same column picked in a matrix or grid across at least N rows;
+  - `duplicate`: the same answers as another response within a time window (using M35's fingerprint);
+  - `lowEffort`: very short, repeated-character or identical open-text answers across questions;
+  - `attentionFailed`: a question marked `attentionCheck: { "expected": ... }` answered otherwise;
+  - the honeypot and challenge results from M35.
+
+  Flags never block a submission. The dashboard shows them and can filter on them (M27), and exports can leave
+  flagged responses out. Thresholds are set per survey in `settings.quality`, and a recompute command updates the
+  flags, because the median moves as responses arrive. The flag functions are pure and live in core.
+- **Depends on:** M27, M35, M59 (timings).
+- **Packages:** schema, core (flag functions), server, dashboard.
+- **Schema impact:** additive (v1).
+- **Effort:** M.
+- **Done when:** for each flag, a response that triggers it and one that does not, and a recompute that changes the
+  speeder flags when the median moves.
+
+---
+
 ## Open decisions
 
 These do not block the first milestones, but should be settled before the one that needs them:
@@ -941,6 +1140,11 @@ These do not block the first milestones, but should be settled before the one th
 - **M34:** the default document and answer limits.
 - **M38:** whether end-to-end encryption is worth giving up server-side validation for those fields.
 - **M39:** ship built-in users and roles, or only document how to plug in an existing identity provider.
+- **M74:** store the "Other" text under a reserved `<questionId>.other` key (recommended, since existing answer
+  shapes stay the same), or turn the answer into an object `{ value, other }`.
+- **M78:** whether admin edits to answers are allowed at all, or only per survey (recommended: off unless a survey
+  turns them on, because edited research data has to be disclosed).
+- **M79:** the default thresholds for speeders and straight-lining.
 
 Decided:
 
@@ -963,6 +1167,6 @@ Decided:
 | M8 · Structure view and property panel | Done (0.2.0) |
 | M9 · Drag and drop | Done (0.2.0). Not yet: auto-scroll while dragging, dragging in the preview |
 | M10 · Visual logic builder | Done (0.2.0) |
-| M11 – M73 | Planned |
+| M11 – M79 | Planned |
 
 Update this table as milestones land, with the release they shipped in.
