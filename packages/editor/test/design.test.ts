@@ -426,3 +426,18 @@ describe("quiz settings in the editor", () => {
     ui.editor.destroy();
   });
 });
+
+describe("share snippets", () => {
+  it("shows link and embed snippets when the server address is known", () => {
+    const target = document.createElement("div");
+    document.body.append(target);
+    const editor = mountEditor(target, { survey, preview: false, publicUrl: "https://example.com/api/" });
+    flushSync();
+    [...target.querySelectorAll<HTMLButtonElement>(".kv-editor-tabs button")].find((b) => b.textContent === "Theme")!.click();
+    flushSync();
+    const codes = [...target.querySelectorAll<HTMLTextAreaElement>(".kv-share-code")].map((t) => t.value);
+    expect(codes[0]).toBe("https://example.com/api/s/s");
+    expect(codes[1]).toBe('<div data-kvesto-survey="s"></div>\n<script src="https://example.com/api/s/embed.js" async></script>');
+    editor.destroy();
+  });
+});

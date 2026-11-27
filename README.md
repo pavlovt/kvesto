@@ -100,6 +100,23 @@ renderSurvey(el, await loadSurvey("customer-feedback", { storage }));
 `SurveyModel` is DOM-free and its `subscribe` follows the Svelte store contract, so you can drive your own UI in
 React, Vue or Svelte instead of using the bundled renderer.
 
+### Hosted on the Kvesto server
+
+The server serves each survey as a page at `/s/{id}` (with `?lang=`, `?layout=question`, `?theme=` and declared
+hidden fields as URL parameters), and an embed script for any website:
+
+```html
+<div data-kvesto-survey="customer-feedback"></div>                                <!-- inline, sizes itself -->
+<div data-kvesto-survey="customer-feedback" data-mode="popup" data-label="Feedback"></div>  <!-- a button -->
+<div data-kvesto-survey="customer-feedback" data-mode="slide-in"></div>          <!-- a corner panel -->
+<script src="https://example.com/api/s/embed.js" async></script>
+```
+
+The page runs with a strict Content Security Policy and no inline script; the frame only ever tells the page around
+it its height and that it is done, never the answers, and the embed script only listens to frames it made on the
+server's origin. `window.KvestoEmbed.inline(el, id)`, `.popup(id)` and `.slideIn(id)` do the same from script, and
+the editor's Theme tab shows the snippets when you pass it `publicUrl`.
+
 ### In plain HTML or any framework: `<kvesto-survey>`
 
 ```html
@@ -546,6 +563,7 @@ KVESTO_DB=./data/kvesto.db PORT=8080 pnpm --filter @kvesto/server start
 | GET, POST | `/surveys` | List / create surveys |
 | GET, PUT, DELETE | `/surveys/{id}` | Read / create-or-replace / delete a survey |
 | GET, POST | `/surveys/{id}/responses` | List / submit responses. Lists take `limit` with `cursor` (from `nextCursor`) or `offset`, and filter with `status`, `from`, `to`, `answer=q:value` and `hidden=name:value`. |
+| GET | `/s/{id}`, `/s/embed.js` | The hosted survey page and the embed script |
 | GET | `/surveys/{id}/responses.csv` | Export responses as CSV (same filters; `values=true` for choice values) |
 | GET, POST, DELETE | `/surveys/{id}/webhooks` … | Webhooks, signed and retried, with a delivery log (see the server README) |
 | POST | `/surveys/{id}/files` | Upload a file for a file question (multipart: `questionId`, `file`) |

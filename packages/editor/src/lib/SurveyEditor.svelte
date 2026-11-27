@@ -22,6 +22,8 @@
     translate?: TranslateFn;
     /** The editor's own look: "light" (default), "dark", or "auto" to follow the device. A toolbar menu changes it. */
     theme?: "light" | "dark" | "auto";
+    /** Where the Kvesto server is reachable, e.g. "https://example.com/api". Shows link and embed snippets on the Theme tab. */
+    publicUrl?: string;
   }
 </script>
 
@@ -35,9 +37,10 @@
   import PropertyPanel from "./panels/PropertyPanel.svelte";
   import TranslationPanel from "./panels/TranslationPanel.svelte";
   import ThemePanel from "./panels/ThemePanel.svelte";
+  import SharePanel from "./panels/SharePanel.svelte";
   import { OutlineDrag } from "./panels/drag.svelte.js";
 
-  let { survey = starterSurvey, storage, onchange, onsave, preview = true, view = "design", translate, theme = "light" }: SurveyEditorProps =
+  let { survey = starterSurvey, storage, onchange, onsave, preview = true, view = "design", translate, theme = "light", publicUrl }: SurveyEditorProps =
     $props();
   // svelte-ignore state_referenced_locally
   let uiTheme = $state(theme);
@@ -253,6 +256,10 @@
         section.kv-editor-pane {
           h2 'Survey theme'
           ThemePanel doc={doc} docState={docState}
+          if publicUrl {
+            h2 'Share and embed'
+            SharePanel surveyId={docState.survey.id} publicUrl={publicUrl}
+          }
         }
         if preview {
           section.kv-editor-pane {

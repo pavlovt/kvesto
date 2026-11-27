@@ -6,6 +6,7 @@ import { cors } from "hono/cors";
 import {
   checkQuestionTypes,
   collectHidden,
+  textOf,
   responsesToCsv,
   resolveLogic,
   scoreSurvey,
@@ -27,6 +28,7 @@ import { openAccess, type Authorize, type KvestoAction } from "./auth.js";
 import type { SurveyRepository } from "./repository.js";
 import * as routes from "./routes.js";
 import { guardOutboundUrl } from "./outbound.js";
+import { EMBED_JS, HOSTED_CSP, hostedAssets, hostedPage, PAGE_CSS, RUN_JS } from "./hosted.js";
 import { createWebhookDispatcher, newWebhookSecret, type WebhookEvent, type WebhookOptions } from "./webhooks.js";
 
 export interface CreateAppOptions {
@@ -226,6 +228,7 @@ export function createApp(options: CreateAppOptions) {
   guard("POST", "/surveys/:id/responses/:responseId/release", "survey:write");
   guard("GET", "/surveys/:id/responses", "response:read");
   guard("GET", "/surveys/:id/responses.csv", "response:read");
+  guard("GET", "/s/:id", "survey:read");
   guard("POST", "/surveys/:id/webhooks", "webhook:manage");
   guard("GET", "/surveys/:id/webhooks", "webhook:manage");
   guard("DELETE", "/surveys/:id/webhooks/:webhookId", "webhook:manage");
@@ -501,6 +504,34 @@ export function createApp(options: CreateAppOptions) {
     if (!(await repo.listWebhooks(id)).some((h) => h.id === webhookId)) return c.json({ error: "Webhook not found" }, 404);
     const items = (await repo.listDeliveries(webhookId, 100)).map(({ payload: _p, webhookId: _w, ...d }) => d);
     return c.json({ items }, 200);
+  });
+
+  // ── The hosted page and the embed script ──
+  const hostedHeaders = {
+    "x-content-type-options": "nosniff",
+    "referrer-policy": "strict-origin-when-cross-origin",
+  };
+  // Registered before /s/{id}, so "embed.js" is never read as a survey id.
+  app.openapi(routes.embedScript, (c) =>
+    c.body(EMBED_JS, 200, { ...hostedHeaders, "content-type": "text/javascript; charset=utf-8", "cache-control": "public, max-age=300" }),
+  );
+  app.openapi(routes.hostedAsset, (c) => {
+    const { file } = c.req.valid("param");
+    const { js, css } = hostedAssets();
+    const [body, type] =
+      file === "kvesto.js" ? [js, "text/javascript"] : file === "run.js" ? [RUN_JS, "text/javascript"] : file === "kvesto.css" ? [css, "text/css"] : [PAGE_CSS, "text/css"];
+    return c.body(body, 200, { ...hostedHeaders, "content-type": `${type}; charset=utf-8`, "cache-control": "public, max-age=300" });
+  });
+  app.openapi(routes.hostedSurvey, async (c) => {
+    const { id } = c.req.valid("param");
+    const survey = await repo.loadSurvey(id);
+    const page = survey ? hostedPage(id, textOf(survey.title, survey.defaultLocale, survey.defaultLocale)) : "<!doctype html><title>Not found</title><p>This survey doesn't exist.</p>";
+    return c.body(page, survey ? 200 : 404, {
+      ...hostedHeaders,
+      "content-type": "text/html; charset=utf-8",
+      "content-security-policy": HOSTED_CSP,
+      "cache-control": "no-store",
+    });
   });
 
   app.openapi(routes.listResponses, async (c) => {

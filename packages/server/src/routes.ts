@@ -249,6 +249,42 @@ export const listDeliveries = createRoute({
   responses: { ...refused, 200: json(DeliveryList, "Deliveries"), 404: error("Webhook not found") },
 });
 
+const text = (type: string, description: string) => ({ content: { [type]: { schema: z.string() } }, description });
+
+export const hostedSurvey = createRoute({
+  method: "get",
+  path: "/s/{id}",
+  tags: ["Hosted"],
+  summary: "A page that shows the survey",
+  description:
+    "For links and iframes. Takes `?lang=`, `?layout=page|question`, `?theme=` and the survey's declared hidden fields as " +
+    "query parameters. Served with a strict Content Security Policy and no inline script.",
+  request: { params: SurveyIdParam },
+  responses: { 200: text("text/html", "The survey page"), 404: text("text/html", "No such survey") },
+});
+
+export const embedScript = createRoute({
+  method: "get",
+  path: "/s/embed.js",
+  tags: ["Hosted"],
+  summary: "The embed script",
+  description: "Turns `<div data-kvesto-survey=\"id\" data-mode=\"inline|popup|slide-in\">` into an embedded survey.",
+  responses: { 200: text("text/javascript", "JavaScript") },
+});
+
+export const hostedAsset = createRoute({
+  method: "get",
+  path: "/s/assets/{file}",
+  tags: ["Hosted"],
+  summary: "Files the survey page loads",
+  request: {
+    params: z.object({
+      file: z.enum(["kvesto.js", "kvesto.css", "page.css", "run.js"]).openapi({ param: { name: "file", in: "path" } }),
+    }),
+  },
+  responses: { 200: text("text/plain", "The file") },
+});
+
 export const uploadFile = createRoute({
   method: "post",
   path: "/surveys/{id}/files",

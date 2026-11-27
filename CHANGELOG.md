@@ -53,6 +53,9 @@ All packages (`kvesto`, `@kvesto/schema`, `core`, `server`, `editor`, `dashboard
 - Webhooks (M29): per-survey webhooks for `response.completed` and `response.updated`, signed with HMAC-SHA256
   (`verifyWebhook`), retried with backoff, with a delivery log, an `onResponse` hook, the `webhook:manage` action,
   and `guardOutboundUrl` against server-side request forgery. Database migration `0003_webhooks`.
+- Hosted embeds (M30): a survey page at `/s/{id}` under a strict CSP, an embed script with inline (self-sizing),
+  popup and slide-in modes, link and embed snippets in the editor, and a Playwright test that embeds and completes a
+  survey from another origin.
 
 ## 0.2.0
 
