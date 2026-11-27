@@ -12,7 +12,9 @@ export type KvestoAction =
   | "response:delete"
   | "file:upload"
   | "file:read"
-  | "webhook:manage";
+  | "webhook:manage"
+  /** Create, list and revoke API tokens. */
+  | "token:manage";
 
 export const KVESTO_ACTIONS: readonly KvestoAction[] = [
   "survey:list",
@@ -25,6 +27,7 @@ export const KVESTO_ACTIONS: readonly KvestoAction[] = [
   "file:upload",
   "file:read",
   "webhook:manage",
+  "token:manage",
 ];
 
 export interface AuthorizeRequest {

@@ -445,6 +445,8 @@ describe("documentation", () => {
     expect(Object.keys(doc.paths).sort()).toEqual(
       [
         "/health",
+        "/tokens",
+        "/tokens/{tokenId}",
         "/s/{id}",
         "/s/embed.js",
         "/s/assets/{file}",

@@ -6,7 +6,9 @@ import { createEncryption, mapAnswerValues, openAnswers, type EncryptionOptions 
 
 /** The survey's title in its default locale, for listings. */
 const titleOf = (survey: Survey) => textOf(survey.title, survey.defaultLocale, survey.defaultLocale);
-import { files, responses, surveys, webhookDeliveries, webhooks } from "./db/schema.js";
+import { apiTokens, files, responses, surveys, webhookDeliveries, webhooks } from "./db/schema.js";
+import type { StoredToken, TokenStore } from "./tokens.js";
+import type { KvestoAction } from "./auth.js";
 import type { KvestoDb } from "./db/sqlite.js";
 
 /**
@@ -150,7 +152,7 @@ export interface DrizzleRepositoryOptions {
   encryption?: EncryptionOptions;
 }
 
-export type DrizzleRepository = SurveyRepository & {
+export type DrizzleRepository = SurveyRepository & TokenStore & {
   /**
    * Encrypt everything again with the current key (and encrypt what was stored before encryption was on, or
    * before a question was marked `pii`). Run it after adding a new current key, before dropping the old one.
@@ -177,7 +179,32 @@ export function drizzleRepository(db: KvestoDb, options: DrizzleRepositoryOption
   const read = (row: typeof responses.$inferSelect): SurveyResponse =>
     toResponse(enc ? { ...row, answers: openAnswers(enc, row.answers) as Answers } : row);
 
+  const tokenOf = (row: typeof apiTokens.$inferSelect): StoredToken & { hash: string } => ({
+    ...row,
+    actions: row.actions as KvestoAction[],
+    surveyIds: row.surveyIds ?? null,
+  });
   const repo: DrizzleRepository = {
+    async createToken(token) {
+      await db.insert(apiTokens).values(token).run();
+    },
+    async findToken(id) {
+      const row = await db.select().from(apiTokens).where(eq(apiTokens.id, id)).get();
+      return row ? tokenOf(row) : null;
+    },
+    async listTokens() {
+      const rows = await db.select().from(apiTokens).orderBy(desc(apiTokens.createdAt)).all();
+      return rows.map((r) => {
+        const { hash: _h, ...rest } = tokenOf(r);
+        return rest;
+      });
+    },
+    async revokeToken(id, at) {
+      return (await db.update(apiTokens).set({ revokedAt: at }).where(eq(apiTokens.id, id)).run()).changes > 0;
+    },
+    async touchToken(id, at) {
+      await db.update(apiTokens).set({ lastUsedAt: at }).where(eq(apiTokens.id, id)).run();
+    },
     async reencrypt() {
       if (!enc) throw new Error("reencrypt needs the encryption option");
       let changedResponses = 0;

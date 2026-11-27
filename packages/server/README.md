@@ -29,6 +29,39 @@ KVESTO_ADMIN_ORIGINS=https://admin.example.com npx kvesto-server  # sites that m
 - Outbound requests (webhooks) go only to public HTTPS addresses, checked again after DNS resolution, with no
   redirects followed.
 
+## Roles, API tokens and sign-in
+
+Bringing your own `authorize` stays the main path. For teams that don't have one, the server comes with roles
+(`ROLE_ACTIONS`: owner, editor, analyst, viewer), scoped API tokens and an OpenID Connect sign-in:
+
+```ts
+const repository = drizzleRepository(createSqliteDb("kvesto.db"));
+const login = oidcLogin({
+  issuer: "https://accounts.example.com",
+  clientId: process.env.OIDC_CLIENT_ID!,
+  clientSecret: process.env.OIDC_CLIENT_SECRET,
+  redirectUri: "https://surveys.example.com/auth/callback",
+  sessionSecret: process.env.KVESTO_SECRET!,
+  role: (claims) => (claims.email === "me@example.com" ? "owner" : null), // or read a groups claim
+  trustedOrigins: ["https://admin.example.com"],
+});
+const app = createApp({
+  repository,
+  authorize: anyAuthorize(login.authorize, tokenAuth({ store: repository, adminKeys: [process.env.KVESTO_ADMIN_KEY!] })),
+});
+app.route("/", login.routes); // /auth/login, /auth/callback, /auth/me, /auth/logout
+```
+
+- **Tokens:** `POST /tokens` with a `name`, a `role` (or a list of `actions`), optional `surveyIds` and
+  `expiresInDays` (default 90) returns `kvt_…` once; only its hash is stored. `GET /tokens` lists them and
+  `DELETE /tokens/{id}` revokes one. Managing tokens needs `token:manage` (owners and admin keys).
+- **Sign-in:** the authorization code flow with PKCE, state and nonce; the ID token's signature (RS256 or ES256,
+  from the provider's JWKS), issuer, audience and expiry are checked. The session is a signed `HttpOnly`, `Secure`,
+  `SameSite=Lax` cookie; there is no user table.
+- **CSRF:** a write with the session cookie is refused unless its `Origin` is the server's own or in
+  `trustedOrigins` (or, without `Origin`, `Sec-Fetch-Site` is `same-origin`). Token requests don't send cookies and
+  aren't affected.
+
 ## Encryption at rest
 
 ```ts

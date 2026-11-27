@@ -211,6 +211,65 @@ export const exportResponses = createRoute({
   },
 });
 
+const ACTIONS = z.enum([
+  "survey:list", "survey:read", "survey:write", "response:create", "response:read", "response:read-pii",
+  "response:delete", "file:upload", "file:read", "webhook:manage", "token:manage",
+]);
+export const ApiToken = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    actions: z.array(ACTIONS),
+    surveyIds: z.array(z.string()).nullable(),
+    expiresAt: z.string().nullable(),
+    createdAt: z.string(),
+    lastUsedAt: z.string().nullable(),
+    revokedAt: z.string().nullable(),
+  })
+  .openapi("ApiToken");
+const NewApiToken = z
+  .object({
+    name: z.string().min(1).max(100),
+    /** A role's actions ("owner", "editor", "analyst", "viewer"), or `actions` for a custom set. */
+    role: z.enum(["owner", "editor", "analyst", "viewer"]).optional(),
+    actions: z.array(ACTIONS).min(1).optional(),
+    surveyIds: z.array(z.string().min(1).max(128)).max(1000).optional(),
+    /** Days until the token stops working. Default 90; 0 for never. */
+    expiresInDays: z.number().int().min(0).max(3650).optional(),
+  })
+  .openapi("NewApiToken");
+const notStored = error("This repository doesn't store tokens");
+
+export const createToken = createRoute({
+  method: "post",
+  path: "/tokens",
+  tags: ["Tokens"],
+  summary: "Create a scoped API token",
+  description: "The token is in this reply only; the server keeps a hash of it.",
+  ...admin,
+  request: { body: { ...json(NewApiToken, "The token's name, role or actions, surveys and expiry"), required: true } },
+  responses: { 201: json(ApiToken.extend({ token: z.string() }), "The token, shown once"), 501: notStored, ...refused },
+});
+
+export const listTokens = createRoute({
+  method: "get",
+  path: "/tokens",
+  tags: ["Tokens"],
+  summary: "List API tokens (never the tokens themselves)",
+  ...admin,
+  responses: { 200: json(z.object({ items: z.array(ApiToken) }), "Tokens, newest first"), 501: notStored, ...refused },
+});
+
+export const revokeToken = createRoute({
+  method: "delete",
+  path: "/tokens/{tokenId}",
+  tags: ["Tokens"],
+  summary: "Revoke an API token",
+  ...admin,
+  request: { params: z.object({ tokenId: z.string().openapi({ param: { name: "tokenId", in: "path" } }) }) },
+  responses: { 204: { description: "Revoked" }, 404: error("No such token"), 501: notStored, ...refused },
+});
+
 export const createWebhook = createRoute({
   method: "post",
   path: "/surveys/{id}/webhooks",

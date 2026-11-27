@@ -64,6 +64,7 @@ All packages (`kvesto`, `@kvesto/schema`, `core`, `server`, `editor`, `dashboard
 - Upload hardening: real file types read from the bytes (disguised files and polyglots refused), safe file names, SVG/HTML/XML never inline, survey and response quotas, `app.uploads.sweep()` for unused uploads, a `scanFile` hook, and optional expiring signed file URLs (M36).
 - Privacy controls: `pii` questions masked in lists, exports and webhooks without the new `response:read-pii` action; consent checkboxes (`consent: true`, an editor preset) with the text and time recorded; stricter `settings.anonymous` with `anonymousHidden`; `settings.retentionDays` with `app.privacy.purge()`; `DELETE /surveys/{id}/responses/{responseId}` (`response:delete`); respondents download or delete their own response with its token, which every response now returns (M37). Custom `authorize` functions must handle the new actions.
 - Encryption at rest: `drizzleRepository(db, { encryption })` stores `pii` answers and uploaded files encrypted with AES-256-GCM under key ids, with rotation through `repository.reencrypt()` / `kvesto-server reencrypt` and keys from `KVESTO_ENCRYPTION_KEYS` (M38).
+- Roles and scoped tokens: `ROLE_ACTIONS` (owner, editor, analyst, viewer), hashed and expiring API tokens with optional survey scopes (`POST/GET /tokens`, `DELETE /tokens/{id}`, `tokenAuth`), an OpenID Connect sign-in (`oidcLogin`) with signed session cookies and CSRF checks on cookie writes, and `anyAuthorize` to combine them (M39). New `token:manage` action.
 
 ## 0.2.0
 

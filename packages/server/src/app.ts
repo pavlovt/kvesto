@@ -54,6 +54,7 @@ import * as routes from "./routes.js";
 import { guardOutboundUrl } from "./outbound.js";
 import { EMBED_JS, HOSTED_CSP, hostedAssets, hostedPage, PAGE_CSS, RUN_JS } from "./hosted.js";
 import { checkUploadType, fileUrlValid, safeFileName, signFileUrl } from "./uploads.js";
+import { newToken, type TokenStore } from "./tokens.js";
 import { createWebhookDispatcher, newWebhookSecret, type WebhookEvent, type WebhookOptions } from "./webhooks.js";
 
 export interface UploadOptions {
@@ -655,6 +656,9 @@ export function createApp(options: CreateAppOptions) {
   guard("GET", "/surveys/:id/responses", "response:read");
   guard("GET", "/surveys/:id/responses.csv", "response:read");
   guard("GET", "/s/:id", "survey:read");
+  guard("POST", "/tokens", "token:manage");
+  guard("GET", "/tokens", "token:manage");
+  guard("DELETE", "/tokens/:tokenId", "token:manage");
   guard("POST", "/surveys/:id/webhooks", "webhook:manage");
   guard("GET", "/surveys/:id/webhooks", "webhook:manage");
   guard("DELETE", "/surveys/:id/webhooks/:webhookId", "webhook:manage");
@@ -663,6 +667,29 @@ export function createApp(options: CreateAppOptions) {
   guard("GET", "/surveys/:id/files/:fileId", "file:read");
 
   app.openapi(routes.health, (c) => c.json({ status: "ok" as const }, 200));
+
+  // ── API tokens, when the repository stores them (the Drizzle one does) ──
+  const tokenStore = "createToken" in repo ? (repo as unknown as TokenStore) : null;
+  const NO_TOKENS = { error: "This repository doesn't store tokens" };
+  app.openapi(routes.createToken, async (c) => {
+    if (!tokenStore) return c.json(NO_TOKENS, 501);
+    const { name, role, actions, surveyIds, expiresInDays = 90 } = c.req.valid("json");
+    const expiresAt = expiresInDays ? new Date(Date.now() + expiresInDays * 86_400_000).toISOString() : null;
+    const { token, record } = newToken({ name, role, actions, surveyIds, expiresAt });
+    await tokenStore.createToken(record);
+    const { hash: _h, ...shown } = record;
+    return c.json({ ...shown, token }, 201);
+  });
+  app.openapi(routes.listTokens, async (c) => {
+    if (!tokenStore) return c.json(NO_TOKENS, 501);
+    return c.json({ items: await tokenStore.listTokens() }, 200);
+  });
+  app.openapi(routes.revokeToken, async (c) => {
+    if (!tokenStore) return c.json(NO_TOKENS, 501);
+    return (await tokenStore.revokeToken(c.req.valid("param").tokenId, new Date().toISOString()))
+      ? c.body(null, 204)
+      : c.json({ error: "No such token" }, 404);
+  });
 
   app.openapi(routes.listSurveys, async (c) => c.json({ items: await repo.listSurveys() }, 200));
 

@@ -55,6 +55,21 @@ export const files = sqliteTable(
   (t) => [index("files_survey_id_idx").on(t.surveyId)],
 );
 
+/** Scoped API tokens. Only a hash of each token's secret is kept. */
+export const apiTokens = sqliteTable("api_tokens", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  /** SHA-256 of the token's secret part. */
+  hash: text("hash").notNull(),
+  actions: text("actions", { mode: "json" }).$type<string[]>().notNull(),
+  /** Only these surveys, or all when null. */
+  surveyIds: text("survey_ids", { mode: "json" }).$type<string[] | null>(),
+  expiresAt: text("expires_at"),
+  createdAt: text("created_at").notNull(),
+  lastUsedAt: text("last_used_at"),
+  revokedAt: text("revoked_at"),
+});
+
 /** Where to send events about a survey's responses. */
 export const webhooks = sqliteTable(
   "webhooks",
