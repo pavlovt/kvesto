@@ -495,6 +495,12 @@ Files are stored by the storage adapter's optional `uploadFile` as soon as the r
 sends them to the server; `memoryStorage`, `localStorageStorage` and runs without storage embed them in the answer
 as base64 `data:` URLs (set `maxSize`: browsers cap localStorage at a few MB).
 
+## Accessibility
+
+Kvesto aims for WCAG 2.2 AA. axe-core checks the runner and the editor on every test run, every question type works
+with a keyboard, and errors are listed in a summary that links to each field. See [ACCESSIBILITY.md](ACCESSIBILITY.md)
+for the keyboard map and the conformance report.
+
 ## The server
 
 ```sh

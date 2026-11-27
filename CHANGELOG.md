@@ -39,6 +39,9 @@ All six packages (`kvesto`, `@kvesto/schema`, `core`, `server`, `editor`, `dashb
 - Quiz mode and scoring (M24): `correctAnswer`, `points`, partial credit and penalties, choice scores, `score()` in
   expressions, `settings.quiz` (pass mark, correct answers and feedback, manual release, time limits per survey or
   page), a server that recalculates scores, a release route, and score statistics in the dashboard.
+- Accessibility audit (M25): axe-core checks on every question type and every editor tab, an error summary with links,
+  errors tied to their inputs, `autocomplete` on text questions, a typed signature, announced ranking moves, 24-pixel
+  targets, `lang` on the survey, and ACCESSIBILITY.md with the keyboard map and a conformance report.
 
 ## 0.2.0
 

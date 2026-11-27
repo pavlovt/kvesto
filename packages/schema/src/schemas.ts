@@ -262,6 +262,11 @@ export const TextQuestionSchema = z.object({
   type: z.literal("text"),
   placeholder: DisplayTextSchema.optional(),
   inputType: z.enum(["text", "email", "number", "date", "url", "tel"]).optional(),
+  /**
+   * The HTML `autocomplete` token, so browsers can fill personal data (WCAG 1.3.5), e.g. "name", "email",
+   * "postal-code". Email, phone and URL inputs get one by default.
+   */
+  autocomplete: z.string().max(100).regex(/^[a-z0-9 -]+$/).optional(),
 });
 
 export const CommentQuestionSchema = z.object({
@@ -298,6 +303,11 @@ export const MultiTextItemSchema = z.object({
   inputType: z.enum(["text", "number", "email", "tel", "url", "date"]).optional(),
   /** This input must be filled in whenever the question is answered (or required). */
   required: z.boolean().optional(),
+  /**
+   * The HTML `autocomplete` token, so browsers can fill personal data (WCAG 1.3.5), e.g. "name", "email",
+   * "postal-code". Email, phone and URL inputs get one by default.
+   */
+  autocomplete: z.string().max(100).regex(/^[a-z0-9 -]+$/).optional(),
 });
 
 /** Several labelled inputs in one question. Answer: `{ [itemValue]: string }`. */

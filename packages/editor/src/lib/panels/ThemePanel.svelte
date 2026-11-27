@@ -58,7 +58,7 @@
       }
     }
     button type=button onclick={() => save({})} 'Reset to the default look'
-    h4 'Export'
+    h3 'Export'
     label {
       span 'CSS'
       textarea.kv-theme-export readonly rows=6 value={css}
@@ -80,5 +80,5 @@
   .kv-theme button { justify-self: start; cursor: pointer; }
   .kv-theme-export { font-family: ui-monospace, monospace; font-size: 0.8rem; }
   .kv-theme-hint { margin: 0; color: var(--kv-ui-muted, #6b7280); }
-  .kv-theme h4 { margin: 0.5rem 0 0; }
+  .kv-theme h3 { margin: 0.5rem 0 0; font-size: 0.95rem; }
 </style>

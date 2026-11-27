@@ -58,6 +58,9 @@ export interface RenderedSurvey {
 
 type El = HTMLElement;
 
+/** The `autocomplete` token an input type gets when the question sets none. */
+const DEFAULT_AUTOCOMPLETE: Record<string, string> = { email: "email", tel: "tel", url: "url" };
+
 const isRecordValue = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
 /**
@@ -113,7 +116,8 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
   const doc = target.ownerDocument;
   // The built-in texts in the model's locale, with any overrides on top.
   const labels: Labels = { ...labelsFor(model.locale), ...options.labels };
-  const root = h(doc, "form", { class: "kv-survey", novalidate: "" });
+  // `lang` so screen readers pronounce the survey's language right, even inside a page in another (WCAG 3.1.2).
+  const root = h(doc, "form", { class: "kv-survey", novalidate: "", lang: model.locale });
   applyTheme(root, options.theme ?? (model.survey.settings?.theme as Theme | undefined));
   target.replaceChildren(root);
 
@@ -150,15 +154,47 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
     return node;
   };
 
+  /** Set after a submit that found errors: the summary stays up to date until they are fixed. */
+  let attempted = false;
   const onSubmit = (e: Event) => {
     e.preventDefault();
     const s = model.snapshot;
-    if (byQuestion) {
-      if (isLastStep(s)) void model.complete();
-      else model.nextStep();
-    } else if (s.isLastPage) void model.complete();
-    else model.next();
+    attempted = true;
+    let moved: boolean | Promise<unknown>;
+    if (byQuestion) moved = isLastStep(s) ? model.complete() : model.nextStep();
+    else moved = s.isLastPage ? model.complete() : model.next();
+    if (moved instanceof Promise) void moved.then(() => showSummary(true));
+    else showSummary(true);
   };
+
+  /**
+   * The error summary: after a submit, a list of what to fix, each linking to its field (WCAG 3.3.1). Focus
+   * moves to it so screen reader users hear it.
+   */
+  const summaryBox = h(doc, "div", { class: "kv-error-summary", role: "alert", tabindex: "-1", hidden: "" });
+  function showSummary(focus = false) {
+    const s = model.snapshot;
+    const shown = Object.entries(s.errors).filter(([key]) => root.querySelector(`[data-key="${CSS.escape(key)}"]`));
+    if (!attempted || !shown.length || s.status !== "running") {
+      summaryBox.hidden = true;
+      if (!shown.length) attempted = false;
+      return;
+    }
+    const items = shown.map(([key, message]) => {
+      const box = root.querySelector<HTMLElement>(`[data-key="${CSS.escape(key)}"]`)!;
+      const title = box.querySelector(".kv-question-title")?.firstChild?.textContent ?? "";
+      const field = box.querySelector<HTMLElement>("input, select, textarea, canvas");
+      const link = h(doc, "a", { href: `#${field?.id ?? ""}` }, `${title}: ${message}`);
+      link.addEventListener("click", (e) => {
+        e.preventDefault();
+        field?.focus();
+      });
+      return h(doc, "li", {}, link);
+    });
+    summaryBox.replaceChildren(h(doc, "p", { class: "kv-error-summary-title" }, labels.errorSummary), h(doc, "ul", {}, ...items));
+    summaryBox.hidden = false;
+    if (focus) summaryBox.focus();
+  }
   root.addEventListener("submit", onSubmit);
 
   const stepNode = () => {
@@ -225,6 +261,7 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
     for (const v of views) v.update(state);
     for (const t of texts) t(state);
     if (clockTimer !== undefined) tickClock();
+    if (attempted) showSummary();
     if (byQuestion) {
       const step = currentStep(state);
       for (const [id, node] of topNodes) if (id !== step?.id) node.hidden = true;
@@ -297,6 +334,9 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
     views = [];
     texts = [];
     topNodes = [];
+    attempted = false;
+    summaryBox.hidden = true;
+    parts.push(summaryBox);
     if (showProgress) {
       parts.push(
         h(
@@ -512,6 +552,8 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
     switch (q.type) {
       case "text": {
         const input = h(doc, "input", { id: qid, type: q.inputType ?? "text", "aria-labelledby": `${qid}-title` });
+        const auto = q.autocomplete ?? DEFAULT_AUTOCOMPLETE[q.inputType ?? ""];
+        if (auto) input.setAttribute("autocomplete", auto);
         if (q.placeholder) input.placeholder = textOf(q.placeholder);
         input.value = typeof value === "string" ? value : "";
         input.addEventListener("input", () => set(input.value));
@@ -625,6 +667,8 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
         const box = h(doc, "div", { class: "kv-multi-text" });
         for (const item of q.items) {
           const input = h(doc, "input", { id: `${qid}-${item.value}`, type: item.inputType ?? "text", "data-item": item.value });
+          const auto = item.autocomplete ?? DEFAULT_AUTOCOMPLETE[item.inputType ?? ""];
+          if (auto) input.setAttribute("autocomplete", auto);
           const cur = isRecordValue(value) ? value[item.value] : undefined;
           input.value = typeof cur === "string" ? cur : "";
           input.addEventListener("input", () => {
@@ -721,8 +765,11 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
       }
     }
 
-    const err = h(doc, "p", { class: "kv-error", role: "alert", hidden: "" });
+    const err = h(doc, "p", { class: "kv-error", id: `${qid}-error`, role: "alert", hidden: "" });
     wrap.append(err);
+    // The question's own inputs (not those of a nested question), which point at the error while there is one.
+    const own = () => [...wrap.querySelectorAll<HTMLElement>("input, select, textarea")].filter((i) => i.closest("[data-question]") === wrap);
+    let invalid = false;
     return {
       el: wrap,
       update(s) {
@@ -730,8 +777,21 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
         star.hidden = !b.required(s);
         // A disabled fieldset disables every input inside it.
         wrap.disabled = q.type !== "computed" && !b.enabled(s);
-        err.textContent = s.errors[b.key] ?? "";
-        err.hidden = !s.errors[b.key];
+        const message = s.errors[b.key];
+        err.textContent = message ?? "";
+        err.hidden = !message;
+        if (Boolean(message) !== invalid) {
+          invalid = Boolean(message);
+          for (const input of own()) {
+            if (invalid) {
+              input.setAttribute("aria-invalid", "true");
+              input.setAttribute("aria-describedby", err.id);
+            } else {
+              input.removeAttribute("aria-invalid");
+              input.removeAttribute("aria-describedby");
+            }
+          }
+        }
         refresh(s);
       },
     };
@@ -799,7 +859,21 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
       strokes = 0;
       b.set(undefined);
     });
-    wrap.append(canvas, h(doc, "div", { class: "kv-signature-actions" }, clear, status));
+    // Keyboard and screen reader users can type their name instead of drawing (WCAG 2.1.1).
+    const typed = h(doc, "input", { type: "text", autocomplete: "name", "aria-label": labels.typeToSign, placeholder: labels.typeToSign });
+    typed.addEventListener("change", () => {
+      const name = typed.value.trim();
+      if (!ctx || !name) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = q.penColor ?? "#000";
+      ctx.font = `italic ${Math.round(canvas.height / 3)}px "Segoe Script", "Brush Script MT", cursive`;
+      ctx.fillText(name, 16, canvas.height * 0.62, canvas.width - 32);
+      strokes = 1;
+      canvas.toBlob((blob) => {
+        if (blob) void model.addFiles(q.id, [new File([blob], "signature.png", { type: "image/png" })]);
+      }, "image/png");
+    });
+    wrap.append(canvas, h(doc, "label", { class: "kv-signature-typed" }, typed), h(doc, "div", { class: "kv-signature-actions" }, clear, status));
     return (s: SurveyState) => {
       const v = b.get(s);
       const signed = Array.isArray(v) && v.length > 0;
@@ -1017,6 +1091,9 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
 
     wrap.append(h(doc, "p", { class: "kv-ranking-hint" }, labels.rankingHint));
     const list = h(doc, "ol", { class: "kv-ranking" });
+    // Screen readers hear where an item went after a move.
+    const said = h(doc, "p", { class: "kv-sr-only", "aria-live": "polite" });
+    wrap.append(said);
     const keep = h(doc, "button", { type: "button", class: "kv-ranking-keep" }, labels.keepOrder);
     keep.addEventListener("click", () => set(order()));
     wrap.append(list, keep);
@@ -1075,6 +1152,11 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
       if (focusAfter) {
         const { value, dir } = focusAfter;
         focusAfter = null;
+        const label = pipeText(labelOf.get(value)!, state.survey, state.logic.answers, { ...pipeOptions, item: b.item?.(state) });
+        said.textContent = labels.rankPosition
+          .replace("{item}", label)
+          .replace("{n}", String(items.indexOf(value) + 1))
+          .replace("{total}", String(items.length));
         const li = [...list.children].find((c) => (c as El).dataset.value === value) as El | undefined;
         const btn = li?.querySelector<HTMLButtonElement>(dir === "up" ? ".kv-ranking-up" : ".kv-ranking-down");
         (btn && !btn.disabled ? btn : li?.querySelector<HTMLButtonElement>("button:not(:disabled)"))?.focus();
