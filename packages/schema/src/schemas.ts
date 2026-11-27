@@ -599,6 +599,19 @@ export const SurveySettingsSchema = z.looseObject({
   progressBar: z.boolean().optional(),
   /** In the question layout, go on by itself after a single-choice, yes/no or rating answer. Default true. */
   autoAdvance: z.boolean().optional(),
+  /**
+   * The look: a preset ("light", "dark", "auto", "compact", "contrast"), or theme variables without their
+   * `--kv-` prefix, optionally with a `preset` to start from. The renderer's `theme` option overrides it.
+   */
+  theme: z
+    .union([
+      z.enum(["light", "dark", "auto", "compact", "contrast"]),
+      z.record(
+        z.string().regex(/^[a-z0-9-]+$/, "Use the variable name without --kv-, such as color-primary"),
+        z.string().max(200).regex(/^[^;{}<>\\]*$/, "Not a CSS value"),
+      ),
+    ])
+    .optional(),
 });
 export type SurveySettings = z.infer<typeof SurveySettingsSchema>;
 

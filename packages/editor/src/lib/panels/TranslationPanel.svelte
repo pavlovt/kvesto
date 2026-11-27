@@ -220,15 +220,15 @@
   .kv-translations-code { width: 6rem; }
   .kv-translations input, .kv-translations select, .kv-translations button, .kv-translations textarea { font: inherit; font-size: 0.85rem; }
   .kv-translations button { cursor: pointer; }
-  .kv-translations-notice { margin: 0; color: #1e40af; }
-  .kv-translations-empty, .kv-translations-stats { margin: 0; color: #6b7280; }
+  .kv-translations-notice { margin: 0; color: var(--kv-ui-accent-text, #1e40af); }
+  .kv-translations-empty, .kv-translations-stats { margin: 0; color: var(--kv-ui-muted, #6b7280); }
   .kv-translations-import input { font-size: 0.8rem; }
   .kv-translations-table { border-collapse: collapse; width: 100%; }
-  .kv-translations-table th, .kv-translations-table td { border-bottom: 1px solid #e5e7eb; padding: 0.3rem 0.4rem; text-align: left; vertical-align: top; }
+  .kv-translations-table th, .kv-translations-table td { border-bottom: 1px solid var(--kv-ui-border, #e5e7eb); padding: 0.3rem 0.4rem; text-align: left; vertical-align: top; }
   .kv-translations-table textarea { width: 100%; box-sizing: border-box; resize: vertical; }
-  .kv-translations-key { font-family: ui-monospace, monospace; font-size: 0.75rem; color: #6b7280; word-break: break-all; }
-  .kv-translations-missing textarea { border-color: #f59e0b; background: #fffbeb; }
-  .kv-translations-review textarea { border-color: #a78bfa; }
-  .kv-translations-flag { display: flex; gap: 0.4rem; align-items: center; font-size: 0.78rem; color: #6d28d9; }
-  .kv-translations-broken { display: block; font-size: 0.78rem; color: #b91c1c; }
+  .kv-translations-key { font-family: ui-monospace, monospace; font-size: 0.75rem; color: var(--kv-ui-muted, #6b7280); word-break: break-all; }
+  .kv-translations-missing textarea { border-color: var(--kv-ui-warn, #f59e0b); background: var(--kv-ui-warn-soft, #fffbeb); }
+  .kv-translations-review textarea { border-color: var(--kv-ui-review, #a78bfa); }
+  .kv-translations-flag { display: flex; gap: 0.4rem; align-items: center; font-size: 0.78rem; color: var(--kv-ui-review-text, #6d28d9); }
+  .kv-translations-broken { display: block; font-size: 0.78rem; color: var(--kv-ui-danger, #b91c1c); }
 </style>

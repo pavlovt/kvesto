@@ -519,11 +519,11 @@
   .kv-props label.kv-props-check { grid-template-columns: auto 1fr; }
   .kv-props input:not([type="checkbox"]), .kv-props textarea, .kv-props select { font: inherit; font-size: 0.9rem; padding: 0.25rem 0.4rem; min-width: 0; }
   .kv-props-id { font-family: ui-monospace, monospace; }
-  .kv-props-column { border: 1px solid #e5e7eb; border-radius: 0.375rem; padding: 0.4rem; display: grid; gap: 0.3rem; }
+  .kv-props-column { border: 1px solid var(--kv-ui-border, #e5e7eb); border-radius: 0.375rem; padding: 0.4rem; display: grid; gap: 0.3rem; }
   .kv-props button { font: inherit; font-size: 0.85rem; cursor: pointer; justify-self: start; }
   .kv-props-logic { padding-left: 6.9rem; }
-  .kv-props-hint { color: #6b7280; font-size: 0.85rem; }
-  .kv-props-error { color: #b91c1c; font-size: 0.85rem; margin: 0; }
+  .kv-props-hint { color: var(--kv-ui-muted, #6b7280); font-size: 0.85rem; }
+  .kv-props-error { color: var(--kv-ui-danger, #b91c1c); font-size: 0.85rem; margin: 0; }
   .kv-props-expr, .kv-props-markdown { font-family: ui-monospace, monospace; }
   .kv-props-variable { display: grid; grid-template-columns: 6rem 1fr auto; gap: 0.25rem; align-items: center; margin-bottom: 0.3rem; }
   .kv-props-variable .kv-props-error { grid-column: 1 / -1; }

@@ -65,6 +65,6 @@
 <style>
   .kv-preview-result { overflow: auto; }
   .kv-preview--selectable :global([data-question]:hover),
-  .kv-preview--selectable :global([data-panel]:hover) { outline: 1px dashed #93c5fd; outline-offset: 4px; }
-  .kv-preview :global(.kv-editor-selected) { outline: 2px solid #2563eb; outline-offset: 4px; border-radius: 0.25rem; }
+  .kv-preview--selectable :global([data-panel]:hover) { outline: 1px dashed var(--kv-ui-accent-line, #93c5fd); outline-offset: 4px; }
+  .kv-preview :global(.kv-editor-selected) { outline: 2px solid var(--kv-ui-accent, #2563eb); outline-offset: 4px; border-radius: 0.25rem; }
 </style>

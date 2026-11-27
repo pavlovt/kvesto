@@ -375,3 +375,34 @@ describe("hidden fields in the editor", () => {
     ui.editor.destroy();
   });
 });
+
+describe("themes in the editor", () => {
+  it("switches the editor between light, dark and auto", () => {
+    const ui = setup(false);
+    expect(ui.$(".kv-editor").getAttribute("data-kv-ui-theme")).toBe("light");
+    const pick = ui.$<HTMLSelectElement>(".kv-editor-ui-theme");
+    pick.value = "dark";
+    pick.dispatchEvent(new Event("change", { bubbles: true }));
+    flushSync();
+    expect(ui.$(".kv-editor").getAttribute("data-kv-ui-theme")).toBe("dark");
+    ui.editor.destroy();
+  });
+
+  it("edits the survey's theme and exports it", () => {
+    const ui = setup(false);
+    ui.$$<HTMLButtonElement>(".kv-editor-tabs button").find((b) => b.textContent === "Theme")!.click();
+    flushSync();
+    const preset = ui.$<HTMLSelectElement>(".kv-theme select");
+    preset.value = "dark";
+    preset.dispatchEvent(new Event("change", { bubbles: true }));
+    flushSync();
+    expect(ui.last().settings).toEqual({ theme: "dark" });
+    ui.type(ui.$<HTMLInputElement>('.kv-theme input[aria-label="radius"]'), "0");
+    expect(ui.last().settings).toEqual({ theme: { preset: "dark", radius: "0" } });
+    expect(ui.$<HTMLTextAreaElement>(".kv-theme-export").value).toContain("--kv-radius: 0;");
+    ui.$$<HTMLButtonElement>(".kv-theme button").find((b) => b.textContent === "Reset to the default look")!.click();
+    flushSync();
+    expect(ui.last().settings).toBeUndefined();
+    ui.editor.destroy();
+  });
+});

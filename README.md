@@ -405,6 +405,23 @@ only the token can change a partial response; a completed one can't be changed. 
 responses out unless asked (`?status=partial` or `?status=all`). The dashboard shows the completion rate and where
 people stop, and can include partial responses in the results.
 
+#### Themes
+
+The default stylesheet is built on CSS custom properties. Pick a preset or set variables (without `--kv-`):
+
+```ts
+mountSurvey(el, { survey, theme: "dark" });             // light (default), dark, auto, compact, contrast
+mountSurvey(el, { survey, theme: { preset: "auto", "color-primary": "#e11d48", radius: "0" } });
+```
+
+`auto` follows the device's light or dark setting. A survey can carry its own look in `settings.theme` (the same
+shapes); the `theme` option overrides it. The variables are listed in `THEME_VARIABLES`, `themeToCss(theme)` turns a
+theme into a stylesheet rule, and the old `--kv-accent` and `--kv-error` still work. The editor's Theme tab edits a
+survey's theme with a live preview and exports it as CSS or JSON.
+
+The editor and the dashboard have their own light, dark and auto looks: pass `theme: "dark"` (or `"auto"`) to
+`mountEditor` / `mountDashboard`, or switch with the menu in their toolbar.
+
 #### Content blocks and images
 
 Pages and panels can also hold elements that show something but take no answer:

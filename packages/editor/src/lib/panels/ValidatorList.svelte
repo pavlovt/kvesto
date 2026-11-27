@@ -124,12 +124,12 @@
 
 <style>
   .kv-validators { display: grid; gap: 0.4rem; }
-  .kv-validator { border: 1px solid #e5e7eb; border-radius: 0.375rem; padding: 0.4rem; display: grid; gap: 0.3rem; }
+  .kv-validator { border: 1px solid var(--kv-ui-border, #e5e7eb); border-radius: 0.375rem; padding: 0.4rem; display: grid; gap: 0.3rem; }
   .kv-validator-head { display: flex; justify-content: space-between; align-items: center; }
   .kv-validator label { display: grid; grid-template-columns: 6.5rem 1fr; gap: 0.3rem; align-items: center; font-size: 0.85rem; }
   .kv-validator input { font: inherit; font-size: 0.85rem; padding: 0.2rem 0.35rem; min-width: 0; }
   .kv-validator-add { display: flex; gap: 0.3rem; }
   .kv-validator-expr { font-family: ui-monospace, monospace !important; }
-  .kv-validator-error { margin: 0; color: #b91c1c; font-size: 0.8rem; }
+  .kv-validator-error { margin: 0; color: var(--kv-ui-danger, #b91c1c); font-size: 0.8rem; }
   .kv-validators button, .kv-validators select { font: inherit; font-size: 0.85rem; cursor: pointer; }
 </style>

@@ -4,8 +4,8 @@ This is the plan for growing Kvesto from today's skeleton into a full survey too
 Each milestone is meant to be one focused change on `main`: it builds, type-checks and passes tests on its own, and
 can ship in a patch or minor release without waiting for the next one.
 
-> **Where we are now:** M22 (hidden fields and prefill from the page) is the latest finished milestone. Next up:
-> M23 (themes). The [Status](#status) table at the bottom lists every milestone.
+> **Where we are now:** M23 (themes) is the latest finished milestone. Next up:
+> M24 (quiz mode and scoring). The [Status](#status) table at the bottom lists every milestone.
 
 Milestones marked **★** are ideas that go beyond the original feature list. They come from looking at how other
 form and survey tools solve the same problems (conversational forms, headless form renderers, open source
@@ -360,8 +360,9 @@ After that the phases can be taken in almost any order; dependencies are listed 
 ### M23 · Themes
 
 - **Scope:** move `styles.css` onto CSS custom properties (`--kv-color-primary`, `--kv-radius`, `--kv-font`, …), ship
-  a few presets (light, dark, compact), and accept a `theme` object on `mountSurvey` that sets the variables. An
-  editor theme panel edits the variables with a live preview and exports them as JSON or CSS.
+  a few presets (light, dark, auto following the device, compact, high contrast), and accept a `theme` object on
+  `mountSurvey` that sets the variables. An editor theme panel edits the variables with a live preview and exports
+  them as JSON or CSS. The editor and the dashboard themselves also get light, dark and auto looks with a toggle.
 - **Packages:** core (CSS, render option), editor.
 - **Schema impact:** none, or an optional `theme` object on the survey if per-survey themes are wanted.
 - **Done when:** the presets render in the demo apps, and the default look is unchanged.
@@ -1184,6 +1185,7 @@ Decided:
 | M20 · Localization | Done (unreleased). Not yet: Intl number and date formatting of piped values; rarely shown messages for malformed answers stay English |
 | M21 · Partial responses and resume | Done (unreleased) |
 | M22 · Hidden fields and prefill from the page | Done (unreleased) |
-| M23 – M79 | Planned |
+| M23 · Themes | Done (unreleased). The dark looks are checked by tests, not yet by eye in a browser |
+| M24 – M79 | Planned |
 
 Update this table as milestones land, with the release they shipped in.

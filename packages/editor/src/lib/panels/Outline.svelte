@@ -140,21 +140,21 @@
   .kv-outline-list { list-style: none; margin: 0.25rem 0 0; padding: 0 0 0 0.75rem; display: grid; gap: 0.2rem; }
   .kv-outline-row { display: flex; align-items: center; gap: 0.15rem; }
   .kv-outline-select { flex: 1; display: flex; gap: 0.4rem; align-items: baseline; text-align: left; background: none; border: 1px solid transparent; border-radius: 0.3rem; padding: 0.2rem 0.35rem; cursor: pointer; font: inherit; min-width: 0; }
-  .kv-outline-select:hover { background: #f3f4f6; }
-  .kv-outline-selected > .kv-outline-row > .kv-outline-select { background: #eff6ff; border-color: #93c5fd; }
-  .kv-outline-kind { font-size: 0.7rem; color: #6b7280; text-transform: uppercase; letter-spacing: 0.03em; white-space: nowrap; }
+  .kv-outline-select:hover { background: var(--kv-ui-hover, #f3f4f6); }
+  .kv-outline-selected > .kv-outline-row > .kv-outline-select { background: var(--kv-ui-accent-soft, #eff6ff); border-color: var(--kv-ui-accent-line, #93c5fd); }
+  .kv-outline-kind { font-size: 0.7rem; color: var(--kv-ui-muted, #6b7280); text-transform: uppercase; letter-spacing: 0.03em; white-space: nowrap; }
   .kv-outline-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .kv-outline-row > button:not(.kv-outline-select), .kv-outline-page-head button { font: inherit; font-size: 0.8rem; padding: 0.1rem 0.35rem; cursor: pointer; }
-  .kv-outline-empty { color: #9ca3af; font-style: italic; padding: 0.2rem 0.35rem; }
+  .kv-outline-empty { color: var(--kv-ui-subtle, #9ca3af); font-style: italic; padding: 0.2rem 0.35rem; }
   .kv-outline-page { padding-bottom: 0.4rem; }
   .kv-outline-nested { padding-bottom: 0.35rem; }
-  .kv-outline-handle { cursor: grab; touch-action: none; background: none; border: 0; color: #9ca3af; padding: 0.1rem 0.2rem !important; }
-  .kv-outline-handle:hover, .kv-outline-handle:focus-visible, .kv-outline-handle[aria-pressed="true"] { color: #2563eb; }
+  .kv-outline-handle { cursor: grab; touch-action: none; background: none; border: 0; color: var(--kv-ui-subtle, #9ca3af); padding: 0.1rem 0.2rem !important; }
+  .kv-outline-handle:hover, .kv-outline-handle:focus-visible, .kv-outline-handle[aria-pressed="true"] { color: var(--kv-ui-accent, #2563eb); }
   .kv-outline-select { touch-action: none; }
   .kv-outline-dragging > .kv-outline-row { opacity: 0.45; }
-  .kv-drop-before > .kv-outline-row { box-shadow: 0 -2px 0 #2563eb; }
-  .kv-drop-after { box-shadow: 0 2px 0 #2563eb; }
-  .kv-drop-into > .kv-outline-empty { outline: 2px dashed #2563eb; border-radius: 0.3rem; }
+  .kv-drop-before > .kv-outline-row { box-shadow: 0 -2px 0 var(--kv-ui-accent, #2563eb); }
+  .kv-drop-after { box-shadow: 0 2px 0 var(--kv-ui-accent, #2563eb); }
+  .kv-drop-into > .kv-outline-empty { outline: 2px dashed var(--kv-ui-accent, #2563eb); border-radius: 0.3rem; }
   .kv-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
   .kv-outline-add-page { justify-self: start; font: inherit; font-size: 0.85rem; cursor: pointer; }
 </style>

@@ -228,10 +228,10 @@
 </template>
 
 <style>
-  .kv-dash-thumb { display: block; max-width: 12rem; max-height: 5rem; border: 1px solid #e5e7eb; border-radius: 0.25rem; margin-bottom: 0.2rem; background: #fff; }
+  .kv-dash-thumb { display: block; max-width: 12rem; max-height: 5rem; border: 1px solid var(--kv-ui-border, #e5e7eb); border-radius: 0.25rem; margin-bottom: 0.2rem; background: #fff; }
   .kv-dash-results h1 { font-size: 1.5rem; margin: 0 0 0.25rem; }
-  .kv-dash-card { background: white; border: 1px solid #e5e7eb; border-radius: 0.5rem; padding: 1rem; margin-bottom: 1rem; max-width: 48rem; }
-  .kv-dash-group { font-weight: 700; font-size: 0.95rem; color: #374151; margin: 1.25rem 0 0.5rem; max-width: 48rem; }
+  .kv-dash-card { background: var(--kv-ui-surface, white); border: 1px solid var(--kv-ui-border, #e5e7eb); border-radius: 0.5rem; padding: 1rem; margin-bottom: 1rem; max-width: 48rem; }
+  .kv-dash-group { font-weight: 700; font-size: 0.95rem; color: var(--kv-ui-text-2, #374151); margin: 1.25rem 0 0.5rem; max-width: 48rem; }
   .kv-dash-card h2 { font-size: 1.05rem; margin: 0 0 0.25rem; }
   .kv-dash-num { text-align: right; font-variant-numeric: tabular-nums; }
   .kv-dash-dropoff { list-style: none; margin: 0; padding: 0; }
@@ -240,13 +240,13 @@
   .kv-dash-completion h3 { font-size: 0.95rem; margin: 0.75rem 0 0.25rem; }
   .kv-dash-toggle { display: flex; gap: 0.4rem; align-items: center; font-size: 0.9rem; }
   .kv-dash-bar-row { display: grid; grid-template-columns: 10rem 1fr 3rem; gap: 0.5rem; align-items: center; margin: 0.3rem 0; }
-  .kv-dash-bar { background: #eef2ff; border-radius: 999px; height: 0.6rem; overflow: hidden; }
-  .kv-dash-bar-fill { background: #2563eb; height: 100%; }
+  .kv-dash-bar { background: var(--kv-ui-accent-soft, #eef2ff); border-radius: 999px; height: 0.6rem; overflow: hidden; }
+  .kv-dash-bar-fill { background: var(--kv-ui-accent, #2563eb); height: 100%; }
   .kv-dash-matrix-scroll { overflow-x: auto; }
   .kv-dash-matrix { border-collapse: collapse; }
-  .kv-dash-matrix th, .kv-dash-matrix td { padding: 0.35rem 0.75rem; border-bottom: 1px solid #e5e7eb; }
+  .kv-dash-matrix th, .kv-dash-matrix td { padding: 0.35rem 0.75rem; border-bottom: 1px solid var(--kv-ui-border, #e5e7eb); }
   .kv-dash-matrix tbody th { text-align: left; font-weight: normal; }
-  .kv-dash-heat { background: color-mix(in srgb, #2563eb calc(var(--share) * 0.5), transparent); }
-  .kv-dash-muted { color: #6b7280; font-size: 0.9rem; }
-  .kv-dash-error { color: #b91c1c; white-space: pre-wrap; }
+  .kv-dash-heat { background: color-mix(in srgb, var(--kv-ui-accent, #2563eb) calc(var(--share) * 0.5), transparent); }
+  .kv-dash-muted { color: var(--kv-ui-muted, #6b7280); font-size: 0.9rem; }
+  .kv-dash-error { color: var(--kv-ui-danger, #b91c1c); white-space: pre-wrap; }
 </style>

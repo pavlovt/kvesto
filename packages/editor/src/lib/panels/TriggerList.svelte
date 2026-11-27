@@ -139,9 +139,9 @@
 
 <style>
   .kv-triggers { display: grid; gap: 0.5rem; }
-  .kv-trigger { border: 1px solid #e5e7eb; border-radius: 0.375rem; padding: 0.4rem; display: grid; gap: 0.35rem; }
+  .kv-trigger { border: 1px solid var(--kv-ui-border, #e5e7eb); border-radius: 0.375rem; padding: 0.4rem; display: grid; gap: 0.35rem; }
   .kv-trigger-action { display: flex; flex-wrap: wrap; gap: 0.25rem; align-items: center; font-size: 0.85rem; }
   .kv-trigger-action select, .kv-trigger-action input, .kv-triggers button { font: inherit; font-size: 0.85rem; min-width: 0; }
   .kv-triggers > button { justify-self: start; }
-  .kv-trigger-none { margin: 0; color: #9ca3af; font-style: italic; font-size: 0.85rem; }
+  .kv-trigger-none { margin: 0; color: var(--kv-ui-subtle, #9ca3af); font-style: italic; font-size: 0.85rem; }
 </style>

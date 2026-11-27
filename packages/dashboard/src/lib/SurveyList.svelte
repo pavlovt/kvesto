@@ -72,10 +72,10 @@
 </template>
 
 <style>
-  .kv-dash-list { border-collapse: collapse; background: white; min-width: 24rem; }
-  .kv-dash-list th, .kv-dash-list td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid #e5e7eb; }
+  .kv-dash-list { border-collapse: collapse; background: var(--kv-ui-surface, white); min-width: 24rem; }
+  .kv-dash-list th, .kv-dash-list td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--kv-ui-border, #e5e7eb); }
   .kv-dash-list .kv-dash-num { text-align: right; font-variant-numeric: tabular-nums; }
-  .kv-dash-link { font: inherit; color: #2563eb; background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
-  .kv-dash-muted { color: #6b7280; font-size: 0.9rem; }
-  .kv-dash-error { color: #b91c1c; white-space: pre-wrap; }
+  .kv-dash-link { font: inherit; color: var(--kv-ui-accent, #2563eb); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
+  .kv-dash-muted { color: var(--kv-ui-muted, #6b7280); font-size: 0.9rem; }
+  .kv-dash-error { color: var(--kv-ui-danger, #b91c1c); white-space: pre-wrap; }
 </style>

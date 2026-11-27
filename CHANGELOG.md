@@ -33,6 +33,9 @@ All six packages (`kvesto`, `@kvesto/schema`, `core`, `server`, `editor`, `dashb
   out unless asked, and completion and drop-off in the dashboard. Database migration `0002_partial_responses`.
 - Hidden fields (M22): `hiddenFields` filled from the `hidden` option or (opt-in) URL parameters, usable in conditions,
   expressions and piping, stored in `meta.hidden`, validated with on the server, and filterable by API and dashboard.
+- Themes (M23): the runner's stylesheet on CSS variables with light, dark, auto, compact and contrast presets, a
+  `theme` option and `settings.theme`, an editor Theme tab with CSS and JSON export, and light, dark and auto looks
+  for the editor and the dashboard themselves.
 
 ## 0.2.0
 

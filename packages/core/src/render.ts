@@ -20,6 +20,7 @@ import { repeatItems } from "./logic.js";
 import { formatBytes, itemKey } from "./validate.js";
 import { formatComputed, pipeText } from "./piping.js";
 import { labelsFor, type Labels } from "./i18n.js";
+import { applyTheme, type Theme } from "./theme.js";
 import { questionType } from "./question-types.js";
 import { parseMarkdown, type MarkdownInline } from "./markdown.js";
 
@@ -41,6 +42,8 @@ export interface RenderOptions {
   progressBar?: boolean;
   /** In the question layout, go on by itself after a single-choice, yes/no or rating answer. Default: `settings.autoAdvance`, else true. */
   autoAdvance?: boolean;
+  /** A preset ("dark", "auto", …) or theme variables. Default: the survey's `settings.theme`, else the light look. */
+  theme?: Theme;
 }
 
 /** Question types answered with one click, which auto-advance and take number keys. */
@@ -111,6 +114,7 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
   // The built-in texts in the model's locale, with any overrides on top.
   const labels: Labels = { ...labelsFor(model.locale), ...options.labels };
   const root = h(doc, "form", { class: "kv-survey", novalidate: "" });
+  applyTheme(root, options.theme ?? (model.survey.settings?.theme as Theme | undefined));
   target.replaceChildren(root);
 
   let renderedPage = -1;
@@ -1087,8 +1091,8 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
 
 /** One-call embed: create the model and render it into `target`. */
 export function mountSurvey(target: El, options: CreateSurveyOptions & RenderOptions): RenderedSurvey {
-  const { labels, sanitizeHtml, layout, progressBar, autoAdvance, ...modelOptions } = options;
-  const render: RenderOptions = { labels, sanitizeHtml, layout, progressBar, autoAdvance };
+  const { labels, sanitizeHtml, layout, progressBar, autoAdvance, theme, ...modelOptions } = options;
+  const render: RenderOptions = { labels, sanitizeHtml, layout, progressBar, autoAdvance, theme };
   // Leave unset options out, so the survey's own settings apply.
   for (const k of Object.keys(render) as (keyof RenderOptions)[]) if (render[k] === undefined) delete render[k];
   return renderSurvey(target, createSurvey(modelOptions), render);

@@ -13,13 +13,15 @@
     /** Show the live preview. Default true. */
     preview?: boolean;
     /** The view to open with: the visual designer, the translations or the JSON source. Default "design". */
-    view?: "design" | "translations" | "json";
+    view?: "design" | "theme" | "translations" | "json";
     /**
      * Machine translation for the Translations tab, e.g. a call to an AI model:
      * gets texts by key and returns translations by key. Drafts are marked for
      * review. Without it the "Translate with AI" button is hidden.
      */
     translate?: TranslateFn;
+    /** The editor's own look: "light" (default), "dark", or "auto" to follow the device. A toolbar menu changes it. */
+    theme?: "light" | "dark" | "auto";
   }
 </script>
 
@@ -32,11 +34,15 @@
   import Outline from "./panels/Outline.svelte";
   import PropertyPanel from "./panels/PropertyPanel.svelte";
   import TranslationPanel from "./panels/TranslationPanel.svelte";
+  import ThemePanel from "./panels/ThemePanel.svelte";
   import { OutlineDrag } from "./panels/drag.svelte.js";
 
-  let { survey = starterSurvey, storage, onchange, onsave, preview = true, view = "design", translate }: SurveyEditorProps = $props();
+  let { survey = starterSurvey, storage, onchange, onsave, preview = true, view = "design", translate, theme = "light" }: SurveyEditorProps =
+    $props();
   // svelte-ignore state_referenced_locally
-  let tab = $state<"design" | "translations" | "json">(view);
+  let uiTheme = $state(theme);
+  // svelte-ignore state_referenced_locally
+  let tab = $state<"design" | "theme" | "translations" | "json">(view);
 
   // The `survey` prop is only the starting point; edits live in the document.
   // svelte-ignore state_referenced_locally
@@ -151,6 +157,18 @@
           class:kv-editor-tab-on={tab === "translations"}
           onclick={() => (tab = "translations")}
         ) 'Translations'
+        button(
+          type=button
+          role=tab
+          aria-selected={tab === "theme"}
+          class:kv-editor-tab-on={tab === "theme"}
+          onclick={() => (tab = "theme")}
+        ) 'Theme'
+      }
+      select.kv-editor-ui-theme aria-label="Editor theme" value={uiTheme} onchange={(e) => (uiTheme = e.currentTarget.value as typeof uiTheme)} {
+        option value="light" 'Light'
+        option value="dark" 'Dark'
+        option value="auto" 'Auto'
       }
       button.kv-editor-undo(
         type=button
@@ -210,7 +228,7 @@
   }
 
   /* svelte-ignore a11y_no_static_element_interactions */
-  .kv-editor class:kv-editor-dragging={drag.mode === "pointer"} onkeydown={onKeydown} {
+  .kv-editor class:kv-editor-dragging={drag.mode === "pointer"} data-kv-ui-theme={uiTheme} onkeydown={onKeydown} {
     @render toolbar()
     @render problems()
     if tab === "design" {
@@ -228,6 +246,19 @@
         section.kv-editor-pane.kv-editor-props-pane {
           h2 'Properties'
           PropertyPanel doc={doc} docState={docState}
+        }
+      }
+    } else if tab === "theme" {
+      .kv-editor-design class:kv-editor-design--no-preview={!preview} {
+        section.kv-editor-pane {
+          h2 'Survey theme'
+          ThemePanel doc={doc} docState={docState}
+        }
+        if preview {
+          section.kv-editor-pane {
+            h2 'Preview'
+            @render livePreview()
+          }
         }
       }
     } else if tab === "translations" {
@@ -261,22 +292,74 @@
   .kv-editor-source--single { grid-template-columns: 1fr; }
   @media (max-width: 1100px) { .kv-editor-design { grid-template-columns: minmax(14rem, 1fr) minmax(16rem, 1.4fr); } }
   @media (max-width: 900px) { .kv-editor-design, .kv-editor-source { grid-template-columns: 1fr; } }
-  .kv-editor-pane { background: white; border: 1px solid #e5e7eb; border-radius: 0.5rem; padding: 1rem; min-width: 0; }
+  .kv-editor-pane { background: var(--kv-ui-surface, white); border: 1px solid var(--kv-ui-border, #e5e7eb); border-radius: 0.5rem; padding: 1rem; min-width: 0; }
   .kv-editor-pane h2 { font-size: 1.05rem; margin: 0 0 0.75rem; }
   .kv-editor-props-pane, .kv-editor-outline-pane { position: sticky; top: 0.5rem; max-height: calc(100vh - 1rem); overflow: auto; }
   .kv-editor-toolbar, .kv-editor-palette { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
   .kv-editor-toolbar button, .kv-editor-palette button { font: inherit; font-size: 0.85rem; padding: 0.3rem 0.6rem; cursor: pointer; }
   .kv-editor-tabs { display: flex; margin-right: 0.5rem; }
-  .kv-editor-tabs button { border: 1px solid #d1d5db; background: white; }
+  .kv-editor-tabs button { border: 1px solid var(--kv-ui-border-strong, #d1d5db); background: var(--kv-ui-surface, white); }
   .kv-editor-tabs button:first-child { border-radius: 0.375rem 0 0 0.375rem; }
   .kv-editor-tabs button:last-child { border-radius: 0 0.375rem 0.375rem 0; border-left: 0; }
-  .kv-editor-tabs .kv-editor-tab-on { background: #eff6ff; border-color: #93c5fd; }
-  .kv-editor-toolbar .kv-editor-primary { margin-left: auto; background: #2563eb; color: white; border: 0; border-radius: 0.375rem; }
+  .kv-editor-tabs .kv-editor-tab-on { background: var(--kv-ui-accent-soft, #eff6ff); border-color: var(--kv-ui-accent-line, #93c5fd); }
+  .kv-editor-toolbar .kv-editor-primary { margin-left: auto; background: var(--kv-ui-accent, #2563eb); color: var(--kv-ui-on-accent, white); border: 0; border-radius: 0.375rem; }
   .kv-editor-json { width: 100%; box-sizing: border-box; min-height: 60vh; font-family: ui-monospace, monospace; font-size: 0.85rem; }
   .kv-editor-dragging, .kv-editor-dragging * { cursor: grabbing !important; user-select: none; }
   .kv-editor-palette button { touch-action: none; }
-  .kv-editor-ghost { position: fixed; z-index: 1000; pointer-events: none; background: #1f2937; color: white; font-size: 0.8rem; padding: 0.2rem 0.5rem; border-radius: 0.3rem; box-shadow: 0 2px 6px rgb(0 0 0 / 0.2); }
-  .kv-editor-muted { color: #6b7280; font-size: 0.9rem; }
+  .kv-editor-ghost { position: fixed; z-index: 1000; pointer-events: none; background: var(--kv-ui-text, #1f2937); color: var(--kv-ui-on-accent, white); font-size: 0.8rem; padding: 0.2rem 0.5rem; border-radius: 0.3rem; box-shadow: 0 2px 6px rgb(0 0 0 / 0.2); }
+  .kv-editor-muted { color: var(--kv-ui-muted, #6b7280); font-size: 0.9rem; }
   .kv-editor-layout { display: flex; gap: 0.35rem; align-items: center; font-size: 0.85rem; margin-bottom: 0.5rem; }
-  .kv-editor-error { color: #b91c1c; white-space: pre-wrap; overflow: auto; margin: 0; }
+  .kv-editor-error { color: var(--kv-ui-danger, #b91c1c); white-space: pre-wrap; overflow: auto; margin: 0; }
+  /* Light by default (the colours above); dark when asked, or with "auto" when the device prefers it. */
+  .kv-editor { background: var(--kv-ui-bg, transparent); color: var(--kv-ui-fg, inherit); color-scheme: var(--kv-ui-scheme, normal); }
+  .kv-editor[data-kv-ui-theme="dark"] {
+    --kv-ui-bg: #0f172a;
+    --kv-ui-fg: #e5e7eb;
+    --kv-ui-surface: #1e293b;
+    --kv-ui-accent: #60a5fa;
+    --kv-ui-on-accent: #0b1220;
+    --kv-ui-accent-text: #93c5fd;
+    --kv-ui-accent-soft: #1e3a5f;
+    --kv-ui-accent-line: #3b82f6;
+    --kv-ui-border: #334155;
+    --kv-ui-border-strong: #475569;
+    --kv-ui-text: #f1f5f9;
+    --kv-ui-text-2: #cbd5e1;
+    --kv-ui-muted: #94a3b8;
+    --kv-ui-subtle: #64748b;
+    --kv-ui-hover: #273449;
+    --kv-ui-danger: #f87171;
+    --kv-ui-danger-line: #b91c1c;
+    --kv-ui-warn: #f59e0b;
+    --kv-ui-warn-soft: #3b2f12;
+    --kv-ui-review: #8b5cf6;
+    --kv-ui-review-text: #c4b5fd;
+    --kv-ui-scheme: dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    .kv-editor[data-kv-ui-theme="auto"] {
+      --kv-ui-bg: #0f172a;
+      --kv-ui-fg: #e5e7eb;
+      --kv-ui-surface: #1e293b;
+      --kv-ui-accent: #60a5fa;
+      --kv-ui-on-accent: #0b1220;
+      --kv-ui-accent-text: #93c5fd;
+      --kv-ui-accent-soft: #1e3a5f;
+      --kv-ui-accent-line: #3b82f6;
+      --kv-ui-border: #334155;
+      --kv-ui-border-strong: #475569;
+      --kv-ui-text: #f1f5f9;
+      --kv-ui-text-2: #cbd5e1;
+      --kv-ui-muted: #94a3b8;
+      --kv-ui-subtle: #64748b;
+      --kv-ui-hover: #273449;
+      --kv-ui-danger: #f87171;
+      --kv-ui-danger-line: #b91c1c;
+      --kv-ui-warn: #f59e0b;
+      --kv-ui-warn-soft: #3b2f12;
+      --kv-ui-review: #8b5cf6;
+      --kv-ui-review-text: #c4b5fd;
+      --kv-ui-scheme: dark;
+    }
+  }
 </style>

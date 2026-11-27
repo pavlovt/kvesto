@@ -191,3 +191,19 @@ describe("partial responses", () => {
     unmount(view);
   });
 });
+
+describe("dashboard theme", () => {
+  it("starts with the given theme and can be switched", async () => {
+    const target = document.createElement("div");
+    const dash = mountDashboard(target, { storage: memoryStorage(), theme: "auto" });
+    await settle();
+    const root = target.querySelector(".kv-dashboard")!;
+    expect(root.getAttribute("data-kv-ui-theme")).toBe("auto");
+    const pick = target.querySelector<HTMLSelectElement>(".kv-dash-ui-theme")!;
+    pick.value = "dark";
+    pick.dispatchEvent(new Event("change", { bubbles: true }));
+    flushSync();
+    expect(root.getAttribute("data-kv-ui-theme")).toBe("dark");
+    dash.destroy();
+  });
+});
