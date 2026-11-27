@@ -1,4 +1,4 @@
-import { pageQuestions, type AnswerValue, type Element, type Answers, type Comparison, type Condition, type ConditionValue, type Page, type Question, type Survey } from "@kvesto/schema";
+import { pageQuestions, type AnswerValue, type Element, type RepeatItem, type Answers, type Comparison, type Condition, type ConditionValue, type Page, type Question, type Survey } from "@kvesto/schema";
 
 export function isEmptyAnswer(value: AnswerValue | undefined): boolean {
   if (value === undefined || value === null || value === "") return true;
@@ -76,11 +76,12 @@ function evaluateComparison(c: Comparison, answers: Answers): boolean {
  * Evaluate a condition against answers. Pure data in, boolean out: conditions
  * are never compiled or run as code.
  */
-export function evaluateCondition(condition: Condition, answers: Answers): boolean {
-  if ("all" in condition) return condition.all.every((c) => evaluateCondition(c, answers));
-  if ("any" in condition) return condition.any.some((c) => evaluateCondition(c, answers));
-  if ("not" in condition) return !evaluateCondition(condition.not, answers);
-  return evaluateComparison(condition, answers);
+export function evaluateCondition(condition: Condition, answers: Answers, item?: Answers): boolean {
+  if ("all" in condition) return condition.all.every((c) => evaluateCondition(c, answers, item));
+  if ("any" in condition) return condition.any.some((c) => evaluateCondition(c, answers, item));
+  if ("not" in condition) return !evaluateCondition(condition.not, answers, item);
+  // `scope: "item"` compares an answer in the current item of a repeating panel.
+  return evaluateComparison(condition, condition.scope === "item" ? (item ?? {}) : answers);
 }
 
 export interface SurveyLogic {
@@ -94,6 +95,22 @@ export interface SurveyLogic {
   requiredQuestions: Set<string>;
   /** Answers with hidden questions removed: what gets submitted. */
   answers: Answers;
+  /** Per visible repeating panel: the logic of each of its items, in order. */
+  items: Record<string, ItemLogic[]>;
+}
+
+/** Visibility inside one item of a repeating panel. */
+export interface ItemLogic {
+  visibleQuestions: Set<string>;
+  visiblePanels: Set<string>;
+  requiredQuestions: Set<string>;
+  /** The item's answers with hidden questions removed (a `RepeatItem`; typed wider so the survey level fits too). */
+  answers: Answers;
+}
+
+/** The items of a repeating panel's answer (anything else counts as no items). */
+export function repeatItems(value: AnswerValue | undefined): RepeatItem[] {
+  return Array.isArray(value) ? value.filter((v): v is RepeatItem => typeof v === "object" && v !== null && !Array.isArray(v)) : [];
 }
 
 /**
@@ -105,34 +122,58 @@ export interface SurveyLogic {
  */
 export function resolveLogic(survey: Survey, answers: Answers): SurveyLogic {
   const visiblePages = new Set<string>();
-  const visibleQuestions = new Set<string>();
-  const visiblePanels = new Set<string>();
-  const requiredQuestions = new Set<string>();
   const effective: Answers = {};
+  const top: ItemLogic = { visibleQuestions: new Set(), visiblePanels: new Set(), requiredQuestions: new Set(), answers: effective };
+  const items: Record<string, ItemLogic[]> = {};
 
-  const visit = (elements: readonly Element[], parentVisible: boolean) => {
+  /**
+   * Walk elements, recording into `into`. Outside repeats, `into` is the
+   * survey-level logic and `item` is undefined; inside an item, `into`
+   * collects that item and `item` is the item's raw answers.
+   */
+  const visit = (elements: readonly Element[], parentVisible: boolean, into: ItemLogic, item: RepeatItem | undefined) => {
     for (const el of elements) {
-      const visible = parentVisible && (!el.visibleIf || evaluateCondition(el.visibleIf, effective));
+      const visible = parentVisible && (!el.visibleIf || evaluateCondition(el.visibleIf, effective, into.answers));
       if (el.type === "panel") {
-        if (visible) visiblePanels.add(el.id);
+        if (visible) into.visiblePanels.add(el.id);
+        if (el.repeat && !item) {
+          if (!visible) continue;
+          const list = repeatItems(answers[el.id]).map((raw) => {
+            const logic: ItemLogic = { visibleQuestions: new Set(), visiblePanels: new Set(), requiredQuestions: new Set(), answers: {} };
+            visit(el.elements, true, logic, raw);
+            return logic;
+          });
+          items[el.id] = list;
+          if (answers[el.id] !== undefined) effective[el.id] = list.map((l) => l.answers as RepeatItem);
+          continue;
+        }
         // Still walk a hidden panel: nothing inside is visible, but the walk keeps document order.
-        visit(el.elements, visible);
+        visit(el.elements, visible, into, item);
         continue;
       }
       if (!visible) continue;
-      visibleQuestions.add(el.id);
-      if (el.required || (el.requiredIf && evaluateCondition(el.requiredIf, effective))) requiredQuestions.add(el.id);
-      const v = answers[el.id];
-      if (v !== undefined) effective[el.id] = v;
+      into.visibleQuestions.add(el.id);
+      if (el.required || (el.requiredIf && evaluateCondition(el.requiredIf, effective, into.answers))) {
+        into.requiredQuestions.add(el.id);
+      }
+      const v = (item ?? answers)[el.id];
+      if (v !== undefined) into.answers[el.id] = v;
     }
   };
 
   for (const page of survey.pages) {
     const pageVisible = !page.visibleIf || evaluateCondition(page.visibleIf, effective);
     if (pageVisible) visiblePages.add(page.id);
-    visit(page.elements, pageVisible);
+    visit(page.elements, pageVisible, top, undefined);
   }
-  return { visiblePages, visibleQuestions, visiblePanels, requiredQuestions, answers: effective };
+  return {
+    visiblePages,
+    visibleQuestions: top.visibleQuestions,
+    visiblePanels: top.visiblePanels,
+    requiredQuestions: top.requiredQuestions,
+    answers: effective,
+    items,
+  };
 }
 
 /** The visible questions of a page, in order, including those inside visible panels. */

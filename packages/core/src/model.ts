@@ -1,7 +1,9 @@
 import {
   allQuestions,
   migrateSurvey,
-  pageQuestions,
+  walkElements,
+  type Panel,
+  type RepeatItem,
   type AnswerValue,
   type Answers,
   type FileAnswer,
@@ -14,8 +16,8 @@ import {
 } from "@kvesto/schema";
 import type { SurveyStorage } from "./storage.js";
 import { fileToDataUrl } from "./files.js";
-import { resolveLogic, visibleElements, type SurveyLogic } from "./logic.js";
-import { validateAnswer, validateFile } from "./validate.js";
+import { repeatItems, resolveLogic, visibleElements, type SurveyLogic } from "./logic.js";
+import { itemKey, validateAnswer, validateFile, validateRepeat, validationTargets } from "./validate.js";
 import type { CustomValidators } from "./validators.js";
 
 export interface CreateSurveyOptions {
@@ -25,7 +27,7 @@ export interface CreateSurveyOptions {
   storage?: SurveyStorage;
   /** Called after a successful completion with the response (stored or not). */
   onComplete?: (result: CompletionResult) => void | Promise<void>;
-  /** Called whenever an answer changes. */
+  /** Called whenever an answer changes, with the question id (or the repeating panel id for item changes). */
   onChange?: (answers: Answers, questionId: string) => void;
   /** Pre-filled answers. */
   initialAnswers?: Answers;
@@ -46,6 +48,10 @@ export interface SurveyState {
   survey: Survey;
   /** Everything the respondent entered, including answers to questions that are now hidden. */
   answers: Answers;
+  /**
+   * Error messages by key: a question id, a repeating panel id (number of
+   * items), or `panelId.index.questionId` for a question inside an item.
+   */
   errors: Record<string, string>;
   /** Index into `survey.pages` (hidden pages are skipped by next/prev). */
   pageIndex: number;
@@ -81,11 +87,24 @@ export class SurveyModel {
   readonly survey: Survey;
   private state: SurveyState;
   private listeners = new Set<Listener>();
+  /** Repeating panels by id, and which repeating panel each inner question belongs to. */
+  private readonly repeats = new Map<string, Panel>();
+  private readonly repeatOf = new Map<string, string>();
 
   constructor(private readonly options: CreateSurveyOptions) {
     this.survey = migrateSurvey(options.survey);
+    walkElements(this.survey, (el, at) => {
+      if (at.repeat) this.repeatOf.set(el.id, at.repeat);
+      else if (el.type === "panel" && el.repeat) this.repeats.set(el.id, el);
+    });
+    const answers: Answers = { ...(options.initialAnswers ?? {}) };
+    // Repeating panels start with their minimum number of (empty) items.
+    for (const [id, panel] of this.repeats) {
+      const min = panel.repeat?.min ?? 0;
+      if (answers[id] === undefined && min > 0) answers[id] = Array.from({ length: min }, () => ({}));
+    }
     this.state = this.compute({
-      answers: { ...(options.initialAnswers ?? {}) },
+      answers,
       errors: {},
       pageIndex: 0,
       status: "running",
@@ -104,6 +123,7 @@ export class SurveyModel {
     return () => this.listeners.delete(listener);
   }
 
+  /** Every question, including those inside panels and repeating panels. */
   get questions(): Question[] {
     return allQuestions(this.survey);
   }
@@ -126,9 +146,21 @@ export class SurveyModel {
     return q;
   }
 
-  /** Set an answer. Pass `undefined` to clear it. */
+  private repeat(panelId: string): Panel {
+    const panel = this.repeats.get(panelId);
+    if (!panel) throw new Error(`"${panelId}" is not a repeating panel`);
+    return panel;
+  }
+
+  /**
+   * Set an answer. Pass `undefined` to clear it. Also takes a repeating
+   * panel id with its whole list of items.
+   */
   setValue(questionId: string, value: AnswerValue | undefined): void {
+    if (this.repeats.has(questionId)) return this.setItems(questionId, repeatItems(value), value === undefined);
     this.question(questionId);
+    const inside = this.repeatOf.get(questionId);
+    if (inside) throw new Error(`"${questionId}" is inside repeating panel "${inside}": use setItemValue`);
     const answers = { ...this.state.answers };
     if (value === undefined) delete answers[questionId];
     else answers[questionId] = value;
@@ -136,6 +168,58 @@ export class SurveyModel {
     delete errors[questionId];
     this.update({ answers, errors });
     this.options.onChange?.(answers, questionId);
+  }
+
+  /** The items of a repeating panel. */
+  getItems(panelId: string): RepeatItem[] {
+    this.repeat(panelId);
+    return repeatItems(this.state.answers[panelId]);
+  }
+
+  /** Add an empty item to a repeating panel. Returns false when it already has `max` items. */
+  addItem(panelId: string): boolean {
+    const { repeat } = this.repeat(panelId);
+    const items = this.getItems(panelId);
+    if (repeat?.max !== undefined && items.length >= repeat.max) return false;
+    this.setItems(panelId, [...items, {}]);
+    return true;
+  }
+
+  /** Remove an item from a repeating panel. Returns false when it has only `min` items. */
+  removeItem(panelId: string, index: number): boolean {
+    const { repeat } = this.repeat(panelId);
+    const items = this.getItems(panelId);
+    if (index < 0 || index >= items.length || items.length <= (repeat?.min ?? 0)) return false;
+    this.setItems(panelId, items.filter((_, i) => i !== index));
+    return true;
+  }
+
+  /** Set an answer to a question inside one item of a repeating panel. Pass `undefined` to clear it. */
+  setItemValue(panelId: string, index: number, questionId: string, value: AnswerValue | undefined): void {
+    this.repeat(panelId);
+    if (this.repeatOf.get(questionId) !== panelId) throw new Error(`"${questionId}" is not a question of "${panelId}"`);
+    const items = this.getItems(panelId);
+    if (index < 0 || index >= items.length) throw new Error(`"${panelId}" has no item ${index}`);
+    const item: RepeatItem = { ...items[index] };
+    if (value === undefined) delete item[questionId];
+    else item[questionId] = value as RepeatItem[string];
+    const next = items.map((it, i) => (i === index ? item : it));
+    const errors = { ...this.state.errors };
+    delete errors[itemKey(panelId, index, questionId)];
+    this.update({ answers: { ...this.state.answers, [panelId]: next }, errors });
+    this.options.onChange?.(this.state.answers, panelId);
+  }
+
+  /** Replace a repeating panel's items. Item errors are cleared, since indexes may have moved. */
+  private setItems(panelId: string, items: RepeatItem[], clear = false): void {
+    const answers = { ...this.state.answers };
+    if (clear) delete answers[panelId];
+    else answers[panelId] = items;
+    const errors = Object.fromEntries(
+      Object.entries(this.state.errors).filter(([k]) => k !== panelId && !k.startsWith(`${panelId}.`)),
+    );
+    this.update({ answers, errors });
+    this.options.onChange?.(answers, panelId);
   }
 
   /**
@@ -194,7 +278,8 @@ export class SurveyModel {
     if (!page) return true;
     const { logic } = this.state;
     const errors = { ...this.state.errors };
-    const questions = pageQuestions(page);
+    const { questions, repeats } = validationTargets(page.elements);
+    let ok = true;
     for (const q of questions) {
       const err = logic.visibleQuestions.has(q.id)
         ? validateAnswer(q, this.state.answers[q.id], {
@@ -203,11 +288,21 @@ export class SurveyModel {
             answers: logic.answers,
           })
         : null;
-      if (err) errors[q.id] = err;
-      else delete errors[q.id];
+      if (err) {
+        errors[q.id] = err;
+        ok = false;
+      } else delete errors[q.id];
+    }
+    for (const panel of repeats) {
+      for (const k of Object.keys(errors)) if (k === panel.id || k.startsWith(`${panel.id}.`)) delete errors[k];
+      if (!logic.visiblePanels.has(panel.id)) continue;
+      for (const issue of validateRepeat(panel, this.state.answers[panel.id], logic, { validators: this.options.validators })) {
+        errors[issue.questionId] = issue.message;
+        ok = false;
+      }
     }
     this.update({ errors });
-    return questions.every((q) => !errors[q.id]);
+    return ok;
   }
 
   private visiblePageIndexes(logic = this.state.logic): number[] {

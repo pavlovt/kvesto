@@ -1,13 +1,16 @@
 import {
-  allQuestions,
+  panelQuestions,
+  walkElements,
   type AnswerValue,
+  type Element,
+  type Panel,
   type Answers,
   type FileAnswer,
   type FileQuestion,
   type Question,
   type Survey,
 } from "@kvesto/schema";
-import { isEmptyAnswer, resolveLogic } from "./logic.js";
+import { isEmptyAnswer, repeatItems, resolveLogic, type SurveyLogic } from "./logic.js";
 import { runValidators, type CustomValidators } from "./validators.js";
 
 export interface ValidateOptions {
@@ -145,15 +148,86 @@ function checkShape(question: Question, value: AnswerValue, required: boolean): 
 }
 
 export interface AnswerIssue {
+  /**
+   * Where the problem is, as an error key: a question id, a repeating panel id
+   * (for the number of items), or `panelId.index.questionId` for a question
+   * inside an item of a repeating panel.
+   */
   questionId: string;
   message: string;
+  /** The same location as a path into the answers, e.g. `["children", 0, "age"]`. */
+  path: (string | number)[];
+}
+
+/** The error key of a question inside an item of a repeating panel. */
+export function itemKey(panelId: string, index: number, questionId: string): string {
+  return `${panelId}.${index}.${questionId}`;
+}
+
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+/**
+ * Validate a repeating panel's answer: the number of items, and every visible
+ * question in every item (with that item's conditional logic).
+ */
+export function validateRepeat(
+  panel: Panel,
+  value: AnswerValue | undefined,
+  logic: SurveyLogic,
+  options: Pick<ValidateOptions, "validators"> & { strict?: boolean } = {},
+): AnswerIssue[] {
+  const issues: AnswerIssue[] = [];
+  const add = (questionId: string, message: string, path: (string | number)[]) => issues.push({ questionId, message, path });
+  if (value !== undefined && value !== null && (!Array.isArray(value) || repeatItems(value).length !== value.length)) {
+    add(panel.id, "Expected a list of items.", [panel.id]);
+    return issues;
+  }
+  const raw = repeatItems(value);
+  const { min = 0, max } = panel.repeat ?? {};
+  if (raw.length < min) add(panel.id, `Add at least ${plural(min, "item", "items")}.`, [panel.id]);
+  if (max !== undefined && raw.length > max) add(panel.id, `Add at most ${plural(max, "item", "items")}.`, [panel.id]);
+
+  const questions = panelQuestions<Element>(panel);
+  const known = new Set(questions.map((q) => q.id));
+  const itemLogic = logic.items[panel.id] ?? [];
+  raw.forEach((item, i) => {
+    if (options.strict) {
+      for (const k of Object.keys(item)) if (!known.has(k)) add(itemKey(panel.id, i, k), "Unknown question", [panel.id, i, k]);
+    }
+    const il = itemLogic[i];
+    if (!il) return;
+    for (const q of questions) {
+      if (!il.visibleQuestions.has(q.id)) continue;
+      const message = validateAnswer(q, item[q.id], {
+        required: il.requiredQuestions.has(q.id),
+        validators: options.validators,
+        answers: { ...logic.answers, ...il.answers },
+      });
+      if (message) add(itemKey(panel.id, i, q.id), message, [panel.id, i, q.id]);
+    }
+  });
+  return issues;
+}
+
+/** The questions and repeating panels to validate for some elements: questions inside repeats belong to their panel. */
+export function validationTargets(elements: readonly Element[]): { questions: Question[]; repeats: Panel[] } {
+  const questions: Question[] = [];
+  const repeats: Panel[] = [];
+  walkElements({ pages: [{ elements }] }, (el) => {
+    if (el.type !== "panel") questions.push(el);
+    else if (el.repeat) {
+      repeats.push(el);
+      return "skip";
+    }
+  });
+  return { questions, repeats };
 }
 
 /**
  * Validate a full set of answers against a survey, applying its conditional
- * logic: hidden questions are skipped, `requiredIf` is honoured, and answers
- * to unknown questions are reported. Used by the server; handy for your own
- * backend too.
+ * logic: hidden questions are skipped, `requiredIf` is honoured, repeating
+ * panels are checked item by item, and answers to unknown questions are
+ * reported. Used by the server; handy for your own backend too.
  */
 export function validateAnswers(
   survey: Survey,
@@ -161,11 +235,11 @@ export function validateAnswers(
   options: Pick<ValidateOptions, "validators"> = {},
 ): { issues: AnswerIssue[]; answers: Answers } {
   const logic = resolveLogic(survey, answers);
-  const questions = allQuestions(survey);
-  const known = new Set(questions.map((q) => q.id));
+  const { questions, repeats } = validationTargets(survey.pages.flatMap((p) => p.elements));
+  const known = new Set([...questions, ...repeats].map((q) => q.id));
   const issues: AnswerIssue[] = Object.keys(answers)
     .filter((k) => !known.has(k))
-    .map((questionId) => ({ questionId, message: "Unknown question" }));
+    .map((questionId) => ({ questionId, message: "Unknown question", path: [questionId] }));
   for (const q of questions) {
     if (!logic.visibleQuestions.has(q.id)) continue;
     const message = validateAnswer(q, answers[q.id], {
@@ -173,7 +247,11 @@ export function validateAnswers(
       validators: options.validators,
       answers: logic.answers,
     });
-    if (message) issues.push({ questionId: q.id, message });
+    if (message) issues.push({ questionId: q.id, message, path: [q.id] });
+  }
+  for (const panel of repeats) {
+    if (!logic.visiblePanels.has(panel.id)) continue;
+    issues.push(...validateRepeat(panel, answers[panel.id], logic, { validators: options.validators, strict: true }));
   }
   return { issues, answers: logic.answers };
 }

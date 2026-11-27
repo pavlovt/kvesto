@@ -4,6 +4,9 @@ export type { CompletionResult, CreateSurveyOptions, Listener, SurveyState } fro
 export {
   validateAnswer,
   validateAnswers,
+  validateRepeat,
+  validationTargets,
+  itemKey,
   validateFile,
   fileMatchesAccept,
   formatBytes,
@@ -11,7 +14,7 @@ export {
   type ValidateOptions,
 } from "./validate.js";
 export { runValidators, type CustomValidatorFn, type CustomValidatorContext, type CustomValidators } from "./validators.js";
-export { evaluateCondition, resolveLogic, isEmptyAnswer, type SurveyLogic } from "./logic.js";
+export { evaluateCondition, resolveLogic, isEmptyAnswer, repeatItems, type SurveyLogic, type ItemLogic } from "./logic.js";
 export { fileToDataUrl } from "./files.js";
 export { summarizeResponses, type QuestionSummary, type PanelHeading, type MatrixRowSummary, type RankingSummary } from "./summary.js";
 export type { SurveyStorage, SurveySummary } from "./storage.js";
