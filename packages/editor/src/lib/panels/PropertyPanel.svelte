@@ -99,6 +99,10 @@
     const title = `${el.title ?? ""}${el.title ? " " : ""}{${source.scope ? "$item." : ""}${source.id}}`;
     doc.updateElement(el.id, { title });
   }
+  function setHiddenFields(text: string) {
+    const names = [...new Set(text.split(",").map((s) => s.trim()).filter((s) => /^[A-Za-z0-9_-]+$/.test(s)))];
+    doc.updateSurvey({ hiddenFields: names.length ? names : undefined } as Loose);
+  }
   // Survey variables: named expressions.
   const variables = $derived(((view.survey as Loose).variables ?? []) as { name: string; expr: string }[]);
   const setVariables = (next: { name: string; expr: string }[], key = "") =>
@@ -145,6 +149,14 @@
           }
         }
       }
+      h3 'Hidden fields'
+      p.kv-props-hint 'Values your site passes in (a campaign, a user id), usable in conditions and text. Separate them with commas.'
+      input.kv-props-hidden(
+        aria-label="Hidden fields"
+        placeholder="source, userId"
+        value={((view.survey as Loose).hiddenFields ?? []).join(", ")}
+        onchange={(e) => setHiddenFields(e.currentTarget.value)}
+      )
       h3 'Variables'
       p.kv-props-hint 'Named values worked out from answers. Use them in expressions and text as {"{name}"}.'
       each variables as v, vi (vi) {

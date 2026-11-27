@@ -86,7 +86,13 @@ export function conditionSources(
     // A repeating panel's own condition is evaluated outside its items: `repeat` is the panel around the owner.
     repeat = all[end]!.repeat;
   }
-  const out: ConditionSource[] = [];
+  // Hidden fields are known from the start, so every condition may use them.
+  const out: ConditionSource[] = ((survey as Loose).hiddenFields ?? []).map((name: string) => ({
+    id: name,
+    label: `${name} (hidden field)`,
+    type: "hidden",
+    question: { id: name, type: "hidden" },
+  }));
   for (const w of all.slice(0, end)) {
     const el = w.element as Loose;
     if (el.type === "panel" || el.type === "content" || el.type === "image" || (el.type === "grid" && !includeGrids)) continue;
@@ -114,6 +120,8 @@ export function operatorsFor(source: ConditionSource): ConditionOperator[] {
       return ["eq", "neq", "contains", "notContains", "in", "notIn", ...presence];
     case "comment":
       return ["eq", "neq", "contains", "notContains", ...presence];
+    case "hidden":
+      return ["eq", "neq", "contains", "notContains", "in", "notIn", ...presence];
     case "single-choice":
     case "dropdown":
       return ["eq", "neq", "in", "notIn", ...presence];

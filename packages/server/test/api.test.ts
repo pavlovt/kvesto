@@ -695,3 +695,27 @@ describe("partial responses", () => {
     expect(all.items[0].answers).toEqual({ email: "a@b.co", more: "x" });
   });
 });
+
+describe("hidden fields", () => {
+  const tracked = {
+    schemaVersion: 1,
+    id: "tracked",
+    title: "Tracked",
+    hiddenFields: ["source"],
+    pages: [{ id: "p1", elements: [{ id: "code", type: "text", title: "Code", required: true, visibleIf: { question: "source", op: "eq", value: "promo" } }] }],
+  };
+
+  it("uses hidden values from meta.hidden in validation, keeps only declared ones, and filters by them", async () => {
+    await send("POST", "/surveys", tracked);
+    expect((await send("POST", "/surveys/tracked/responses", { answers: {}, meta: { hidden: { source: "promo" } } })).status).toBe(400);
+    const ok = await send("POST", "/surveys/tracked/responses", { answers: { code: "X" }, meta: { hidden: { source: "promo", sneaky: "1" }, ua: "t" } });
+    expect((await ok.json()).meta).toEqual({ hidden: { source: "promo" }, ua: "t" });
+    await send("POST", "/surveys/tracked/responses", { answers: {}, meta: { hidden: { source: "ads" } } });
+    await send("POST", "/surveys/tracked/responses", { answers: {} });
+    const list = async (q: string) => (await (await send("GET", `/surveys/tracked/responses${q}`)).json()).total;
+    expect(await list("")).toBe(3);
+    expect(await list("?hidden=source:promo")).toBe(1);
+    expect(await list("?hidden=source:ads")).toBe(1);
+    expect(await list("?hidden=source:none")).toBe(0);
+  });
+});

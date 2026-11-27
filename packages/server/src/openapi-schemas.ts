@@ -77,6 +77,11 @@ export const Pagination = z.object({
   offset: z.coerce.number().int().min(0).default(0).openapi({ param: { name: "offset", in: "query" } }),
   /** Which responses: completed ones (default), partial ones, or all. */
   status: z.enum(["complete", "partial", "all"]).default("complete").openapi({ param: { name: "status", in: "query" } }),
+  /** `name:value`, repeatable: keep responses whose hidden field has that value. */
+  hidden: z
+    .union([z.string(), z.array(z.string())])
+    .optional()
+    .openapi({ param: { name: "hidden", in: "query", description: "name:value, repeatable" } }),
 });
 
 export const ResponseParams = z.object({

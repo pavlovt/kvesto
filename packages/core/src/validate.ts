@@ -369,8 +369,9 @@ export function validateAnswers(
       partial?: boolean;
     } = {},
 ): { issues: AnswerIssue[]; answers: Answers } {
-  const logic = resolveLogic(survey, answers, { functions: options.functions, now: options.now });
-  const expression: EvaluateOptions = { functions: options.functions, now: options.now, variables: surveyVariables(survey) };
+  const hidden = options.hidden && Object.keys(options.hidden).length ? { hidden: options.hidden } : {};
+  const logic = resolveLogic(survey, answers, { functions: options.functions, now: options.now, ...hidden });
+  const expression: EvaluateOptions = { functions: options.functions, now: options.now, variables: surveyVariables(survey), ...hidden };
   const { questions, repeats } = validationTargets(survey.pages.flatMap((p) => p.elements));
   const known = new Set([...questions, ...repeats].map((q) => q.id));
   const issues: AnswerIssue[] = Object.keys(answers)

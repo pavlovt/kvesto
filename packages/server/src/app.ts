@@ -5,6 +5,7 @@ import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import {
   checkQuestionTypes,
+  collectHidden,
   fileRules,
   findElement,
   registerQuestionType,
@@ -45,6 +46,22 @@ export interface CreateAppOptions {
    * surveys using them can be saved and their answers are validated with the type's `validate`.
    */
   questionTypes?: QuestionTypeDefinition[];
+}
+
+/** The declared hidden fields' values in a response's `meta.hidden`: strings only, cut to 500 characters. */
+function hiddenOf(survey: Survey, meta: Record<string, unknown> | undefined): Record<string, string> {
+  const given = meta?.hidden;
+  if (!given || typeof given !== "object") return {};
+  const strings = Object.fromEntries(Object.entries(given).filter(([, v]) => typeof v === "string")) as Record<string, string>;
+  return collectHidden(survey, strings);
+}
+
+/** The response with only the declared hidden fields kept in `meta.hidden`. */
+function withHidden<T extends { meta?: Record<string, unknown> }>(input: T, hidden: Record<string, string>): T {
+  if (!input.meta?.hidden) return input;
+  const { hidden: _given, ...meta } = input.meta;
+  const next = { ...meta, ...(Object.keys(hidden).length ? { hidden } : {}) };
+  return { ...input, ...(Object.keys(next).length ? { meta: next } : { meta: undefined }) };
 }
 
 /** The stored form of a resume token's secret. */
@@ -146,8 +163,15 @@ export function createApp(options: CreateAppOptions) {
   };
 
   /** Validate answers (partial ones need nothing yet), in the respondent's language when the survey has it. */
-  const check = (survey: Survey, answers: Answers, partial: boolean, acceptLanguage: string | undefined) => {
+  const check = (
+    survey: Survey,
+    answers: Answers,
+    partial: boolean,
+    acceptLanguage: string | undefined,
+    hidden: Record<string, string> = {},
+  ) => {
     const result = validateAnswers(survey, answers, {
+      hidden,
       validators: options.validators,
       functions: options.functions,
       locale: preferredLocale(acceptLanguage, survey),
@@ -201,10 +225,12 @@ export function createApp(options: CreateAppOptions) {
     const survey = await repo.loadSurvey(id);
     if (!survey) return c.json({ error: "Survey not found" }, 404);
     const partial = input.status === "partial";
-    const checked = check(survey, input.answers, partial, c.req.header("accept-language"));
+    const hidden = hiddenOf(survey, input.meta);
+    const checked = check(survey, input.answers, partial, c.req.header("accept-language"), hidden);
     if ("bad" in checked) return c.json(checked.bad, 400);
     // Answers to questions hidden by conditional logic are dropped, as the core runtime does.
-    const { status: _status, ...rest } = input;
+    const { status: _status, ...given } = input;
+    const rest = withHidden(given, hidden);
     if (!partial) return c.json(await repo.saveResponse(id, { ...rest, answers: checked.answers }), 201);
     const secret = randomBytes(32).toString("base64url");
     const saved = await repo.savePartialResponse(id, { ...rest, answers: checked.answers }, hashSecret(secret));
@@ -233,9 +259,14 @@ export function createApp(options: CreateAppOptions) {
     const found = await partialFor(id, responseId, token);
     if (!("response" in found)) return c.json({ error: found.error }, found.status);
     const partial = input.status === "partial";
-    const checked = check(survey, input.answers, partial, c.req.header("accept-language"));
+    const hidden = hiddenOf(survey, input.meta ?? found.response!.meta);
+    const checked = check(survey, input.answers, partial, c.req.header("accept-language"), hidden);
     if ("bad" in checked) return c.json(checked.bad, 400);
-    const updated = await repo.updateResponse(id, responseId, { ...input, answers: checked.answers, status: partial ? "partial" : "complete" });
+    const updated = await repo.updateResponse(
+      id,
+      responseId,
+      withHidden({ ...input, meta: input.meta ?? found.response!.meta, answers: checked.answers, status: partial ? "partial" : "complete" }, hidden),
+    );
     return c.json(updated, 200);
   });
 
@@ -297,7 +328,15 @@ export function createApp(options: CreateAppOptions) {
     const { id } = c.req.valid("param");
     const { limit, offset, status } = c.req.valid("query");
     if (!(await repo.surveyExists(id))) return c.json({ error: "Survey not found" }, 404);
-    const [items, total] = await Promise.all([repo.listResponsesPage(id, { limit, offset, status }), repo.countResponses(id, status)]);
+    // `?hidden=source:newsletter` (repeatable) keeps responses whose hidden field has that value.
+    const hidden = Object.fromEntries(
+      c.req
+        .queries("hidden")
+        ?.map((h) => [h.slice(0, h.indexOf(":")), h.slice(h.indexOf(":") + 1)] as const)
+        .filter(([k]) => /^[A-Za-z0-9_-]+$/.test(k)) ?? [],
+    );
+    const filter = { status, ...(Object.keys(hidden).length ? { hidden } : {}) };
+    const [items, total] = await Promise.all([repo.listResponsesPage(id, { limit, offset, ...filter }), repo.countResponses(id, filter)]);
     return c.json({ items, total, limit, offset }, 200);
   });
 

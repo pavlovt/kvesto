@@ -1,5 +1,5 @@
 export * from "@kvesto/schema";
-export { SurveyModel, createSurvey, loadSurvey } from "./model.js";
+export { SurveyModel, createSurvey, loadSurvey, collectHidden } from "./model.js";
 export type { CompletionResult, CreateSurveyOptions, Listener, Step, SurveyState } from "./model.js";
 export {
   validateAnswer,

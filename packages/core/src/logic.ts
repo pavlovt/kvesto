@@ -89,6 +89,8 @@ export interface LogicOptions {
   now?: () => Date;
   /** Survey variables (name → expression). `resolveLogic` fills this in from the survey. */
   variables?: Record<string, string>;
+  /** Hidden field values, by name. */
+  hidden?: Record<string, string>;
 }
 
 /**
@@ -102,7 +104,13 @@ export function evaluateCondition(condition: Condition, answers: Answers, item?:
   if ("not" in condition) return !evaluateCondition(condition.not, answers, item, options);
   if ("expr" in condition) return evaluateExpressionCondition(condition.expr, answers, { ...options, ...(item ? { item } : {}) });
   // `scope: "item"` compares an answer in the current item of a repeating panel.
-  return evaluateComparison(condition, condition.scope === "item" ? (item ?? {}) : answers);
+  if (condition.scope === "item") return evaluateComparison(condition, item ?? {});
+  // A hidden field compares like an answer.
+  const hidden = options.hidden;
+  if (hidden && Object.hasOwn(hidden, condition.question) && !Object.hasOwn(answers, condition.question)) {
+    return evaluateComparison(condition, { [condition.question]: hidden[condition.question]! });
+  }
+  return evaluateComparison(condition, answers);
 }
 
 export interface SurveyLogic {

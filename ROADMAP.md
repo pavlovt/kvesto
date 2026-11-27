@@ -4,8 +4,8 @@ This is the plan for growing Kvesto from today's skeleton into a full survey too
 Each milestone is meant to be one focused change on `main`: it builds, type-checks and passes tests on its own, and
 can ship in a patch or minor release without waiting for the next one.
 
-> **Where we are now:** M21 (partial responses and resume) is the latest finished milestone. Next up:
-> M22 (hidden fields and prefill from the page). The [Status](#status) table at the bottom lists every milestone.
+> **Where we are now:** M22 (hidden fields and prefill from the page) is the latest finished milestone. Next up:
+> M23 (themes). The [Status](#status) table at the bottom lists every milestone.
 
 Milestones marked **★** are ideas that go beyond the original feature list. They come from looking at how other
 form and survey tools solve the same problems (conversational forms, headless form renderers, open source
@@ -1183,6 +1183,7 @@ Decided:
 | M19 · One question at a time | Done (unreleased) |
 | M20 · Localization | Done (unreleased). Not yet: Intl number and date formatting of piped values; rarely shown messages for malformed answers stay English |
 | M21 · Partial responses and resume | Done (unreleased) |
-| M22 – M79 | Planned |
+| M22 · Hidden fields and prefill from the page | Done (unreleased) |
+| M23 – M79 | Planned |
 
 Update this table as milestones land, with the release they shipped in.

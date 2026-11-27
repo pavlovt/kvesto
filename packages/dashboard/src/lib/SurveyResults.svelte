@@ -55,7 +55,22 @@
   // Partial responses (saved progress) are left out of the results unless asked for.
   let includePartial = $state(false);
   const partials = $derived(all.filter((r) => r.status === "partial").length);
-  const responses = $derived(includePartial ? all : all.filter((r) => r.status !== "partial"));
+  // Filters by hidden field value ("" means any).
+  let hiddenFilter = $state<Record<string, string>>({});
+  const hiddenOf = (r: SurveyResponse) => ((r.meta?.hidden ?? {}) as Record<string, string>);
+  const hiddenValues = $derived(
+    (source?.hiddenFields ?? []).map((name) => ({
+      name,
+      values: [...new Set(all.map((r) => hiddenOf(r)[name]).filter((v): v is string => typeof v === "string"))].sort(),
+    })),
+  );
+  const responses = $derived(
+    all.filter(
+      (r) =>
+        (includePartial || r.status !== "partial") &&
+        Object.entries(hiddenFilter).every(([name, value]) => !value || hiddenOf(r)[name] === value),
+    ),
+  );
   const summary = $derived<QuestionSummary[]>(survey ? summarizeResponses(survey, responses) : []);
   const completion = $derived(survey && partials ? completionStats(survey, all) : null);
   // Panels around a question, as "Outer / Inner"; untitled panels are left out.
@@ -82,6 +97,21 @@
     .kv-dash-results {
       h1 '{survey.title}'
       p.kv-dash-muted '{responses.length} responses'
+      if hiddenValues.some((h) => h.values.length) {
+        .kv-dash-filters {
+          each hiddenValues as h (h.name) {
+            label {
+              span '{h.name}'
+              select value={hiddenFilter[h.name] ?? ""} onchange={(e) => (hiddenFilter = { ...hiddenFilter, [h.name]: e.currentTarget.value })} {
+                option value="" 'Any'
+                each h.values as v (v) {
+                  option value={v} '{v}'
+                }
+              }
+            }
+          }
+        }
+      }
       if completion {
         section.kv-dash-card.kv-dash-completion {
           h2 'Completion'
@@ -205,6 +235,8 @@
   .kv-dash-card h2 { font-size: 1.05rem; margin: 0 0 0.25rem; }
   .kv-dash-num { text-align: right; font-variant-numeric: tabular-nums; }
   .kv-dash-dropoff { list-style: none; margin: 0; padding: 0; }
+  .kv-dash-filters { display: flex; flex-wrap: wrap; gap: 0.75rem; margin: 0 0 1rem; font-size: 0.9rem; }
+  .kv-dash-filters label { display: flex; gap: 0.35rem; align-items: center; }
   .kv-dash-completion h3 { font-size: 0.95rem; margin: 0.75rem 0 0.25rem; }
   .kv-dash-toggle { display: flex; gap: 0.4rem; align-items: center; font-size: 0.9rem; }
   .kv-dash-bar-row { display: grid; grid-template-columns: 10rem 1fr 3rem; gap: 0.5rem; align-items: center; margin: 0.3rem 0; }

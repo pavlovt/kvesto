@@ -33,6 +33,8 @@ export interface EvaluateOptions {
   now?: () => Date;
   /** Survey variables by name (`{ total: "{a} + {b}" }`), worked out when an expression refers to them. */
   variables?: Record<string, string>;
+  /** Hidden field values by name, for `{name}` when no question has that id. */
+  hidden?: Record<string, string>;
 }
 
 /** Raised for problems found while evaluating, such as an unknown function. */
@@ -226,6 +228,9 @@ export function evaluateNode(node: ExpressionNode, answers: Answers, options: Ev
           if (depth >= MAX_VARIABLE_DEPTH) throw new ExpressionEvaluationError(`Variable "${n.name}" is nested too deeply`);
           const v = evaluateNode(compileExpression(options.variables[n.name]!), answers, { ...options, item: undefined }, depth + 1);
           return v === undefined ? null : v;
+        }
+        if (!n.scope && options.hidden && Object.hasOwn(options.hidden, n.name) && !Object.hasOwn(answers, n.name)) {
+          return options.hidden[n.name]!;
         }
         return lookup(n, answers, options.item);
       case "unary": {

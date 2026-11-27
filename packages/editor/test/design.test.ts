@@ -358,3 +358,20 @@ describe("translations in the editor", () => {
     ui.editor.destroy();
   });
 });
+
+describe("hidden fields in the editor", () => {
+  it("declares hidden fields and offers them in conditions", () => {
+    const ui = setup(false);
+    const input = ui.$<HTMLInputElement>(".kv-props-hidden");
+    input.value = "source, bad id, userId";
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    flushSync();
+    expect(ui.last().hiddenFields).toEqual(["source", "userId"]);
+    select(ui, "name");
+    ui.$$<HTMLButtonElement>(".kv-props button").find((b) => b.textContent?.trim() === "Show only when…")!.click();
+    flushSync();
+    const options = [...ui.$<HTMLSelectElement>(".kv-props .kv-cond-question").options].map((o) => o.value);
+    expect(options).toEqual(["source", "userId"]);
+    ui.editor.destroy();
+  });
+});

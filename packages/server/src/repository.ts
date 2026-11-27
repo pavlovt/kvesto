@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, count, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, sql } from "drizzle-orm";
 import type { SurveyStorage, SurveySummary } from "@kvesto/core";
 import { textOf, type ResponseInput, type Survey, type SurveyResponse } from "@kvesto/schema";
 
@@ -24,13 +24,18 @@ export interface StoredFile {
 }
 
 /** Which responses a listing returns. */
-export type ResponseFilter = "complete" | "partial" | "all";
+export type ResponseStatusFilter = "complete" | "partial" | "all";
+export interface ResponseFilter {
+  status?: ResponseStatusFilter;
+  /** Hidden field values the response must have. */
+  hidden?: Record<string, string>;
+}
 
 export interface SurveyRepository extends Required<Omit<SurveyStorage, "uploadFile" | "saveProgress" | "loadProgress">> {
   surveyExists(id: string): Promise<boolean>;
   createSurvey(survey: Survey): Promise<Survey>;
-  countResponses(surveyId: string, status?: ResponseFilter): Promise<number>;
-  listResponsesPage(surveyId: string, opts: { limit: number; offset: number; status?: ResponseFilter }): Promise<SurveyResponse[]>;
+  countResponses(surveyId: string, filter?: ResponseFilter): Promise<number>;
+  listResponsesPage(surveyId: string, opts: { limit: number; offset: number } & ResponseFilter): Promise<SurveyResponse[]>;
   /** Store a partial response with the hash of its resume token's secret. */
   savePartialResponse(surveyId: string, input: ResponseInput, tokenHash: string): Promise<SurveyResponse>;
   /** A response with its token hash, for checking a resume token. */
@@ -54,8 +59,13 @@ function toResponse(row: typeof responses.$inferSelect): SurveyResponse {
   };
 }
 
-const byStatus = (surveyId: string, status: ResponseFilter = "complete") =>
-  status === "all" ? eq(responses.surveyId, surveyId) : and(eq(responses.surveyId, surveyId), eq(responses.status, status));
+const byFilter = (surveyId: string, { status = "complete", hidden = {} }: ResponseFilter = {}) =>
+  and(
+    eq(responses.surveyId, surveyId),
+    ...(status === "all" ? [] : [eq(responses.status, status)]),
+    // Names are checked by the API (letters, digits, - and _), and values are bound parameters.
+    ...Object.entries(hidden).map(([name, value]) => sql`json_extract(${responses.meta}, ${`$.hidden.${name}`}) = ${value}`),
+  );
 
 export function drizzleRepository(db: KvestoDb): SurveyRepository {
   const now = () => new Date().toISOString();
@@ -148,15 +158,15 @@ export function drizzleRepository(db: KvestoDb): SurveyRepository {
         .run();
       return (await this.loadResponse(surveyId, responseId))!.response;
     },
-    async countResponses(surveyId, status) {
-      const row = await db.select({ n: count() }).from(responses).where(byStatus(surveyId, status)).get();
+    async countResponses(surveyId, filter) {
+      const row = await db.select({ n: count() }).from(responses).where(byFilter(surveyId, filter)).get();
       return row?.n ?? 0;
     },
-    async listResponsesPage(surveyId, { limit, offset, status }) {
+    async listResponsesPage(surveyId, { limit, offset, ...filter }) {
       const rows = await db
         .select()
         .from(responses)
-        .where(byStatus(surveyId, status))
+        .where(byFilter(surveyId, filter))
         .orderBy(desc(responses.createdAt))
         .limit(limit)
         .offset(offset)

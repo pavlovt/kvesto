@@ -366,6 +366,25 @@ rating answer moves on by itself (`autoAdvance: false` turns that off). Logic st
 it, so hidden questions and pages are skipped. Custom UIs can use `model.nextStep()`, `model.prevStep()`,
 `state.steps` and `state.stepIndex`. `progressBar: true` adds the bar to the page layout too.
 
+#### Hidden fields
+
+Declare values your site passes in without a visible question, such as a campaign or your own user id:
+
+```json
+{ "hiddenFields": ["source", "userId"],
+  "pages": [{ "id": "p1", "elements": [
+    { "id": "code", "type": "text", "title": "Your {source} code", "visibleIf": { "question": "source", "op": "eq", "value": "newsletter" } } ] }] }
+```
+
+```ts
+mountSurvey(el, { survey, hidden: { userId: currentUser.id } });
+mountSurvey(el, { survey, hiddenFromUrl: location.href }); // opt-in: ?source=newsletter
+```
+
+Only declared fields are read; other URL parameters are ignored. They work in conditions, expressions and piped text
+like answers, are stored in the response's `meta.hidden`, and the server uses them when it validates. Filter by
+them with `GET /surveys/{id}/responses?hidden=source:newsletter`, or in the dashboard.
+
 #### Saving progress and coming back
 
 With a storage adapter that has `saveProgress`, the runner saves the answers so far after every page (or step) and

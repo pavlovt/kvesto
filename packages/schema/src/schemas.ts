@@ -763,6 +763,12 @@ export const SurveySchema = z
     defaultLocale: z.string().regex(LOCALE_PATTERN).optional(),
     /** The locales this survey is translated into (the default locale included). */
     locales: z.array(z.string().regex(LOCALE_PATTERN)).optional(),
+    /**
+     * Values the host fills in without a visible question (a campaign, a user id), from the `hidden`
+     * option or, when allowed, URL parameters. Usable in conditions, expressions and piping as `{name}`;
+     * stored in the response's `meta.hidden`.
+     */
+    hiddenFields: z.array(id).optional(),
     /** Machine-translated texts that nobody has checked yet, as text keys per locale. Ignored by the runner. */
     translationsToReview: z.record(z.string().regex(LOCALE_PATTERN), z.array(z.string())).optional(),
   })
@@ -779,6 +785,8 @@ export const SurveySchema = z
     ) => {
       if (!condition) return;
       for (const c of conditionComparisons(condition)) {
+        // A hidden field is known from the start.
+        if (hiddenNames.has(c.question) && !c.scope && c.row === undefined) continue;
         const target = seen.get(c.question);
         const issue = (message: string) => ctx.addIssue({ code: "custom", path, message });
         if (!target || !earlierOnly.has(c.question)) {
@@ -811,7 +819,9 @@ export const SurveySchema = z
         const target = seen.get(r.name);
         const shown = `{${r.scope ? "$item." : ""}${[r.name, ...r.path].join(".")}}`;
         const variable = variableDeps.get(r.name);
-        if (variable && !r.scope) {
+        if (hiddenNames.has(r.name) && !r.scope) {
+          if (r.path.length) out.push(`${shown}: a hidden field has no parts`);
+        } else if (variable && !r.scope) {
           const later = [...variable].filter((q) => !earlierOnly.has(q));
           if (r.path.length) out.push(`${shown}: a variable has no parts`);
           else if (later.length) out.push(`${shown} uses ${later.map((q) => `"${q}"`).join(", ")}, which does not come earlier`);
@@ -848,6 +858,14 @@ export const SurveySchema = z
     // Variables: unique names, references to questions outside repeats or to other variables, and no cycles.
     // `variableDeps` holds the questions each variable depends on, directly or through other variables.
     const variableDeps = new Map<string, Set<string>>();
+    const hiddenNames = new Set(survey.hiddenFields ?? []);
+    (survey.hiddenFields ?? []).forEach((name, i) => {
+      if (survey.hiddenFields!.indexOf(name) !== i) {
+        ctx.addIssue({ code: "custom", path: ["hiddenFields", i], message: `Duplicate hidden field "${name}"` });
+      } else if (allIds.has(name) || survey.variables?.some((v) => v.name === name)) {
+        ctx.addIssue({ code: "custom", path: ["hiddenFields", i], message: `"${name}" is already an element id or a variable` });
+      }
+    });
     const variables = survey.variables ?? [];
     const varIndex = new Map(variables.map((v, i) => [v.name, i]));
     variables.forEach((v, i) => {
@@ -872,6 +890,7 @@ export const SurveySchema = z
         const at = ["variables", i, "expr"];
         if (r.scope) ctx.addIssue({ code: "custom", path: at, message: "Variables cannot use $item" });
         else if (varIndex.has(r.name)) for (const d of depsOf(r.name, at)) deps.add(d);
+        else if (hiddenNames.has(r.name)) continue;
         else if (!questionIds.has(r.name)) ctx.addIssue({ code: "custom", path: at, message: `{${r.name}} is not a question or variable` });
         else if (inRepeat.has(r.name)) {
           ctx.addIssue({ code: "custom", path: at, message: `"${r.name}" is inside a repeating panel, so it has no single answer here` });
@@ -899,7 +918,7 @@ export const SurveySchema = z
       const all = typeof text === "string" ? text : Object.values(text).join(" ");
       if (!all.includes("{")) return;
       const refs = textPlaceholders(all).filter(
-        (r) => (questionIds.has(r.name) || (variableDeps.has(r.name) && !r.scope)) && (itemRefs || r.scope !== "item"),
+        (r) => (questionIds.has(r.name) || ((variableDeps.has(r.name) || hiddenNames.has(r.name)) && !r.scope)) && (itemRefs || r.scope !== "item"),
       );
       for (const message of refProblems(refs, earlierOnly, repeat)) ctx.addIssue({ code: "custom", path, message });
     };

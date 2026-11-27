@@ -138,7 +138,7 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
     if (!raw.includes("{") && !raw.includes("}")) return raw;
     const node = doc.createTextNode("");
     const refresh = (s: SurveyState) => {
-      const next = pipeText(raw, s.survey, s.logic.answers, { ...pipeOptions, values: s.logic.variables, item: item?.(s) });
+      const next = pipeText(raw, s.survey, s.logic.answers, { ...pipeOptions, values: { ...model.hidden, ...s.logic.variables }, item: item?.(s) });
       if (node.data !== next) node.data = next;
     };
     refresh(model.snapshot);
@@ -195,7 +195,7 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
       if (renderedStatus !== "completed") {
         const done = pipeText(state.survey.completedText ?? labels.completed, state.survey, state.logic.answers, {
           ...pipeOptions,
-          values: state.logic.variables,
+          values: { ...model.hidden, ...state.logic.variables },
         });
         root.replaceChildren(h(doc, "p", { class: "kv-completed", role: "status" }, done));
       }

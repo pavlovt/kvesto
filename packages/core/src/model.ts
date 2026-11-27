@@ -67,6 +67,13 @@ export interface CreateSurveyOptions {
   autoSaveProgress?: boolean;
   /** Called with the resume token after each progress save, e.g. to put it in a "continue later" link. */
   onProgress?: (token: string) => void;
+  /** Values for the survey's `hiddenFields`, by name. Undeclared names are ignored. */
+  hidden?: Record<string, string>;
+  /**
+   * Also read hidden fields from this URL's query parameters (pass `location.href`). Opt-in, and only
+   * declared fields are read. Values passed in `hidden` win.
+   */
+  hiddenFromUrl?: string | URL;
 }
 
 export interface CompletionResult {
@@ -136,6 +143,8 @@ export class SurveyModel {
   readonly survey: Survey;
   /** The locale texts are shown in. */
   readonly locale: string;
+  /** The hidden field values this response carries. */
+  readonly hidden: Record<string, string>;
   private state: SurveyState;
   private listeners = new Set<Listener>();
   /** Repeating panels by id, and which repeating panel each inner question belongs to. */
@@ -172,7 +181,9 @@ export class SurveyModel {
       else if (isQuestion(el)) this.topQuestions.push(el);
     });
     const variables = surveyVariables(this.survey);
-    this.logicOptions = { functions: options.functions, now: options.now, ...(variables ? { variables } : {}) };
+    this.hidden = collectHidden(this.survey, options.hidden, options.hiddenFromUrl);
+    const hidden = Object.keys(this.hidden).length ? { hidden: this.hidden } : {};
+    this.logicOptions = { functions: options.functions, now: options.now, ...(variables ? { variables } : {}), ...hidden };
     this.expression = { ...this.logicOptions };
     this.token = options.resume?.token;
     const answers: Answers = { ...(options.initialAnswers ?? {}), ...(options.resume?.answers ?? {}) };
@@ -381,7 +392,7 @@ export class SurveyModel {
   text(raw: string, item?: { panel: string; index: number }): string {
     const { logic } = this.state;
     const itemAnswers = item ? logic.items[item.panel]?.[item.index]?.answers : undefined;
-    return pipeText(raw, this.survey, logic.answers, { values: logic.variables, ...(itemAnswers ? { item: itemAnswers } : {}) });
+    return pipeText(raw, this.survey, logic.answers, { values: { ...this.hidden, ...logic.variables }, ...(itemAnswers ? { item: itemAnswers } : {}) });
   }
 
   private question(questionId: string): Question {
@@ -676,7 +687,9 @@ export class SurveyModel {
     const response: ResponseInput = {
       // Only visible questions: answers to questions hidden by logic are dropped.
       answers: { ...this.state.logic.answers },
-      ...(this.options.meta ? { meta: this.options.meta } : {}),
+      ...(this.options.meta || Object.keys(this.hidden).length
+        ? { meta: { ...this.options.meta, ...(Object.keys(this.hidden).length ? { hidden: { ...this.hidden } } : {}) } }
+        : {}),
     };
     clearTimeout(this.progressTimer);
     this.update({ status: "submitting", submitError: null });
@@ -741,6 +754,24 @@ export class SurveyModel {
       isLastPage: !visible.some((i) => i > s.pageIndex),
     };
   }
+}
+
+/** Longest hidden field value kept. */
+const MAX_HIDDEN_LENGTH = 500;
+
+/** The declared hidden fields' values, from the URL (when allowed) and then the `hidden` option. */
+export function collectHidden(
+  survey: { hiddenFields?: string[] },
+  given: Record<string, string> = {},
+  url?: string | URL,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  const params = url === undefined ? undefined : new URL(String(url), "http://x").searchParams;
+  for (const name of survey.hiddenFields ?? []) {
+    const value = Object.hasOwn(given, name) ? given[name] : (params?.get(name) ?? undefined);
+    if (typeof value === "string" && value !== "") out[name] = value.slice(0, MAX_HIDDEN_LENGTH);
+  }
+  return out;
 }
 
 /** Create a survey runtime from survey JSON. */
