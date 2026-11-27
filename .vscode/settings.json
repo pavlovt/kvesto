@@ -1,0 +1,5 @@
+{
+  // The Svelte extension can't parse <template lang="braceml"> and reports false errors
+  // (Expected token }, ';' expected). Type-check with `pnpm typecheck` instead.
+  "svelte.plugin.typescript.diagnostics.enable": false
+}
