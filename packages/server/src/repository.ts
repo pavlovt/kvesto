@@ -6,8 +6,9 @@ import { createEncryption, mapAnswerValues, openAnswers, type EncryptionOptions 
 
 /** The survey's title in its default locale, for listings. */
 const titleOf = (survey: Survey) => textOf(survey.title, survey.defaultLocale, survey.defaultLocale);
-import { apiTokens, files, responses, surveys, webhookDeliveries, webhooks } from "./db/schema.js";
+import { apiTokens, auditLog, files, responses, surveys, webhookDeliveries, webhooks } from "./db/schema.js";
 import type { StoredToken, TokenStore } from "./tokens.js";
+import type { AuditStore } from "./audit.js";
 import type { KvestoAction } from "./auth.js";
 import type { KvestoDb } from "./db/sqlite.js";
 
@@ -152,7 +153,7 @@ export interface DrizzleRepositoryOptions {
   encryption?: EncryptionOptions;
 }
 
-export type DrizzleRepository = SurveyRepository & TokenStore & {
+export type DrizzleRepository = SurveyRepository & TokenStore & AuditStore & {
   /**
    * Encrypt everything again with the current key (and encrypt what was stored before encryption was on, or
    * before a question was marked `pii`). Run it after adding a new current key, before dropping the old one.
@@ -185,6 +186,31 @@ export function drizzleRepository(db: KvestoDb, options: DrizzleRepositoryOption
     surveyIds: row.surveyIds ?? null,
   });
   const repo: DrizzleRepository = {
+    async auditTail() {
+      const row = await db.select({ seq: auditLog.seq, hash: auditLog.hash }).from(auditLog).orderBy(desc(auditLog.seq)).limit(1).get();
+      return { hash: row?.hash ?? null, seq: (row?.seq ?? 0) + 1 };
+    },
+    async appendAudit(entry) {
+      await db.insert(auditLog).values(entry).run();
+    },
+    async listAudit({ actor, action, surveyId, from, to, after, limit = 100 }) {
+      return db
+        .select()
+        .from(auditLog)
+        .where(
+          and(
+            actor ? eq(auditLog.actor, actor) : undefined,
+            action ? eq(auditLog.action, action) : undefined,
+            surveyId ? eq(auditLog.surveyId, surveyId) : undefined,
+            from ? gte(auditLog.at, from) : undefined,
+            to ? lte(auditLog.at, to) : undefined,
+            after ? sql`${auditLog.seq} > ${after}` : undefined,
+          ),
+        )
+        .orderBy(auditLog.seq)
+        .limit(limit)
+        .all();
+    },
     async createToken(token) {
       await db.insert(apiTokens).values(token).run();
     },

@@ -43,6 +43,13 @@
       "when": 1795812951853,
       "tag": "0005_api_tokens",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1795813255095,
+      "tag": "0006_audit_log",
+      "breakpoints": true
     }
   ]
 }

@@ -62,6 +62,19 @@ app.route("/", login.routes); // /auth/login, /auth/callback, /auth/me, /auth/lo
   `trustedOrigins` (or, without `Origin`, `Sec-Fetch-Site` is `same-origin`). Token requests don't send cookies and
   aren't affected.
 
+## Audit log
+
+Every admin request (refused ones too) adds an entry: who (`token:<id>`, `user:<sub>`, `admin-key`, `api-key`, or
+what your own `authorize` sets with `setActor(c, "…")`), the action, method, path, survey, the reply's status, the
+client address and the request id. `GET /audit` lists them oldest first (filters `actor`, `action`, `surveyId`,
+`from`, `to`; page with `after` and `limit`) and `GET /audit.csv` exports them; both need `audit:read`.
+`createApp({ audit: { onAudit: (entry) => siem.send(entry) } })` forwards each entry, and `audit: false` turns the
+log off.
+
+Each entry's `hash` covers the entry and the previous hash, so changing or deleting one breaks the chain from there
+on: `await app.audit.verify()` returns `{ ok: true }` or the `seq` where it breaks. Keep a copy of the latest hash
+elsewhere (`onAudit` is a good place) if you need to detect the end of the log being cut off too.
+
 ## Encryption at rest
 
 ```ts

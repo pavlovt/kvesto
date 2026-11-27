@@ -5,6 +5,7 @@
  */
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { KVESTO_ACTIONS, RESPONDENT_ACTIONS, type Authorize, type KvestoAction } from "./auth.js";
+import { setActor } from "./audit.js";
 
 export type Role = "owner" | "editor" | "analyst" | "viewer";
 export const ROLES: readonly Role[] = ["owner", "editor", "analyst", "viewer"];
@@ -86,7 +87,10 @@ export function tokenAuth(options: TokenAuthOptions): Authorize {
     const match = /^Bearer\s+(\S+)$/i.exec((c.req.header("authorization") ?? "").trim());
     if (!match) return deny(c, "An API token is required");
     const given = hash(match[1]!);
-    if (adminKeys.some((k) => timingSafeEqual(Buffer.from(k), Buffer.from(given)))) return true;
+    if (adminKeys.some((k) => timingSafeEqual(Buffer.from(k), Buffer.from(given)))) {
+      setActor(c, "admin-key");
+      return true;
+    }
     const parts = TOKEN.exec(match[1]!);
     const found = parts ? await options.store.findToken(parts[1]!) : null;
     if (!found || !timingSafeEqual(Buffer.from(found.hash), Buffer.from(hash(parts![2]!)))) return deny(c, "Invalid API token");
@@ -97,6 +101,7 @@ export function tokenAuth(options: TokenAuthOptions): Authorize {
     // A token for some surveys works only on those (so it can't list all surveys either).
     if (found.surveyIds && (!surveyId || !found.surveyIds.includes(surveyId))) return deny(c, "This token is not for this survey", 403);
     await options.store.touchToken(found.id, now.toISOString());
+    setActor(c, `token:${found.id}`);
     return true;
   };
 }

@@ -55,6 +55,7 @@ import { guardOutboundUrl } from "./outbound.js";
 import { EMBED_JS, HOSTED_CSP, hostedAssets, hostedPage, PAGE_CSS, RUN_JS } from "./hosted.js";
 import { checkUploadType, fileUrlValid, safeFileName, signFileUrl } from "./uploads.js";
 import { newToken, type TokenStore } from "./tokens.js";
+import { actorOf, createAuditLog, type AuditEntry, type AuditStore } from "./audit.js";
 import { createWebhookDispatcher, newWebhookSecret, type WebhookEvent, type WebhookOptions } from "./webhooks.js";
 
 export interface UploadOptions {
@@ -109,6 +110,11 @@ export interface CreateAppOptions {
   signingSecret?: string;
   /** Upload limits and checks beyond each question's `accept` and `maxSize`. */
   uploads?: UploadOptions;
+  /**
+   * The audit log of admin requests, kept when the repository can store it (the Drizzle one can). `onAudit` gets each
+   * entry, e.g. to forward it to a SIEM; `false` turns the log off.
+   */
+  audit?: false | { onAudit?: (entry: AuditEntry) => void | Promise<void> };
   /** Run `app.privacy.purge()` (deleting responses older than each survey's `retentionDays`) this often, in seconds. */
   purgeEverySeconds?: number;
   /** Serve /openapi.json and the /docs UI. Default true. */
@@ -409,6 +415,32 @@ export function createApp(options: CreateAppOptions) {
     );
   }
 
+  // The audit log: after each admin request, one entry with who, what, the outcome and where from.
+  const auditStore = options.audit !== false && "appendAudit" in repo ? (repo as unknown as AuditStore) : null;
+  const auditLog = auditStore ? createAuditLog(auditStore, options.audit ? options.audit.onAudit : undefined) : null;
+  if (auditLog) {
+    app.use("*", async (c, next) => {
+      await next();
+      const action = (c as unknown as { get(k: string): unknown }).get("kvestoAction") as string | undefined;
+      if (!action || isRespondentRoute(c.req.method, c.req.path)) return;
+      try {
+        await auditLog.write({
+          at: new Date().toISOString(),
+          actor: actorOf(c) ?? "unknown",
+          action,
+          method: c.req.method,
+          path: c.req.path,
+          surveyId: c.req.path.match(/\/surveys\/([^/]+)/)?.[1]?.replace(/\.csv$/, "") ?? null,
+          status: c.res.status,
+          ip: clientAddress(c, options.clientAddress),
+          requestId: c.get("requestId"),
+        });
+      } catch (e) {
+        console.error("[kvesto] writing the audit log failed", e);
+      }
+    });
+  }
+
   // Rate limits, per address (and survey for the respondent budgets).
   const ipOf = (c: Context) => clientAddress(c, options.clientAddress);
   const limiter = options.rateLimit
@@ -628,6 +660,7 @@ export function createApp(options: CreateAppOptions) {
   const authorize = options.authorize ?? openAccess;
   const guard = (method: "GET" | "POST" | "PUT" | "DELETE", path: string, action: KvestoAction) =>
     app.on(method, path, async (c, next) => {
+      (c as unknown as { set(k: string, v: unknown): void }).set("kvestoAction", action);
       const verdict = await authorize(c, { action, ...(c.req.param("id") ? { surveyId: c.req.param("id") } : {}) });
       if (verdict instanceof Response) return verdict;
       if (verdict !== true) return c.json({ error: "Forbidden" }, 403);
@@ -656,6 +689,8 @@ export function createApp(options: CreateAppOptions) {
   guard("GET", "/surveys/:id/responses", "response:read");
   guard("GET", "/surveys/:id/responses.csv", "response:read");
   guard("GET", "/s/:id", "survey:read");
+  guard("GET", "/audit", "audit:read");
+  guard("GET", "/audit.csv", "audit:read");
   guard("POST", "/tokens", "token:manage");
   guard("GET", "/tokens", "token:manage");
   guard("DELETE", "/tokens/:tokenId", "token:manage");
@@ -667,6 +702,34 @@ export function createApp(options: CreateAppOptions) {
   guard("GET", "/surveys/:id/files/:fileId", "file:read");
 
   app.openapi(routes.health, (c) => c.json({ status: "ok" as const }, 200));
+
+  // ── The audit log ──
+  const NO_AUDIT = { error: "This repository has no audit log" };
+  app.openapi(routes.listAudit, async (c) => {
+    if (!auditStore) return c.json(NO_AUDIT, 501);
+    const { limit, ...filter } = c.req.valid("query");
+    const items = await auditStore.listAudit({ ...filter, limit });
+    return c.json({ items, ...(items.length === limit ? { nextAfter: items.at(-1)!.seq } : {}) }, 200);
+  });
+  app.openapi(routes.exportAudit, async (c) => {
+    if (!auditStore) return c.json(NO_AUDIT, 501);
+    const filter = c.req.valid("query");
+    const cols = ["seq", "at", "actor", "action", "method", "path", "surveyId", "status", "ip", "requestId", "hash"] as const;
+    const cell = (v: unknown) => {
+      const s = v === null || v === undefined ? "" : String(v);
+      // Defuse spreadsheet formulas, then quote.
+      const safe = /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+      return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
+    };
+    const lines = [cols.join(",")];
+    for (let after = 0; ; ) {
+      const page = await auditStore.listAudit({ ...filter, after, limit: 1000 });
+      for (const e of page) lines.push(cols.map((k) => cell(e[k])).join(","));
+      if (page.length < 1000) break;
+      after = page.at(-1)!.seq;
+    }
+    return c.body(`${lines.join("\r\n")}\r\n`, 200, { "content-type": "text/csv; charset=utf-8", "content-disposition": 'attachment; filename="audit.csv"' });
+  });
 
   // ── API tokens, when the repository stores them (the Drizzle one does) ──
   const tokenStore = "createToken" in repo ? (repo as unknown as TokenStore) : null;
@@ -1109,7 +1172,13 @@ export function createApp(options: CreateAppOptions) {
   }
 
   // `app.webhooks.flush()` sends what is due now (tests, graceful shutdown); `stop()` ends the retry timers.
-  return Object.assign(app, { webhooks: dispatcher, uploads, privacy });
+  const audit = {
+    /** Wait for entries being written. */
+    flush: () => auditLog?.flush() ?? Promise.resolve(),
+    /** Check the hash chain over the whole log. */
+    verify: () => auditLog?.verify() ?? Promise.resolve({ ok: true as const }),
+  };
+  return Object.assign(app, { webhooks: dispatcher, uploads, privacy, audit });
 }
 
 export type KvestoApp = ReturnType<typeof createApp>;

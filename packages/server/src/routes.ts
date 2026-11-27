@@ -213,7 +213,7 @@ export const exportResponses = createRoute({
 
 const ACTIONS = z.enum([
   "survey:list", "survey:read", "survey:write", "response:create", "response:read", "response:read-pii",
-  "response:delete", "file:upload", "file:read", "webhook:manage", "token:manage",
+  "response:delete", "file:upload", "file:read", "webhook:manage", "token:manage", "audit:read",
 ]);
 export const ApiToken = z
   .object({
@@ -268,6 +268,56 @@ export const revokeToken = createRoute({
   ...admin,
   request: { params: z.object({ tokenId: z.string().openapi({ param: { name: "tokenId", in: "path" } }) }) },
   responses: { 204: { description: "Revoked" }, 404: error("No such token"), 501: notStored, ...refused },
+});
+
+const AuditEntry = z
+  .object({
+    seq: z.number(),
+    at: z.string(),
+    actor: z.string(),
+    action: z.string(),
+    method: z.string(),
+    path: z.string(),
+    surveyId: z.string().nullable(),
+    status: z.number(),
+    ip: z.string(),
+    requestId: z.string(),
+    hash: z.string(),
+  })
+  .openapi("AuditEntry");
+const AuditQuery = z.object({
+  actor: z.string().max(200).optional(),
+  action: z.string().max(50).optional(),
+  surveyId: z.string().max(128).optional(),
+  from: z.string().max(40).optional(),
+  to: z.string().max(40).optional(),
+  /** Entries after this `seq` (from `nextAfter`). */
+  after: z.coerce.number().int().min(0).optional(),
+  limit: z.coerce.number().int().min(1).max(1000).default(100),
+});
+
+export const listAudit = createRoute({
+  method: "get",
+  path: "/audit",
+  tags: ["Audit"],
+  summary: "The audit log of admin requests, oldest first",
+  ...admin,
+  request: { query: AuditQuery },
+  responses: {
+    200: json(z.object({ items: z.array(AuditEntry), nextAfter: z.number().optional() }), "Entries"),
+    501: error("This repository has no audit log"),
+    ...refused,
+  },
+});
+
+export const exportAudit = createRoute({
+  method: "get",
+  path: "/audit.csv",
+  tags: ["Audit"],
+  summary: "The audit log as CSV (same filters)",
+  ...admin,
+  request: { query: AuditQuery.omit({ after: true, limit: true }) },
+  responses: { 200: { content: { "text/csv": { schema: z.string() } }, description: "CSV" }, 501: error("This repository has no audit log"), ...refused },
 });
 
 export const createWebhook = createRoute({

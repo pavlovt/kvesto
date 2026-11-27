@@ -1,4 +1,5 @@
 import type { Context } from "hono";
+import { setActor } from "./audit.js";
 
 /** Everything a client can do through the API. `authorize` is asked about each one. */
 export type KvestoAction =
@@ -14,7 +15,9 @@ export type KvestoAction =
   | "file:read"
   | "webhook:manage"
   /** Create, list and revoke API tokens. */
-  | "token:manage";
+  | "token:manage"
+  /** Read the audit log. */
+  | "audit:read";
 
 export const KVESTO_ACTIONS: readonly KvestoAction[] = [
   "survey:list",
@@ -28,6 +31,7 @@ export const KVESTO_ACTIONS: readonly KvestoAction[] = [
   "file:read",
   "webhook:manage",
   "token:manage",
+  "audit:read",
 ];
 
 export interface AuthorizeRequest {
@@ -84,7 +88,10 @@ export function apiKeyAuth(options: ApiKeyAuthOptions): Authorize {
     const match = /^Bearer\s+(.+)$/i.exec(header.trim());
     // Check every key so the time taken doesn't depend on which one matched.
     const ok = match ? keys.map((k) => safeEqual(k, match[1]!)).includes(true) : false;
-    if (ok) return true;
+    if (ok) {
+      setActor(c, "api-key");
+      return true;
+    }
     return c.json(
       { error: match ? "Invalid API key" : "An API key is required" },
       401,

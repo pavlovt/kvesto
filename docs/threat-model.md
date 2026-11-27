@@ -32,6 +32,9 @@ as untrusted, what it defends against, and what it leaves to the system around i
 | Personal data | Respondents | `pii` answers masked in lists, exports and webhooks without `response:read-pii`; anonymous surveys keep no id, identifying hidden fields or client meta; retention purge; respondents can download or delete their response with its token. |
 | Spreadsheet exports | Respondents' answers | Cells that a spreadsheet would run as formulas (`= + - @`, tab, CR) are defused in CSV and Excel exports. |
 
+Admin requests are recorded in a hash-chained audit log (`GET /audit`, `app.audit.verify()`), so changes to past
+entries are detectable; cutting off the newest entries is only detectable against a hash kept elsewhere.
+
 ## What the host is responsible for
 
 - Authentication and authorization of admins: Kvesto calls your `authorize` and `identifyRespondent` functions and

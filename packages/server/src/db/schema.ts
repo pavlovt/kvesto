@@ -55,6 +55,25 @@ export const files = sqliteTable(
   (t) => [index("files_survey_id_idx").on(t.surveyId)],
 );
 
+/** One entry per admin request, append-only and hash-chained. */
+export const auditLog = sqliteTable(
+  "audit_log",
+  {
+    seq: integer("seq").primaryKey(),
+    at: text("at").notNull(),
+    actor: text("actor").notNull(),
+    action: text("action").notNull(),
+    method: text("method").notNull(),
+    path: text("path").notNull(),
+    surveyId: text("survey_id"),
+    status: integer("status").notNull(),
+    ip: text("ip").notNull(),
+    requestId: text("request_id").notNull(),
+    hash: text("hash").notNull(),
+  },
+  (t) => [index("audit_log_at_idx").on(t.at)],
+);
+
 /** Scoped API tokens. Only a hash of each token's secret is kept. */
 export const apiTokens = sqliteTable("api_tokens", {
   id: text("id").primaryKey(),

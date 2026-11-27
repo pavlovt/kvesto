@@ -8,6 +8,7 @@ import { Hono, type Context } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { RESPONDENT_ACTIONS, type Authorize } from "./auth.js";
 import { ROLE_ACTIONS, type Role } from "./tokens.js";
+import { setActor } from "./audit.js";
 
 export interface OidcOptions {
   /** The provider's issuer URL; its `/.well-known/openid-configuration` is read. */
@@ -191,6 +192,7 @@ export function oidcLogin(options: OidcOptions): { routes: Hono; authorize: Auth
     const session = sessionOf(c, options.sessionSecret);
     if (!session) return c.json({ error: "Please sign in" }, 401);
     // The cookie goes along with any request to this server, so writes must come from a page allowed to make them.
+    setActor(c, `user:${session.sub}`);
     if (!sameOriginWrite(c, options.trustedOrigins)) return c.json({ error: "Cross-site request refused" }, 403);
     return ROLE_ACTIONS[session.role].includes(action);
   };
