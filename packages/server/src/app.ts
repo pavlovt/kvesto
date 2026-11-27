@@ -4,10 +4,17 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { Scalar } from "@scalar/hono-api-reference";
 import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
+import { HTTPException } from "hono/http-exception";
+import { requestId } from "hono/request-id";
+import { secureHeaders } from "hono/secure-headers";
 import {
+  answerLimitIssues,
   checkQuestionTypes,
   collectHidden,
   surveyAvailability,
+  surveyLimitIssues,
+  type AnswerLimits,
+  type SurveyLimits,
   textOf,
   type ClosedReason,
   responsesToCsv,
@@ -36,8 +43,21 @@ import { createWebhookDispatcher, newWebhookSecret, type WebhookEvent, type Webh
 
 export interface CreateAppOptions {
   repository: SurveyRepository;
-  /** CORS origin(s). Default "*" so the core's httpStorage works from any site. Pass false to disable. */
+  /**
+   * CORS origin(s) for the respondent routes (loading a survey, submitting and resuming responses, uploads, the
+   * hosted page). Default "*" so surveys can be embedded on any site. Pass false for no CORS.
+   */
   cors?: string | string[] | false;
+  /**
+   * CORS origin(s) for the admin routes (editing surveys, reading responses, exports, webhooks), such as your
+   * editor's and dashboard's origins. Default none: only pages on the server's own origin can call them.
+   */
+  adminCors?: string | string[] | false;
+  /**
+   * Lower the size limits: survey documents (`SURVEY_LIMITS`), answers (`ANSWER_LIMITS`), and request bodies in
+   * bytes (default 5 MB for surveys, 1 MB for responses and other JSON).
+   */
+  limits?: { survey?: Partial<SurveyLimits>; answers?: Partial<AnswerLimits>; surveyBytes?: number; jsonBytes?: number };
   /** Serve /openapi.json and the /docs UI. Default true. */
   docs?: boolean;
   /** Largest accepted upload in bytes, whatever a question allows. Default 10 MB. */
@@ -85,6 +105,27 @@ const CLOSED: Record<ClosedReason, [401 | 403 | 409, string]> = {
   "sign-in": [401, "This survey needs a signed-in respondent"],
 };
 const BROWSER_ID = /^[A-Za-z0-9_-]{16,64}$/;
+
+/** The routes respondents use, which any site may call (`cors`). Everything else is an admin route (`adminCors`). */
+const PUBLIC_ROUTES: [string, RegExp][] = [
+  ["GET", /\/health$/],
+  ["GET", /\/surveys\/[^/]+$/],
+  ["POST", /\/surveys\/[^/]+\/responses$/],
+  ["PATCH", /\/surveys\/[^/]+\/responses\/[^/]+$/],
+  ["POST", /\/surveys\/[^/]+\/responses\/[^/]+\/resume$/],
+  ["POST", /\/surveys\/[^/]+\/files$/],
+  ["GET", /\/surveys\/[^/]+\/files\/[^/]+$/],
+  ["GET", /\/s\/[^/]+(?:\/[^/]+)?$/],
+];
+export function isRespondentRoute(method: string, path: string): boolean {
+  const m = method === "HEAD" ? "GET" : method;
+  return PUBLIC_ROUTES.some(([pm, re]) => pm === m && re.test(path));
+}
+const originIn = (list: string | string[] | false, origin: string): string | null => {
+  if (list === false) return null;
+  const all = Array.isArray(list) ? list : [list];
+  return all.includes("*") ? "*" : all.includes(origin) ? origin : null;
+};
 
 /** The response's meta without `browserId`, which is only used for the hash. */
 function withoutBrowserId<T extends { meta?: Record<string, unknown> }>(input: T): T {
@@ -258,12 +299,75 @@ export function createApp(options: CreateAppOptions) {
     },
   });
 
-  if (options.cors !== false) app.use("*", cors({ origin: options.cors ?? "*" }));
-
+  // Every response carries a request id, and errors are logged under it instead of being shown.
+  app.use("*", requestId());
   app.onError((err, c) => {
-    console.error(err);
-    return c.json({ error: "Internal server error" }, 500);
+    if (err instanceof HTTPException) return err.getResponse();
+    const id = c.get("requestId");
+    console.error(`[kvesto] request ${id} failed:`, err);
+    return c.json({ error: "Internal server error", requestId: id }, 500);
   });
+
+  // Secure headers on everything. The hosted page may be framed by any site (its CSP says so); nothing else may.
+  app.use("*", secureHeaders({ xFrameOptions: false, crossOriginResourcePolicy: false, strictTransportSecurity: false, referrerPolicy: "strict-origin-when-cross-origin" }));
+  app.use("*", async (c, next) => {
+    await next();
+    const h = c.res.headers;
+    const path = c.req.path;
+    h.set("Cross-Origin-Resource-Policy", isRespondentRoute(c.req.method, path) ? "cross-origin" : "same-origin");
+    if (!/\/s\/[^/]+(?:\/[^/]+)?$/.test(path)) h.set("X-Frame-Options", "DENY");
+    // The API reference page loads its UI from a CDN, so it keeps its own defaults.
+    if (!h.has("content-security-policy") && !/\/docs$/.test(path)) h.set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'");
+    const https = new URL(c.req.url).protocol === "https:" || c.req.header("x-forwarded-proto") === "https";
+    if (https) h.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  });
+
+  // CORS by route: respondent routes for any site, admin routes only for the origins you list.
+  const publicCors = options.cors ?? "*";
+  const adminCors = options.adminCors ?? false;
+  if (adminCors !== false && originIn(adminCors, "") === "*") {
+    console.warn(
+      "[kvesto] adminCors allows any origin: any website can call the admin API from a browser that has a key. " +
+        "List your editor's and dashboard's origins instead.",
+    );
+  }
+  if (publicCors !== false || adminCors !== false) {
+    app.use(
+      "*",
+      cors({
+        origin: (origin, c) => {
+          // A preflight asks for the method it is about to use.
+          const method = c.req.method === "OPTIONS" ? (c.req.header("access-control-request-method") ?? "GET") : c.req.method;
+          return originIn(isRespondentRoute(method, c.req.path) ? publicCors : adminCors, origin);
+        },
+      }),
+    );
+  }
+
+  // Request body sizes, and document limits checked on the raw JSON before it is parsed (so hostile nesting
+  // can't exhaust the stack in validation).
+  const tooLarge = (bytes: number) =>
+    bodyLimit({ maxSize: bytes, onError: (c) => c.json({ error: `Request bodies are limited to ${formatBytes(bytes)}` }, 413) });
+  const surveyBytes = options.limits?.surveyBytes ?? 5 * 1024 * 1024;
+  const jsonBytes = options.limits?.jsonBytes ?? 1024 * 1024;
+  const checkSurveyLimits = async (c: Context, next: () => Promise<void>) => {
+    const body: unknown = await c.req.json().catch(() => undefined);
+    const issues = body === undefined ? [] : surveyLimitIssues(body, options.limits?.survey);
+    if (issues.length) return c.json({ error: "The survey is too large", issues }, 400);
+    await next();
+  };
+  const checkAnswerLimits = async (c: Context, next: () => Promise<void>) => {
+    const body: unknown = await c.req.json().catch(() => undefined);
+    const answers = body && typeof body === "object" ? (body as { answers?: unknown }).answers : undefined;
+    const issues = answers === undefined ? [] : answerLimitIssues(answers, options.limits?.answers).map((i) => ({ ...i, path: ["answers", ...i.path] }));
+    if (issues.length) return c.json({ error: "The answers are too large", issues }, 400);
+    await next();
+  };
+  app.on("POST", "/surveys", tooLarge(surveyBytes), checkSurveyLimits);
+  app.on("PUT", "/surveys/:id", tooLarge(surveyBytes), checkSurveyLimits);
+  app.on("POST", "/surveys/:id/responses", tooLarge(jsonBytes), checkAnswerLimits);
+  app.on("PATCH", "/surveys/:id/responses/:responseId", tooLarge(jsonBytes), checkAnswerLimits);
+  app.on("POST", ["/surveys/:id/responses/:responseId/resume", "/surveys/:id/responses/:responseId/release", "/surveys/:id/webhooks"], tooLarge(jsonBytes));
 
   if (!options.authorize) {
     console.warn(

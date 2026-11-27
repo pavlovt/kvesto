@@ -1,4 +1,4 @@
-export { createApp, type CreateAppOptions, type KvestoApp } from "./app.js";
+export { createApp, isRespondentRoute, type CreateAppOptions, type KvestoApp } from "./app.js";
 export { drizzleRepository, type StoredFile, type SurveyRepository } from "./repository.js";
 export { createSqliteDb, type KvestoDb } from "./db/sqlite.js";
 export { guardOutboundUrl, isPrivateAddress, OutboundUrlError, type OutboundOptions } from "./outbound.js";

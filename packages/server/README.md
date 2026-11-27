@@ -13,7 +13,21 @@ npm install @kvesto/server
 npx kvesto-server                              # http://localhost:3000, docs at /docs
 KVESTO_DB=./data/kvesto.db PORT=8080 npx kvesto-server
 KVESTO_API_KEYS=key1,key2 npx kvesto-server     # require a key for admin actions
+KVESTO_ADMIN_ORIGINS=https://admin.example.com npx kvesto-server  # sites that may call the admin API
 ```
+
+## Safe defaults
+
+- Secure headers on every response (`nosniff`, a `default-src 'none'` CSP on the API, `X-Frame-Options: DENY`
+  except for the hosted survey page, HSTS over HTTPS), and a request id (`X-Request-Id`). Errors are logged under
+  that id; the reply has only the id, never the error.
+- CORS by route: the respondent routes (load a survey, submit, resume, upload, the hosted page) allow any origin
+  (`cors`, default `"*"`); the admin routes allow only `adminCors` (default none, so only the server's own origin).
+- Size limits: request bodies (5 MB for surveys, 1 MB for other JSON), and `SURVEY_LIMITS` / `ANSWER_LIMITS` from
+  `@kvesto/schema` (pages, elements, panel depth, choices, string length, condition depth, list and repeat sizes),
+  checked on the raw JSON before it is parsed. Lower them with `createApp({ limits })`.
+- Outbound requests (webhooks) go only to public HTTPS addresses, checked again after DNS resolution, with no
+  redirects followed.
 
 ## Mount it in your own Hono app
 

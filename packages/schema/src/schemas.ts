@@ -4,6 +4,7 @@
  * Every survey document carries a `schemaVersion`. Bump `SURVEY_SCHEMA_VERSION`
  * when the format changes in a breaking way and add a migration in `migrate.ts`.
  */
+import { answerLimitIssues, surveyLimitIssues } from "./limits.js";
 import { z } from "zod";
 import { isQuestion, walkElements } from "./elements.js";
 import { textPlaceholders } from "./placeholders.js";
@@ -848,6 +849,7 @@ export const SurveySchema = z
     translationsToReview: z.record(z.string().regex(LOCALE_PATTERN), z.array(z.string())).optional(),
   })
   .superRefine((survey, ctx) => {
+    for (const issue of surveyLimitIssues(survey)) ctx.addIssue({ code: "custom", ...issue });
     // Questions seen so far, in survey order (conditions may only look back), with the repeating panel they are in.
     const seen = new Map<string, { question: Question; repeat: string | undefined }>();
     const repeats = new Set<string>();
@@ -1181,7 +1183,9 @@ export const AnswerValueSchema = z.union([
   z.null(),
 ]);
 
-export const AnswersSchema = z.record(z.string(), AnswerValueSchema);
+export const AnswersSchema = z.record(z.string(), AnswerValueSchema).superRefine((answers, ctx) => {
+  for (const issue of answerLimitIssues(answers)) ctx.addIssue({ code: "custom", ...issue });
+});
 
 /** Whether a response was submitted, or saved along the way so the respondent can come back. */
 export const ResponseStatusSchema = z.enum(["partial", "complete"]);

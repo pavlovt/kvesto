@@ -612,6 +612,9 @@ KVESTO_DB=./data/kvesto.db PORT=8080 pnpm --filter @kvesto/server start
 | GET | `/openapi.json`, `/docs` | OpenAPI 3.1 document and Scalar API reference |
 
 Responses are validated against the survey with the same rules the core uses, including conditional logic.
+The server sends secure headers, allows any origin only on the respondent routes (`adminCors` lists the sites that
+may call the admin routes), and refuses oversized documents and answers; see the
+[server README](packages/server/README.md#safe-defaults).
 Uploads are checked against the question's `accept` and `maxSize` and a server-wide cap (`createApp({ maxFileSize })`,
 10 MB by default), stored in the database, and served back as downloads unless they are images, PDF or plain text.
 To mount the API inside an existing

@@ -5,3 +5,4 @@ export { surveyJsonSchema, SURVEY_JSON_SCHEMA_URL } from "./json-schema.js";
 export * from "./expression.js";
 export * from "./placeholders.js";
 export * from "./i18n.js";
+export * from "./limits.js";
