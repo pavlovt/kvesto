@@ -4,8 +4,8 @@ This is the plan for growing Kvesto from today's skeleton into a full survey too
 Each milestone is meant to be one focused change on `main`: it builds, type-checks and passes tests on its own, and
 can ship in a patch or minor release without waiting for the next one.
 
-> **Where we are now:** M28 (export) is the latest finished milestone. Next up:
-> M29 (webhooks). The [Status](#status) table at the bottom lists every milestone.
+> **Where we are now:** M29 (webhooks) is the latest finished milestone. Next up:
+> M30 (hosted embeds). The [Status](#status) table at the bottom lists every milestone.
 
 Milestones marked **★** are ideas that go beyond the original feature list. They come from looking at how other
 form and survey tools solve the same problems (conversational forms, headless form renderers, open source
@@ -1191,6 +1191,7 @@ Decided:
 | M26 · Framework wrappers | Done (unreleased). Angular is left for when someone asks |
 | M27 · Dashboard table view and filters | Done (unreleased) |
 | M28 · Export | Done (unreleased). A generated PDF is left for later; printing gives a PDF through the browser |
-| M29 – M79 | Planned |
+| M29 · Webhooks | Done (unreleased). Includes M34's outbound URL guard, brought forward so webhooks never ship without it |
+| M30 – M79 | Planned |
 
 Update this table as milestones land, with the release they shipped in.

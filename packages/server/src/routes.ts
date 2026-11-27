@@ -5,6 +5,11 @@ import {
   FileParams,
   FileUpload,
   ExportQuery,
+  CreatedWebhook,
+  DeliveryList,
+  WebhookInput,
+  WebhookList,
+  WebhookParams,
   Pagination,
   ResponseInput,
   ResponseList,
@@ -194,6 +199,54 @@ export const exportResponses = createRoute({
     200: { content: { "text/csv": { schema: z.string() } }, description: "CSV (UTF-8 with a byte order mark)" },
     404: error("Survey not found"),
   },
+});
+
+export const createWebhook = createRoute({
+  method: "post",
+  path: "/surveys/{id}/webhooks",
+  ...admin,
+  tags: ["Webhooks"],
+  summary: "Add a webhook",
+  description:
+    "Each event is POSTed as JSON with `Kvesto-Event`, `Kvesto-Delivery` and `Kvesto-Signature: t=…,v1=…` " +
+    "(HMAC-SHA256 of `t.body` with the secret), and retried with growing delays. The URL must be public https.",
+  request: { params: SurveyIdParam, body: { ...json(WebhookInput, "Where and what to send"), required: true } },
+  responses: {
+    ...refused,
+    201: json(CreatedWebhook, "The webhook, with its secret (shown only this once)"),
+    400: error("The URL can't be used"),
+    404: error("Survey not found"),
+  },
+});
+
+export const listWebhooks = createRoute({
+  method: "get",
+  path: "/surveys/{id}/webhooks",
+  ...admin,
+  tags: ["Webhooks"],
+  summary: "List webhooks",
+  request: { params: SurveyIdParam },
+  responses: { ...refused, 200: json(WebhookList, "Webhooks (without secrets)"), 404: error("Survey not found") },
+});
+
+export const deleteWebhook = createRoute({
+  method: "delete",
+  path: "/surveys/{id}/webhooks/{webhookId}",
+  ...admin,
+  tags: ["Webhooks"],
+  summary: "Remove a webhook",
+  request: { params: WebhookParams },
+  responses: { ...refused, 204: { description: "Removed" }, 404: error("Webhook not found") },
+});
+
+export const listDeliveries = createRoute({
+  method: "get",
+  path: "/surveys/{id}/webhooks/{webhookId}/deliveries",
+  ...admin,
+  tags: ["Webhooks"],
+  summary: "A webhook's delivery log, newest first",
+  request: { params: WebhookParams },
+  responses: { ...refused, 200: json(DeliveryList, "Deliveries"), 404: error("Webhook not found") },
 });
 
 export const uploadFile = createRoute({

@@ -20,11 +20,14 @@ import {
   type ExpressionFunctions,
   type QuestionTypeDefinition,
   type Answers,
+  type SurveyResponse,
   type Survey,
 } from "@kvesto/core";
 import { openAccess, type Authorize, type KvestoAction } from "./auth.js";
 import type { SurveyRepository } from "./repository.js";
 import * as routes from "./routes.js";
+import { guardOutboundUrl } from "./outbound.js";
+import { createWebhookDispatcher, newWebhookSecret, type WebhookEvent, type WebhookOptions } from "./webhooks.js";
 
 export interface CreateAppOptions {
   repository: SurveyRepository;
@@ -49,6 +52,13 @@ export interface CreateAppOptions {
    * surveys using them can be saved and their answers are validated with the type's `validate`.
    */
   questionTypes?: QuestionTypeDefinition[];
+  /** How webhooks are sent (fetch, retry delays, allowed URLs). */
+  webhooks?: WebhookOptions;
+  /**
+   * Called after a response is stored: "response.completed" when it is submitted, "response.updated" when a
+   * partial one is saved. For in-process integrations; errors are logged, never shown to the respondent.
+   */
+  onResponse?: (event: WebhookEvent, response: SurveyResponse, survey: Survey) => void | Promise<void>;
 }
 
 /** The declared hidden fields' values in a response's `meta.hidden`: strings only, cut to 500 characters. */
@@ -146,6 +156,23 @@ const INLINE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/web
  */
 export function createApp(options: CreateAppOptions) {
   const repo = options.repository;
+  const dispatcher = createWebhookDispatcher(repo, options.webhooks);
+  /** Tell webhooks and `onResponse` about a stored response, without delaying the reply. */
+  const notify = (survey: Survey, response: SurveyResponse) => {
+    const event: WebhookEvent = response.status === "partial" ? "response.updated" : "response.completed";
+    void (async () => {
+      try {
+        await options.onResponse?.(event, response, survey);
+      } catch (e) {
+        console.error("[kvesto] onResponse failed", e);
+      }
+      try {
+        await dispatcher.emit(survey, event, response);
+      } catch (e) {
+        console.error("[kvesto] queuing webhooks failed", e);
+      }
+    })();
+  };
   for (const type of options.questionTypes ?? []) registerQuestionType(type);
   const maxFileSize = options.maxFileSize ?? 10 * 1024 * 1024;
   const app = new OpenAPIHono({
@@ -199,6 +226,10 @@ export function createApp(options: CreateAppOptions) {
   guard("POST", "/surveys/:id/responses/:responseId/release", "survey:write");
   guard("GET", "/surveys/:id/responses", "response:read");
   guard("GET", "/surveys/:id/responses.csv", "response:read");
+  guard("POST", "/surveys/:id/webhooks", "webhook:manage");
+  guard("GET", "/surveys/:id/webhooks", "webhook:manage");
+  guard("DELETE", "/surveys/:id/webhooks/:webhookId", "webhook:manage");
+  guard("GET", "/surveys/:id/webhooks/:webhookId/deliveries", "webhook:manage");
   guard("POST", "/surveys/:id/files", "file:upload");
   guard("GET", "/surveys/:id/files/:fileId", "file:read");
 
@@ -286,9 +317,14 @@ export function createApp(options: CreateAppOptions) {
     // Answers to questions hidden by conditional logic are dropped, as the core runtime does.
     const { status: _status, ...given } = input;
     const rest = withQuiz(survey, withHidden(given, hidden), checked.answers, hidden, partial);
-    if (!partial) return c.json(await repo.saveResponse(id, { ...rest, answers: checked.answers }), 201);
+    if (!partial) {
+      const saved = await repo.saveResponse(id, { ...rest, answers: checked.answers });
+      notify(survey, saved);
+      return c.json(saved, 201);
+    }
     const secret = randomBytes(32).toString("base64url");
     const saved = await repo.savePartialResponse(id, { ...rest, answers: checked.answers }, hashSecret(secret));
+    notify(survey, saved);
     return c.json({ ...saved, resumeToken: `${saved.id}.${secret}` }, 201);
   });
 
@@ -329,6 +365,7 @@ export function createApp(options: CreateAppOptions) {
         partial,
       ),
     );
+    notify(survey, updated);
     return c.json(updated, 200);
   });
 
@@ -433,6 +470,39 @@ export function createApp(options: CreateAppOptions) {
     });
   });
 
+  app.openapi(routes.createWebhook, async (c) => {
+    const { id } = c.req.valid("param");
+    const { url, events } = c.req.valid("json");
+    if (!(await repo.surveyExists(id))) return c.json({ error: "Survey not found" }, 404);
+    try {
+      await guardOutboundUrl(url, options.webhooks?.outbound);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return c.json({ error: "The URL can't be used", issues: [{ path: ["url"], message }] }, 400);
+    }
+    const { secret, ...hook } = await repo.createWebhook({ surveyId: id, url, events, secret: newWebhookSecret() });
+    return c.json({ id: hook.id, url: hook.url, events: hook.events, createdAt: hook.createdAt, secret }, 201);
+  });
+
+  app.openapi(routes.listWebhooks, async (c) => {
+    const { id } = c.req.valid("param");
+    if (!(await repo.surveyExists(id))) return c.json({ error: "Survey not found" }, 404);
+    const items = (await repo.listWebhooks(id)).map(({ secret: _s, surveyId: _id, ...h }) => h);
+    return c.json({ items }, 200);
+  });
+
+  app.openapi(routes.deleteWebhook, async (c) => {
+    const { id, webhookId } = c.req.valid("param");
+    return (await repo.deleteWebhook(id, webhookId)) ? c.body(null, 204) : c.json({ error: "Webhook not found" }, 404);
+  });
+
+  app.openapi(routes.listDeliveries, async (c) => {
+    const { id, webhookId } = c.req.valid("param");
+    if (!(await repo.listWebhooks(id)).some((h) => h.id === webhookId)) return c.json({ error: "Webhook not found" }, 404);
+    const items = (await repo.listDeliveries(webhookId, 100)).map(({ payload: _p, webhookId: _w, ...d }) => d);
+    return c.json({ items }, 200);
+  });
+
   app.openapi(routes.listResponses, async (c) => {
     const { id } = c.req.valid("param");
     const { limit, offset, status } = c.req.valid("query");
@@ -466,7 +536,8 @@ export function createApp(options: CreateAppOptions) {
     app.get("/docs", Scalar({ url: "openapi.json", pageTitle: "Kvesto API" }));
   }
 
-  return app;
+  // `app.webhooks.flush()` sends what is due now (tests, graceful shutdown); `stop()` ends the retry timers.
+  return Object.assign(app, { webhooks: dispatcher });
 }
 
 export type KvestoApp = ReturnType<typeof createApp>;

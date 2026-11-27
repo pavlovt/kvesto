@@ -5,7 +5,7 @@ import { textOf, type ResponseInput, type Survey, type SurveyResponse } from "@k
 
 /** The survey's title in its default locale, for listings. */
 const titleOf = (survey: Survey) => textOf(survey.title, survey.defaultLocale, survey.defaultLocale);
-import { files, responses, surveys } from "./db/schema.js";
+import { files, responses, surveys, webhookDeliveries, webhooks } from "./db/schema.js";
 import type { KvestoDb } from "./db/sqlite.js";
 
 /**
@@ -42,6 +42,30 @@ export interface ResponseCursor {
   id: string;
 }
 
+/** A webhook as stored (the secret is only shown when it is created). */
+export interface StoredWebhook {
+  id: string;
+  surveyId: string;
+  url: string;
+  events: string[];
+  secret: string;
+  createdAt: string;
+}
+
+export interface StoredDelivery {
+  id: string;
+  webhookId: string;
+  event: string;
+  payload: string;
+  status: "pending" | "succeeded" | "failed";
+  attempts: number;
+  lastStatusCode: number | null;
+  lastError: string | null;
+  nextAttemptAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface SurveyRepository extends Required<Omit<SurveyStorage, "uploadFile" | "saveProgress" | "loadProgress">> {
   surveyExists(id: string): Promise<boolean>;
   createSurvey(survey: Survey): Promise<Survey>;
@@ -56,6 +80,15 @@ export interface SurveyRepository extends Required<Omit<SurveyStorage, "uploadFi
   loadResponse(surveyId: string, responseId: string): Promise<{ response: SurveyResponse; tokenHash: string | null } | null>;
   /** Replace a response's answers and meta, and set its status. */
   updateResponse(surveyId: string, responseId: string, input: ResponseInput): Promise<SurveyResponse>;
+  createWebhook(webhook: Omit<StoredWebhook, "id" | "createdAt">): Promise<StoredWebhook>;
+  listWebhooks(surveyId: string): Promise<StoredWebhook[]>;
+  deleteWebhook(surveyId: string, webhookId: string): Promise<boolean>;
+  createDelivery(delivery: Pick<StoredDelivery, "webhookId" | "event" | "payload">): Promise<StoredDelivery>;
+  updateDelivery(id: string, patch: Partial<Omit<StoredDelivery, "id" | "webhookId">>): Promise<void>;
+  /** A webhook's deliveries, newest first. */
+  listDeliveries(webhookId: string, limit: number): Promise<StoredDelivery[]>;
+  /** Deliveries still waiting, due at or before `now` (an ISO time), oldest first. */
+  dueDeliveries(now: string, limit: number): Promise<(StoredDelivery & { url: string; secret: string })[]>;
   /** Store an uploaded file's bytes (limits are already checked by the API). */
   saveFile(file: Omit<StoredFile, "id" | "createdAt">, data: Uint8Array): Promise<StoredFile>;
   loadFile(surveyId: string, fileId: string): Promise<{ file: StoredFile; data: Uint8Array } | null>;
@@ -198,6 +231,57 @@ export function drizzleRepository(db: KvestoDb): SurveyRepository {
     async listResponses(surveyId) {
       const rows = await db.select().from(responses).where(eq(responses.surveyId, surveyId)).all();
       return rows.map(toResponse);
+    },
+    async createWebhook(input) {
+      const row = { ...input, id: randomUUID(), createdAt: now() };
+      await db.insert(webhooks).values(row).run();
+      return row;
+    },
+    async listWebhooks(surveyId) {
+      return db.select().from(webhooks).where(eq(webhooks.surveyId, surveyId)).orderBy(webhooks.createdAt).all();
+    },
+    async deleteWebhook(surveyId, webhookId) {
+      const r = await db.delete(webhooks).where(and(eq(webhooks.surveyId, surveyId), eq(webhooks.id, webhookId))).run();
+      return r.changes > 0;
+    },
+    async createDelivery(input) {
+      const ts = now();
+      const row = {
+        ...input,
+        id: randomUUID(),
+        status: "pending" as const,
+        attempts: 0,
+        lastStatusCode: null,
+        lastError: null,
+        nextAttemptAt: ts,
+        createdAt: ts,
+        updatedAt: ts,
+      };
+      await db.insert(webhookDeliveries).values(row).run();
+      return row;
+    },
+    async updateDelivery(id, patch) {
+      await db.update(webhookDeliveries).set({ ...patch, updatedAt: now() }).where(eq(webhookDeliveries.id, id)).run();
+    },
+    async listDeliveries(webhookId, limit) {
+      return db
+        .select()
+        .from(webhookDeliveries)
+        .where(eq(webhookDeliveries.webhookId, webhookId))
+        .orderBy(desc(webhookDeliveries.createdAt))
+        .limit(limit)
+        .all();
+    },
+    async dueDeliveries(at, limit) {
+      const rows = await db
+        .select({ d: webhookDeliveries, url: webhooks.url, secret: webhooks.secret })
+        .from(webhookDeliveries)
+        .innerJoin(webhooks, eq(webhooks.id, webhookDeliveries.webhookId))
+        .where(and(eq(webhookDeliveries.status, "pending"), lte(webhookDeliveries.nextAttemptAt, at)))
+        .orderBy(webhookDeliveries.nextAttemptAt)
+        .limit(limit)
+        .all();
+      return rows.map((r) => ({ ...r.d, url: r.url, secret: r.secret }));
     },
     async saveFile(input, data) {
       const file: StoredFile = { ...input, id: randomUUID(), createdAt: now() };

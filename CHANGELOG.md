@@ -50,6 +50,9 @@ All packages (`kvesto`, `@kvesto/schema`, `core`, `server`, `editor`, `dashboard
 - Export (M28): `responsesToCsv` in core, `GET /surveys/{id}/responses.csv`, a new `@kvesto/export` package with a
   dependency-free Excel writer, CSV, Excel and Print buttons and a printable single response in the dashboard, and
   print styles for surveys. Cells that would run as spreadsheet formulas are defused.
+- Webhooks (M29): per-survey webhooks for `response.completed` and `response.updated`, signed with HMAC-SHA256
+  (`verifyWebhook`), retried with backoff, with a delivery log, an `onResponse` hook, the `webhook:manage` action,
+  and `guardOutboundUrl` against server-side request forgery. Database migration `0003_webhooks`.
 
 ## 0.2.0
 

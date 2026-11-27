@@ -75,6 +75,33 @@ The actions are `survey:list`, `survey:read`, `survey:write` (create, replace, d
 
 Point the browser side at it with `httpStorage({ baseUrl })` from [`@kvesto/core`](https://www.npmjs.com/package/@kvesto/core).
 
+## Webhooks
+
+`POST /surveys/{id}/webhooks` with `{ "url": "https://…", "events": ["response.completed", "response.updated"] }`
+returns the webhook with a `secret`, shown only that once. Each event is POSTed as JSON:
+
+```json
+{ "event": "response.completed", "surveyId": "feedback", "sentAt": "…", "response": { "id": "…", "answers": { } } }
+```
+
+with `Kvesto-Event`, `Kvesto-Delivery` (an id, the same on retries) and `Kvesto-Signature: t=<unix seconds>,v1=<hex>`,
+an HMAC-SHA256 of `t.body` with the secret. Check it on the receiving side against the raw body:
+
+```ts
+import { verifyWebhook } from "@kvesto/server"; // or the same few lines in any language:
+// hmac = HMAC_SHA256(secret, `${t}.${rawBody}`); compare in constant time; refuse an old t (replays)
+if (!verifyWebhook(secret, req.headers["kvesto-signature"], rawBody)) return res.status(401).end();
+```
+
+A delivery that doesn't get a 2xx is retried after 10 s, 1 min, 5 min, 30 min and 2 h, then marked failed;
+`GET /surveys/{id}/webhooks/{webhookId}/deliveries` shows the log. Managing webhooks is the `webhook:manage` action
+(admin-only with `apiKeyAuth`). For in-process integrations, `createApp({ onResponse: (event, response, survey) => … })`.
+
+**Outbound requests are guarded.** The server only calls public https URLs: private, loopback, link-local and cloud
+metadata addresses are refused after DNS resolution, checked again before every delivery (so a name that starts
+pointing inside your network is caught), and redirects are never followed. For local development pass
+`webhooks: { outbound: { allowHttp: true, allowPrivate: true } }`. The same check is exported as `guardOutboundUrl`.
+
 ## License
 
 MIT

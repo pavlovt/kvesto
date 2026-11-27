@@ -447,6 +447,9 @@ describe("documentation", () => {
         "/surveys/{id}/responses/{responseId}/release",
         "/surveys/{id}/files",
         "/surveys/{id}/files/{fileId}",
+        "/surveys/{id}/webhooks",
+        "/surveys/{id}/webhooks/{webhookId}",
+        "/surveys/{id}/webhooks/{webhookId}/deliveries",
       ].sort(),
     );
     expect(Object.keys(doc.components.schemas)).toEqual(

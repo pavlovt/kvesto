@@ -8,7 +8,8 @@ export type KvestoAction =
   | "response:create"
   | "response:read"
   | "file:upload"
-  | "file:read";
+  | "file:read"
+  | "webhook:manage";
 
 export const KVESTO_ACTIONS: readonly KvestoAction[] = [
   "survey:list",
@@ -18,6 +19,7 @@ export const KVESTO_ACTIONS: readonly KvestoAction[] = [
   "response:read",
   "file:upload",
   "file:read",
+  "webhook:manage",
 ];
 
 export interface AuthorizeRequest {

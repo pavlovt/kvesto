@@ -546,6 +546,8 @@ KVESTO_DB=./data/kvesto.db PORT=8080 pnpm --filter @kvesto/server start
 | GET, POST | `/surveys` | List / create surveys |
 | GET, PUT, DELETE | `/surveys/{id}` | Read / create-or-replace / delete a survey |
 | GET, POST | `/surveys/{id}/responses` | List / submit responses. Lists take `limit` with `cursor` (from `nextCursor`) or `offset`, and filter with `status`, `from`, `to`, `answer=q:value` and `hidden=name:value`. |
+| GET | `/surveys/{id}/responses.csv` | Export responses as CSV (same filters; `values=true` for choice values) |
+| GET, POST, DELETE | `/surveys/{id}/webhooks` … | Webhooks, signed and retried, with a delivery log (see the server README) |
 | POST | `/surveys/{id}/files` | Upload a file for a file question (multipart: `questionId`, `file`) |
 | GET | `/surveys/{id}/files/{fileId}` | Download an uploaded file |
 | GET | `/openapi.json`, `/docs` | OpenAPI 3.1 document and Scalar API reference |

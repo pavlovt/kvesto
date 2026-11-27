@@ -105,6 +105,45 @@ export const ExportQuery = Pagination.omit({ limit: true, offset: true, cursor: 
     .openapi({ param: { name: "values", in: "query", description: "true for choice values instead of labels" } }),
 });
 
+export const WebhookInput = z
+  .object({
+    url: z.string().url().max(2000).openapi({ example: "https://example.com/hooks/kvesto" }),
+    events: z.array(z.enum(["response.completed", "response.updated"])).min(1).default(["response.completed"]),
+  })
+  .openapi("WebhookInput");
+
+export const Webhook = z
+  .object({ id: z.string(), url: z.string(), events: z.array(z.string()), createdAt: z.string() })
+  .openapi("Webhook");
+
+export const CreatedWebhook = Webhook.extend({
+  /** The signing secret. Shown only now: store it where the receiver can check signatures. */
+  secret: z.string(),
+}).openapi("CreatedWebhook");
+
+export const WebhookList = z.object({ items: z.array(Webhook) }).openapi("WebhookList");
+
+export const Delivery = z
+  .object({
+    id: z.string(),
+    event: z.string(),
+    status: z.enum(["pending", "succeeded", "failed"]),
+    attempts: z.number().int(),
+    lastStatusCode: z.number().int().nullable(),
+    lastError: z.string().nullable(),
+    nextAttemptAt: z.string().nullable(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  })
+  .openapi("WebhookDelivery");
+
+export const DeliveryList = z.object({ items: z.array(Delivery) }).openapi("WebhookDeliveryList");
+
+export const WebhookParams = z.object({
+  id: z.string().openapi({ param: { name: "id", in: "path" } }),
+  webhookId: z.string().openapi({ param: { name: "webhookId", in: "path" } }),
+});
+
 export const ResponseParams = z.object({
   id: z.string().openapi({ param: { name: "id", in: "path" }, example: "customer-feedback" }),
   responseId: z.string().openapi({ param: { name: "responseId", in: "path" } }),

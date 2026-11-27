@@ -1,6 +1,15 @@
 export { createApp, type CreateAppOptions, type KvestoApp } from "./app.js";
 export { drizzleRepository, type StoredFile, type SurveyRepository } from "./repository.js";
 export { createSqliteDb, type KvestoDb } from "./db/sqlite.js";
+export { guardOutboundUrl, isPrivateAddress, OutboundUrlError, type OutboundOptions } from "./outbound.js";
+export {
+  signWebhook,
+  verifyWebhook,
+  WEBHOOK_EVENTS,
+  type WebhookDispatcher,
+  type WebhookEvent,
+  type WebhookOptions,
+} from "./webhooks.js";
 export * as tables from "./db/schema.js";
 export {
   apiKeyAuth,

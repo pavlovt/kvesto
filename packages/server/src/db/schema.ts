@@ -47,3 +47,43 @@ export const files = sqliteTable(
   },
   (t) => [index("files_survey_id_idx").on(t.surveyId)],
 );
+
+/** Where to send events about a survey's responses. */
+export const webhooks = sqliteTable(
+  "webhooks",
+  {
+    id: text("id").primaryKey(),
+    surveyId: text("survey_id")
+      .notNull()
+      .references(() => surveys.id, { onDelete: "cascade" }),
+    url: text("url").notNull(),
+    /** The events to send, e.g. ["response.completed"]. */
+    events: text("events", { mode: "json" }).$type<string[]>().notNull(),
+    /** Signs each delivery (HMAC-SHA256). Shown once, when the webhook is created. */
+    secret: text("secret").notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [index("webhooks_survey_id_idx").on(t.surveyId)],
+);
+
+/** Each attempt to send an event, for the delivery log and retries. */
+export const webhookDeliveries = sqliteTable(
+  "webhook_deliveries",
+  {
+    id: text("id").primaryKey(),
+    webhookId: text("webhook_id")
+      .notNull()
+      .references(() => webhooks.id, { onDelete: "cascade" }),
+    event: text("event").notNull(),
+    /** The exact body sent, so retries send the same bytes and signature input. */
+    payload: text("payload").notNull(),
+    status: text("status", { enum: ["pending", "succeeded", "failed"] }).notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    lastStatusCode: integer("last_status_code"),
+    lastError: text("last_error"),
+    nextAttemptAt: text("next_attempt_at"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (t) => [index("webhook_deliveries_webhook_id_idx").on(t.webhookId, t.createdAt)],
+);
