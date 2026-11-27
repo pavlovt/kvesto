@@ -4,6 +4,7 @@
  * Every survey document carries a `schemaVersion`. Bump `SURVEY_SCHEMA_VERSION`
  * when the format changes in a breaking way and add a migration in `migrate.ts`.
  */
+import { regexRisk } from "./regex.js";
 import { answerLimitIssues, surveyLimitIssues } from "./limits.js";
 import { z } from "zod";
 import { isQuestion, walkElements } from "./elements.js";
@@ -128,7 +129,14 @@ export const MAX_PATTERN_LENGTH = 500;
 /** Text must match a regular expression (the whole answer, so `^`/`$` are implied). For text and comment. */
 export const PatternValidatorSchema = z.object({
   type: z.literal("pattern"),
-  pattern: z.string().min(1).max(MAX_PATTERN_LENGTH),
+  pattern: z
+    .string()
+    .min(1)
+    .max(MAX_PATTERN_LENGTH)
+    .superRefine((p, ctx) => {
+      const risk = regexRisk(p);
+      if (risk) ctx.addIssue({ code: "custom", message: risk });
+    }),
   /** Regular expression flags: any of `i`, `m`, `s`, `u`. */
   flags: z.string().regex(/^[imsu]*$/, "Use only the flags i, m, s and u").optional(),
   ...validatorMessage,

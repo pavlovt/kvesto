@@ -4,8 +4,8 @@ This is the plan for growing Kvesto from today's skeleton into a full survey too
 Each milestone is meant to be one focused change on `main`: it builds, type-checks and passes tests on its own, and
 can ship in a patch or minor release without waiting for the next one.
 
-> **Where we are now:** M40 (audit log) is the latest finished milestone. Next up:
-> M41 (security test suite). The [Status](#status) table at the bottom lists every milestone.
+> **Where we are now:** M41 (security test suite) is the latest finished milestone. Next up:
+> M42 (randomization). The [Status](#status) table at the bottom lists every milestone.
 
 Milestones marked **★** are ideas that go beyond the original feature list. They come from looking at how other
 form and survey tools solve the same problems (conversational forms, headless form renderers, open source
@@ -1203,6 +1203,7 @@ Decided:
 | M38 · Encryption of answers | Done (unreleased). At-rest encryption and rotation only; the end-to-end mode is not built |
 | M39 · Users, roles, scoped tokens and SSO | Done (unreleased). Core parts: no user or workspace tables, no SAML adapter, no token UI in the editor or dashboard |
 | M40 · Audit log | Done (unreleased). No audit view in the dashboard yet |
-| M41 – M79 | Planned |
+| M41 · Security test suite | Done (unreleased). The ZAP scan runs in CI only (not checked locally); fails only on FAIL-level findings |
+| M42 – M79 | Planned |
 
 Update this table as milestones land, with the release they shipped in.

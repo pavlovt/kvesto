@@ -6,3 +6,4 @@ export * from "./expression.js";
 export * from "./placeholders.js";
 export * from "./i18n.js";
 export * from "./limits.js";
+export { regexRisk } from "./regex.js";

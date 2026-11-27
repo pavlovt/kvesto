@@ -66,6 +66,7 @@ All packages (`kvesto`, `@kvesto/schema`, `core`, `server`, `editor`, `dashboard
 - Encryption at rest: `drizzleRepository(db, { encryption })` stores `pii` answers and uploaded files encrypted with AES-256-GCM under key ids, with rotation through `repository.reencrypt()` / `kvesto-server reencrypt` and keys from `KVESTO_ENCRYPTION_KEYS` (M38).
 - Roles and scoped tokens: `ROLE_ACTIONS` (owner, editor, analyst, viewer), hashed and expiring API tokens with optional survey scopes (`POST/GET /tokens`, `DELETE /tokens/{id}`, `tokenAuth`), an OpenID Connect sign-in (`oidcLogin`) with signed session cookies and CSRF checks on cookie writes, and `anyAuthorize` to combine them (M39). New `token:manage` action.
 - Audit log: one hash-chained entry per admin request (actor, action, survey, status, address, request id), `GET /audit` and `GET /audit.csv` (`audit:read`), an `onAudit` hook, `setActor` for custom `authorize` functions, and `app.audit.verify()` to detect tampering (M40).
+- Security test suite: fast-check fuzzing of the survey schema, expressions and condition logic with fixed time budgets, an XSS corpus through every render path, an OWASP ZAP baseline scan in CI, and a release checklist in `SECURITY.md`. Pattern validators now refuse nested repetition and backreferences (`regexRisk`), which could take exponential time (M41).
 
 ## 0.2.0
 

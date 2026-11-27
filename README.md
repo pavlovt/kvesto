@@ -334,7 +334,7 @@ server; the first failure is shown, with the rule's optional `message` instead o
 
 | Validator | Applies to | Fields |
 | --- | --- | --- |
-| `pattern` | text, comment | `pattern` (must match the whole answer), `flags` (`i`, `m`, `s`, `u`) |
+| `pattern` | text, comment | `pattern` (must match the whole answer; nested repetition such as `(a+)+` and backreferences are refused, as they can take forever), `flags` (`i`, `m`, `s`, `u`) |
 | `length` | text, comment | `min`, `max` characters |
 | `range` | rating, text with `inputType` number or date | `min`, `max` (numbers, or `YYYY-MM-DD` for dates) |
 | `count` | multiple-choice, file, matrix | `min`, `max` options picked, files attached, or rows answered |

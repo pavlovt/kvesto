@@ -1,0 +1,58 @@
+name: Security tests
+
+# Deeper fuzzing than the normal test run, and an OWASP ZAP baseline scan of a running server.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "41 3 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      # Each property stops at its own time budget, so this stays within the job's limit.
+      - run: pnpm --filter @kvesto/core exec vitest run test/security
+        env:
+          KVESTO_FUZZ_RUNS: "5000"
+
+  zap-baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Start the demo server with a survey
+        run: |
+          KVESTO_DB=/tmp/zap.db KVESTO_API_KEYS=zap-key KVESTO_RATE_LIMIT=off node packages/server/dist/serve.js > /tmp/server.log 2>&1 &
+          for i in $(seq 1 30); do curl -fs http://localhost:3000/health && break; sleep 1; done
+          curl -fs -X POST http://localhost:3000/surveys -H "authorization: Bearer zap-key" -H "content-type: application/json" \
+            -d '{"schemaVersion":1,"id":"demo","title":"Demo","pages":[{"id":"p","elements":[{"id":"name","type":"text","title":"Name"}]}]}'
+      - name: ZAP baseline scan
+        uses: zaproxy/action-baseline@de8ad967d3548d44ef623df22cf95c3b0baf8b25 # v0.15.0
+        with:
+          target: http://localhost:3000/s/demo
+          # Fail on FAIL-level findings; warnings are reported in the job summary.
+          cmd_options: "-I"
+          allow_issue_writing: false
+      - if: failure()
+        run: cat /tmp/server.log
