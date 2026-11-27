@@ -258,3 +258,20 @@ describe("content blocks in the editor", () => {
     ui.editor.destroy();
   });
 });
+
+describe("input question types in the editor", () => {
+  it("adds a slider and an image choice and edits their settings", () => {
+    const ui = setup(false);
+    const add = (label: string) => {
+      ui.$$<HTMLButtonElement>(".kv-editor-palette button").find((b) => b.textContent?.trim() === label)!.click();
+      flushSync();
+    };
+    add("slider");
+    ui.type(field(ui, "Step"), "5");
+    expect(ui.last().pages[0]!.elements.at(-1)).toMatchObject({ type: "slider", min: 0, max: 100, step: 5 });
+    add("image-choice");
+    ui.type(ui.$<HTMLInputElement>('.kv-props [aria-label="option 1 image URL"]'), "/a.png");
+    expect((ui.last().pages[0]!.elements.at(-1) as { choices: { imageUrl: string }[] }).choices[0]!.imageUrl).toBe("/a.png");
+    ui.editor.destroy();
+  });
+});

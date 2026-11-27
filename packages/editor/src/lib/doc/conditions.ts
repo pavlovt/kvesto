@@ -118,7 +118,12 @@ export function operatorsFor(source: ConditionSource): ConditionOperator[] {
       return ["eq", "neq", "in", "notIn", ...presence];
     case "multiple-choice":
     case "ranking":
+    case "tags":
       return ["contains", "notContains", "in", "notIn", ...presence];
+    case "image-choice":
+      return q.multiple ? ["contains", "notContains", "in", "notIn", ...presence] : ["eq", "neq", "in", "notIn", ...presence];
+    case "slider":
+      return ["eq", "neq", ...ORDER, ...presence];
     case "rating":
       return ["eq", "neq", ...ORDER, "in", "notIn", ...presence];
     case "boolean":
@@ -145,7 +150,11 @@ export function valueKind(source: ConditionSource, op: ConditionOperator): Value
     case "multiple-choice":
     case "ranking":
     case "matrix":
+    case "tags":
+    case "image-choice":
       return many ? "choices" : "choice";
+    case "slider":
+      return many ? "numbers" : "number";
     case "boolean":
       return "boolean";
     case "rating":

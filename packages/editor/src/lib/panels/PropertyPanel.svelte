@@ -327,7 +327,51 @@
       }
       if "choices" in el && el.type !== "grid" {
         h4 'Choices'
-        ChoiceList items={el.choices as Choice[]} min={el.type === "ranking" ? 2 : 1} onchange={(items) => set("choices", items)}
+        ChoiceList items={el.choices as Choice[]} min={el.type === "ranking" ? 2 : 1} images={el.type === "image-choice"} onchange={(items) => set("choices", items)}
+      }
+      if el.type === "dropdown" {
+        label.kv-props-check {
+          input type=checkbox checked={Boolean(el.searchable)} onchange={(e) => set("searchable", e.currentTarget.checked || undefined)}
+          span 'Searchable'
+        }
+      }
+      if el.type === "image-choice" {
+        label.kv-props-check {
+          input type=checkbox checked={Boolean(el.multiple)} onchange={(e) => set("multiple", e.currentTarget.checked || undefined)}
+          span 'Several pictures'
+        }
+      }
+      if el.type === "tags" {
+        label.kv-props-check {
+          input type=checkbox checked={Boolean(el.allowCustom)} onchange={(e) => set("allowCustom", e.currentTarget.checked || undefined)}
+          span 'Allow own entries'
+        }
+        label {
+          span 'Most entries'
+          input type=number min=1 value={el.maxTags ?? ""} oninput={(e) => set("maxTags", num(e.currentTarget.value))}
+        }
+      }
+      if el.type === "multi-text" {
+        h4 'Fields'
+        ChoiceList items={el.items as Choice[]} noun="field" onchange={(items) => set("items", items)}
+      }
+      if el.type === "slider" {
+        label {
+          span 'Min'
+          input type=number value={el.min ?? 0} oninput={(e) => set("min", num(e.currentTarget.value))}
+        }
+        label {
+          span 'Max'
+          input type=number value={el.max ?? 100} oninput={(e) => set("max", num(e.currentTarget.value))}
+        }
+        label {
+          span 'Step'
+          input type=number min=0 value={el.step ?? 1} oninput={(e) => set("step", num(e.currentTarget.value))}
+        }
+        label {
+          span 'Unit'
+          input value={el.unit ?? ""} placeholder="%" oninput={(e) => set("unit", e.currentTarget.value)}
+        }
       }
       if el.type === "matrix" || el.type === "grid" {
         h4 'Rows'

@@ -4,8 +4,8 @@ This is the plan for growing Kvesto from today's skeleton into a full survey too
 Each milestone is meant to be one focused change on `main`: it builds, type-checks and passes tests on its own, and
 can ship in a patch or minor release without waiting for the next one.
 
-> **Where we are now:** M16 (content blocks) is the latest finished milestone. Next up:
-> M17 (input question types). The [Status](#status) table at the bottom lists every milestone.
+> **Where we are now:** M17 (input question types) is the latest finished milestone. Next up:
+> M18 (signature). The [Status](#status) table at the bottom lists every milestone.
 
 Milestones marked **★** are ideas that go beyond the original feature list. They come from looking at how other
 form and survey tools solve the same problems (conversational forms, headless form renderers, open source
@@ -1176,6 +1176,7 @@ Decided:
 | M14 · Triggers | Done (unreleased) |
 | M15 · Question type registry (custom question types) | Done (unreleased). Not yet: the built-in types still have their own code paths instead of being registered the same way |
 | M16 · Content blocks | Done (unreleased) |
-| M17 – M79 | Planned |
+| M17 · Input question types | Done (unreleased). Built in to the schema rather than through the registry, so they get JSON Schema and server checks like the other built-ins |
+| M18 – M79 | Planned |
 
 Update this table as milestones land, with the release they shipped in.

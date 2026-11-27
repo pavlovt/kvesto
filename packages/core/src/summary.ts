@@ -201,6 +201,33 @@ export function summarizeResponses(survey: Survey, responses: SurveyResponse[], 
           summary.files = all.slice(-sampleSize).reverse();
           break;
         }
+        case "multi-text":
+          summary.samples = values
+            .slice(-sampleSize)
+            .reverse()
+            .map((v) =>
+              question.items
+                .map((item) => [item.label, (v as Record<string, unknown>)?.[item.value]] as const)
+                .filter(([, x]) => typeof x === "string" && x !== "")
+                .map(([label, x]) => `${label}: ${x}`)
+                .join("; "),
+            );
+          break;
+        case "slider": {
+          const nums = values.filter((v): v is number => typeof v === "number");
+          if (nums.length) summary.average = nums.reduce((a, b) => a + b, 0) / nums.length;
+          break;
+        }
+        case "tags": {
+          summary.counts = tally(question.choices, (v) => (Array.isArray(v) ? v.map(String) : []));
+          const known = new Set(question.choices.map((c) => c.value));
+          const custom = values.flatMap((v) => (Array.isArray(v) ? v.map(String).filter((x) => !known.has(x)) : []));
+          if (custom.length) summary.samples = custom.slice(-sampleSize).reverse();
+          break;
+        }
+        case "image-choice":
+          summary.counts = tally(question.choices, (v) => (Array.isArray(v) ? v.map(String) : [String(v)]));
+          break;
         default: {
           // A registered custom type: its own summary, or the latest answers.
           const def = questionType(question.type);

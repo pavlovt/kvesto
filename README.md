@@ -129,6 +129,13 @@ React, Vue or Svelte instead of using the bundled renderer.
 | `grid` | `{ row: { column: value } }` | `rows` × `columns`, each column with a `cellType` (text, number, dropdown with `choices`, boolean), optional `required` and `validators` |
 | `ranking` | choice values, best first | |
 | `file` | `[{ name, type, size, url }]` | `accept`, `maxSize` (bytes), `maxFiles` (default 1) |
+| `computed` | worked-out value | read-only; `expr`, `decimals`, `prefix`, `suffix` (see Calculated values) |
+| `multi-text` | `{ field: text }` | `items` of `{ value, label, inputType?, required? }`, one input each |
+| `slider` | number | `min` (default 0), `max` (default 100), `step` (default 1), `unit`; unanswered until moved |
+| `tags` | values (and typed entries) | searchable `choices`, `allowCustom`, `maxTags` |
+| `image-choice` | choice value(s) | `choices` with `imageUrl`; `multiple` for several |
+
+`dropdown` also takes `searchable: true`, which lets respondents type to find a choice in a long list.
 
 #### Panels
 

@@ -47,6 +47,10 @@ const defaultLabels = {
   /** Title of each item of a repeating panel; `{n}` is the item number. */
   itemTitle: "Item {n}",
   uploading: "Uploading…",
+  /** A slider nobody has moved yet. */
+  notSet: "Not set",
+  /** The list of picked tags, for screen readers. */
+  selected: "Selected",
 };
 
 export interface RenderedSurvey {
@@ -55,6 +59,8 @@ export interface RenderedSurvey {
 }
 
 type El = HTMLElement;
+
+const isRecordValue = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 type Labels = typeof defaultLabels;
 
 function h<K extends keyof HTMLElementTagNameMap>(
@@ -401,6 +407,10 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
         break;
       }
       case "dropdown": {
+        if (q.searchable) {
+          refresh = renderSearchable(q, qid, wrap, b);
+          break;
+        }
         const select = h(doc, "select", { id: qid, "aria-labelledby": `${qid}-title` }, h(doc, "option", { value: "" }, ""));
         for (const c of q.choices) select.append(h(doc, "option", { value: c.value }, txt(c.label, b.item)));
         select.value = typeof value === "string" ? value : "";
@@ -479,6 +489,87 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
       case "file":
         refresh = renderFile(q, qid, wrap);
         break;
+      case "multi-text": {
+        const inputs: [HTMLInputElement, string][] = [];
+        const box = h(doc, "div", { class: "kv-multi-text" });
+        for (const item of q.items) {
+          const input = h(doc, "input", { id: `${qid}-${item.value}`, type: item.inputType ?? "text", "data-item": item.value });
+          const cur = isRecordValue(value) ? value[item.value] : undefined;
+          input.value = typeof cur === "string" ? cur : "";
+          input.addEventListener("input", () => {
+            const prev = b.get(model.snapshot);
+            const next: Record<string, string> = { ...(isRecordValue(prev) ? (prev as Record<string, string>) : {}) };
+            if (input.value === "") delete next[item.value];
+            else next[item.value] = input.value;
+            set(Object.keys(next).length ? next : undefined);
+          });
+          inputs.push([input, item.value]);
+          box.append(h(doc, "label", { class: "kv-multi-text-item", for: input.id }, h(doc, "span", {}, txt(item.label, b.item)), input));
+        }
+        wrap.append(box);
+        refresh = (s) => {
+          const v = b.get(s);
+          for (const [input, key] of inputs) {
+            const want = isRecordValue(v) && typeof v[key] === "string" ? (v[key] as string) : "";
+            if (input.value !== want && doc.activeElement !== input) input.value = want;
+          }
+        };
+        break;
+      }
+      case "slider": {
+        const input = h(doc, "input", {
+          id: qid,
+          type: "range",
+          min: String(q.min),
+          max: String(q.max),
+          step: String(q.step),
+          "aria-labelledby": `${qid}-title`,
+        });
+        const out = h(doc, "output", { class: "kv-slider-value", for: qid });
+        input.addEventListener("input", () => set(Number(input.value)));
+        wrap.append(h(doc, "div", { class: "kv-slider" }, input, out));
+        refresh = (s) => {
+          const v = b.get(s);
+          const answered = typeof v === "number";
+          if (answered && doc.activeElement !== input) input.value = String(v);
+          // An untouched slider has no answer yet: say so instead of showing the thumb's starting value.
+          input.classList.toggle("kv-slider--unset", !answered);
+          input.setAttribute("aria-valuetext", answered ? `${v}${q.unit ? ` ${q.unit}` : ""}` : labels.notSet);
+          out.textContent = answered ? `${v}${q.unit ? ` ${q.unit}` : ""}` : labels.notSet;
+        };
+        break;
+      }
+      case "tags":
+        refresh = renderTags(q, qid, wrap, b);
+        break;
+      case "image-choice": {
+        const multi = Boolean(q.multiple);
+        const inputs: [HTMLInputElement, string][] = [];
+        const grid = h(doc, "div", { class: "kv-image-choices" });
+        for (const c of q.choices) {
+          const input = h(doc, "input", { type: multi ? "checkbox" : "radio", name: qid, value: c.value });
+          input.addEventListener("change", () => {
+            if (!multi) return set(c.value);
+            const v = current();
+            const picked = new Set(Array.isArray(v) ? (v as string[]) : []);
+            if (input.checked) picked.add(c.value);
+            else picked.delete(c.value);
+            const next = q.choices.map((x) => x.value).filter((x) => picked.has(x));
+            set(next.length ? next : undefined);
+          });
+          inputs.push([input, c.value]);
+          const img = h(doc, "img", { src: c.imageUrl, alt: "", loading: "lazy" });
+          grid.append(h(doc, "label", { class: "kv-image-choice" }, input, img, h(doc, "span", {}, txt(c.label, b.item))));
+        }
+        wrap.append(grid);
+        refresh = (s) => {
+          const v = b.get(s);
+          for (const [input, choice] of inputs) {
+            input.checked = multi ? Array.isArray(v) && (v as string[]).includes(choice) : v === choice;
+          }
+        };
+        break;
+      }
       default: {
         // A registered custom type draws itself; without a renderer it gets a plain text input.
         const def = questionType(q.type);
@@ -509,6 +600,74 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
         err.hidden = !s.errors[b.key];
         refresh(s);
       },
+    };
+  }
+
+  /** A dropdown you can type into: an input with a list of the choice labels. */
+  function renderSearchable(q: Extract<Question, { type: "dropdown" }>, qid: string, wrap: El, b: Binding) {
+    const list = h(doc, "datalist", { id: `${qid}-list` });
+    for (const c of q.choices) list.append(h(doc, "option", { value: c.label }));
+    const input = h(doc, "input", { id: qid, type: "text", list: list.id, autocomplete: "off", "aria-labelledby": `${qid}-title` });
+    const labelOf = (v: unknown) => q.choices.find((c) => c.value === v)?.label ?? "";
+    input.value = labelOf(b.get(model.snapshot));
+    // Only a label that matches a choice sets the answer; anything else clears it.
+    input.addEventListener("input", () => {
+      const match = q.choices.find((c) => c.label.toLowerCase() === input.value.trim().toLowerCase());
+      b.set(match ? match.value : undefined);
+    });
+    wrap.append(input, list);
+    return (s: SurveyState) => {
+      const want = labelOf(b.get(s));
+      if (doc.activeElement !== input && input.value !== want) input.value = want;
+    };
+  }
+
+  /** Tags: chips for the picked entries, and an input that suggests choices (and takes new entries with `allowCustom`). */
+  function renderTags(q: Extract<Question, { type: "tags" }>, qid: string, wrap: El, b: Binding) {
+    const chips = h(doc, "ul", { class: "kv-tags", "aria-label": labels.selected });
+    const list = h(doc, "datalist", { id: `${qid}-list` });
+    for (const c of q.choices) list.append(h(doc, "option", { value: c.label }));
+    const input = h(doc, "input", { id: qid, type: "text", list: list.id, autocomplete: "off", "aria-labelledby": `${qid}-title` });
+    const picked = (): string[] => {
+      const v = b.get(model.snapshot);
+      return Array.isArray(v) ? (v as string[]) : [];
+    };
+    const add = () => {
+      const text = input.value.trim();
+      if (!text) return;
+      const match = q.choices.find((c) => c.label.toLowerCase() === text.toLowerCase() || c.value === text);
+      const value = match ? match.value : q.allowCustom ? text : undefined;
+      if (value === undefined) return;
+      input.value = "";
+      if (!picked().includes(value)) b.set([...picked(), value]);
+    };
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === ",") {
+        e.preventDefault();
+        add();
+      }
+    });
+    // Picking a suggestion from the list adds it straight away.
+    input.addEventListener("change", add);
+    wrap.append(chips, input, list);
+    let rendered = "";
+    return (s: SurveyState) => {
+      const v = b.get(s);
+      const items = Array.isArray(v) ? (v as string[]) : [];
+      const key = items.join("\u0000");
+      if (key === rendered) return;
+      rendered = key;
+      chips.replaceChildren(
+        ...items.map((value) => {
+          const label = q.choices.find((c) => c.value === value)?.label ?? value;
+          const remove = h(doc, "button", { type: "button", class: "kv-tag-remove", "aria-label": `${labels.removeFile}: ${label}` }, "×");
+          remove.addEventListener("click", () => {
+            const next = picked().filter((x) => x !== value);
+            b.set(next.length ? next : undefined);
+          });
+          return h(doc, "li", { class: "kv-tag" }, label, remove);
+        }),
+      );
     };
   }
 

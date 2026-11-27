@@ -17,6 +17,10 @@ export const QUESTION_TYPES: readonly QuestionType[] = [
   "ranking",
   "file",
   "computed",
+  "multi-text",
+  "slider",
+  "tags",
+  "image-choice",
 ];
 
 export const PALETTE: readonly { kind: PaletteKind; label: string }[] = [
@@ -105,6 +109,28 @@ export function newElement(kind: PaletteKind, survey: SurveyInput): ElementInput
       return { ...base, type: kind, maxFiles: 1, maxSize: 5 * 1024 * 1024 };
     case "computed":
       return { ...base, title: `Result ${n}`, type: kind, expr: "0" };
+    case "multi-text":
+      return {
+        ...base,
+        type: kind,
+        items: [
+          { value: "first", label: "First name" },
+          { value: "last", label: "Last name" },
+        ],
+      };
+    case "slider":
+      return { ...base, type: kind, min: 0, max: 100, step: 1 };
+    case "tags":
+      return { ...base, type: kind, choices: twoChoices(), allowCustom: true };
+    case "image-choice":
+      return {
+        ...base,
+        type: kind,
+        choices: [
+          { value: "a", label: "Option A", imageUrl: "https://example.com/a.png" },
+          { value: "b", label: "Option B", imageUrl: "https://example.com/b.png" },
+        ],
+      };
     default:
       return { ...base, type: kind };
   }

@@ -221,6 +221,18 @@ export const ChoiceSchema = z.object({
   label: RequiredDisplayTextSchema,
 });
 
+/** An image source: an http(s) URL, a relative path, or a `data:image/…` URL. Never `javascript:` and the like. */
+export const ImageSourceSchema = z
+  .string()
+  .min(1)
+  .max(2_000_000)
+  .refine((src) => /^(https?:\/\/|data:image\/[a-z+.-]+[;,]|\/|\.{1,2}\/|[A-Za-z0-9_-][^:]*$)/i.test(src), {
+    message: "Use an http(s) URL, a relative path or a data:image URL",
+  });
+
+/** A choice shown as a picture. The label is the picture's text alternative too. */
+export const ImageChoiceSchema = ChoiceSchema.extend({ imageUrl: ImageSourceSchema });
+
 export const TextQuestionSchema = z.object({
   ...questionBase,
   type: z.literal("text"),
@@ -251,6 +263,54 @@ export const DropdownQuestionSchema = z.object({
   ...questionBase,
   type: z.literal("dropdown"),
   choices: z.array(ChoiceSchema).min(1),
+  /** Type to filter the choices, for long lists. */
+  searchable: z.boolean().optional(),
+});
+
+/** One input of a multi-text question. */
+export const MultiTextItemSchema = z.object({
+  value: z.string().min(1),
+  label: RequiredDisplayTextSchema,
+  inputType: z.enum(["text", "number", "email", "tel", "url", "date"]).optional(),
+  /** This input must be filled in whenever the question is answered (or required). */
+  required: z.boolean().optional(),
+});
+
+/** Several labelled inputs in one question. Answer: `{ [itemValue]: string }`. */
+export const MultiTextQuestionSchema = z.object({
+  ...questionBase,
+  type: z.literal("multi-text"),
+  items: z.array(MultiTextItemSchema).min(1),
+});
+
+/** A number picked on a slider. Answer: a number. */
+export const SliderQuestionSchema = z.object({
+  ...questionBase,
+  type: z.literal("slider"),
+  min: z.number().default(0),
+  max: z.number().default(100),
+  step: z.number().positive().default(1),
+  /** Shown after the value, such as "%" or "km". */
+  unit: DisplayTextSchema.optional(),
+});
+
+/** Pick several from a searchable list, optionally adding your own. Answer: choice values (and typed entries). */
+export const TagsQuestionSchema = z.object({
+  ...questionBase,
+  type: z.literal("tags"),
+  choices: z.array(ChoiceSchema).min(1),
+  /** Let respondents add entries that aren't in the list. */
+  allowCustom: z.boolean().optional(),
+  /** Most entries. */
+  maxTags: z.number().int().positive().optional(),
+});
+
+/** Choose pictures. Answer: a choice value, or several with `multiple`. */
+export const ImageChoiceQuestionSchema = z.object({
+  ...questionBase,
+  type: z.literal("image-choice"),
+  choices: z.array(ImageChoiceSchema).min(1),
+  multiple: z.boolean().optional(),
 });
 
 export const RatingQuestionSchema = z.object({
@@ -395,6 +455,10 @@ export const BuiltinQuestionSchema = z.discriminatedUnion("type", [
   FileQuestionSchema,
   GridQuestionSchema,
   ComputedQuestionSchema,
+  MultiTextQuestionSchema,
+  SliderQuestionSchema,
+  TagsQuestionSchema,
+  ImageChoiceQuestionSchema,
 ]);
 
 export const QuestionSchema = z.union([BuiltinQuestionSchema, CustomQuestionSchema]);
@@ -464,15 +528,6 @@ export const ContentElementSchema = z.object({
   markdown: DisplayTextSchema.max(MAX_CONTENT_LENGTH).optional(),
   html: z.string().max(MAX_CONTENT_LENGTH).optional(),
 });
-
-/** An image source: an http(s) URL, a relative path, or a `data:image/…` URL. Never `javascript:` and the like. */
-const ImageSourceSchema = z
-  .string()
-  .min(1)
-  .max(2_000_000)
-  .refine((src) => /^(https?:\/\/|data:image\/[a-z+.-]+[;,]|\/|\.{1,2}\/|[A-Za-z0-9_-][^:]*$)/i.test(src), {
-    message: "Use an http(s) URL, a relative path or a data:image URL",
-  });
 
 /** An image. `alt` describes it for screen readers; use `""` only for a purely decorative image. */
 export const ImageElementSchema = z.object({
@@ -573,12 +628,16 @@ export function validatorProblem(question: Question, validator: Validator): stri
     case "url":
       return question.type === "text" ? null : `${validator.type} only applies to text questions`;
     case "count":
-      return question.type === "multiple-choice" || question.type === "file" || question.type === "matrix"
+      return question.type === "multiple-choice" ||
+        question.type === "file" ||
+        question.type === "matrix" ||
+        question.type === "tags" ||
+        (question.type === "image-choice" && question.multiple)
         ? null
-        : "count only applies to multiple-choice, file and matrix questions";
+        : "count only applies to multiple-choice, tags, image-choice with multiple, file and matrix questions";
     case "range": {
       const kind =
-        question.type === "rating" || (question.type === "text" && question.inputType === "number")
+        question.type === "rating" || question.type === "slider" || (question.type === "text" && question.inputType === "number")
           ? "number"
           : question.type === "text" && question.inputType === "date"
             ? "string"
@@ -855,8 +914,11 @@ export const SurveySchema = z
           });
         });
       }
-      if (q.type === "rating" && q.min > q.max) {
+      if ((q.type === "rating" || q.type === "slider") && q.min > q.max) {
         ctx.addIssue({ code: "custom", path: [...path, "max"], message: "max must be at least min" });
+      }
+      if (q.type === "multi-text" && !uniqueValues(q.items)) {
+        ctx.addIssue({ code: "custom", path: [...path, "items"], message: "Item values must be unique" });
       }
       // Known from here on: the question's own expression rules may use its answer.
       seen.set(q.id, { question: q, repeat });

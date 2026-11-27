@@ -18,6 +18,8 @@ All six packages (`kvesto`, `@kvesto/schema`, `core`, `server`, `editor`, `dashb
   and editor defaults; `x-*` types in surveys, `createApp({ questionTypes })` on the server.
 - Content blocks and images (M16): `content` elements with a safe Markdown subset and answer placeholders (raw
   `html` only through a host `sanitizeHtml`), and `image` elements, both with `visibleIf` and in the editor palette.
+- Input question types (M17): `multi-text`, `slider`, `tags` (searchable, optional own entries) and `image-choice`,
+  plus `searchable` dropdowns, with validation, rendering, summaries and editor support.
 
 ## 0.2.0
 

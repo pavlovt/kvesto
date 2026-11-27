@@ -15,7 +15,7 @@ import {
 import { isEmptyAnswer, repeatItems, resolveLogic, type LogicOptions, type SurveyLogic } from "./logic.js";
 import { runValidators, type CustomValidators } from "./validators.js";
 import { questionType } from "./question-types.js";
-import { compileExpression, evaluateNode, isEmptyValue, surveyVariables, toAnswerValue, type EvaluateOptions } from "./expression.js";
+import { compileExpression, evaluateNode, isEmptyValue, surveyVariables, toAnswerValue, toNumber, type EvaluateOptions } from "./expression.js";
 
 export interface ValidateOptions {
   /** Override `question.required`, e.g. when a `requiredIf` condition holds. */
@@ -205,6 +205,45 @@ function checkShape(question: Question, value: AnswerValue, required: boolean, o
         value.every((v) => typeof v === "string" && expected.includes(v)) &&
         new Set(value as string[]).size === value.length;
       return ok ? null : "Rank every item exactly once.";
+    }
+    case "multi-text": {
+      if (!isRecord(value)) return "Expected one answer per field.";
+      const items = new Map(question.items.map((i) => [i.value, i]));
+      for (const [key, v] of Object.entries(value)) {
+        const item = items.get(key);
+        if (!item) return `Unknown field "${key}".`;
+        if (typeof v !== "string") return `${item.label}: expected text.`;
+        if (v === "") continue;
+        if (item.inputType === "number" && toNumber(v) === null) return `${item.label}: enter a number.`;
+        if (item.inputType === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return `${item.label}: enter a valid email address.`;
+      }
+      for (const item of question.items) {
+        if (item.required && isEmptyAnswer(value[item.value] as AnswerValue | undefined)) return `${item.label} is required.`;
+      }
+      return null;
+    }
+    case "slider": {
+      const { min, max, step } = question;
+      const onStep = typeof value === "number" && Math.abs((value - min) / step - Math.round((value - min) / step)) < 1e-9;
+      return typeof value === "number" && Number.isFinite(value) && value >= min && value <= max && onStep
+        ? null
+        : `Choose a value from ${min} to ${max}${step !== 1 ? ` in steps of ${step}` : ""}.`;
+    }
+    case "tags": {
+      if (!Array.isArray(value) || !value.every((v) => typeof v === "string" && v.trim() !== "")) return "Expected a list of entries.";
+      const known = new Set(question.choices.map((c) => c.value));
+      for (const v of value as string[]) {
+        if (!known.has(v) && !question.allowCustom) return "Choose from the list.";
+        if (!known.has(v) && v.length > 200) return "Entries are limited to 200 characters.";
+      }
+      if (new Set(value as string[]).size !== value.length) return "Each entry can be added once.";
+      if (question.maxTags !== undefined && value.length > question.maxTags) return `Add at most ${question.maxTags} entries.`;
+      return null;
+    }
+    case "image-choice": {
+      const known = (v: unknown) => typeof v === "string" && question.choices.some((c) => c.value === v);
+      if (question.multiple) return Array.isArray(value) && value.every(known) ? null : "Choose from the pictures.";
+      return known(value) ? null : "Choose one of the pictures.";
     }
     default: {
       // A registered custom type (`x-…`).

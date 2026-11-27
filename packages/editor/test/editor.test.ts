@@ -34,7 +34,7 @@ describe("mountEditor", () => {
     const survey = { schemaVersion: 1 as const, id: "s", title: "S", pages: [{ id: "p", elements: [] }] };
     mountEditor(target, { survey, preview: false, view: "json", onchange: (s) => changes.push(s) });
     flushSync();
-    expect(target.querySelectorAll(".kv-editor-palette button")).toHaveLength(16); // one per question type, panel, repeating panel, text block and image
+    expect(target.querySelectorAll(".kv-editor-palette button")).toHaveLength(20); // one per question type, panel, repeating panel, text block and image
     expect(target.querySelector(".kv-editor-primary")).toBeNull(); // no Save without storage
 
     const rating = [...target.querySelectorAll("button")].find((b) => b.textContent === "rating")!;
