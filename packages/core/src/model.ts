@@ -1,4 +1,5 @@
 import {
+  type Element,
   allQuestions,
   fileRules,
   isQuestion,
@@ -77,11 +78,27 @@ export interface SurveyState {
   isLastPage: boolean;
   /** Ids of file questions with an upload in progress. */
   uploading: string[];
+  /**
+   * The steps of the one-question-at-a-time layout: every visible top-level
+   * element (question, panel or block) of every visible page, in order.
+   */
+  steps: Step[];
+  /** Index of the current step in `steps` (the first one on the current page until `nextStep` moves on). */
+  stepIndex: number;
+  /** The element id `nextStep` / `prevStep` last moved to, or null for the first step of the current page. */
+  stepId: string | null;
   status: "running" | "submitting" | "completed";
   submitError: string | null;
 }
 
-type BaseState = Pick<SurveyState, "answers" | "errors" | "pageIndex" | "status" | "submitError" | "uploading">;
+type BaseState = Pick<SurveyState, "answers" | "errors" | "pageIndex" | "status" | "submitError" | "uploading" | "stepId">;
+
+/** One screen of the one-question-at-a-time layout. */
+export interface Step {
+  pageIndex: number;
+  /** The id of the top-level element shown on this step. */
+  id: string;
+}
 
 export type Listener = (state: SurveyState) => void;
 
@@ -142,6 +159,7 @@ export class SurveyModel {
       status: "running",
       submitError: null,
       uploading: [],
+      stepId: null,
     });
     // Conditions that already hold at the start don't clear prefilled answers.
     for (const q of this.topQuestions) {
@@ -464,22 +482,107 @@ export class SurveyModel {
     return ok;
   }
 
+  /** Every visible top-level element of every visible page, in order. */
+  private stepsOf(logic: SurveyLogic, visiblePages: number[]): Step[] {
+    const out: Step[] = [];
+    for (const pi of visiblePages) {
+      for (const el of this.survey.pages[pi]!.elements) {
+        const shown =
+          el.type === "panel"
+            ? logic.visiblePanels.has(el.id)
+            : el.type === "content" || el.type === "image"
+              ? logic.visibleBlocks.has(el.id)
+              : logic.visibleQuestions.has(el.id);
+        if (shown) out.push({ pageIndex: pi, id: el.id });
+      }
+    }
+    return out;
+  }
+
+  private order?: Map<string, number>;
+  /** The position of every top-level element in the survey, to find where a hidden step was. */
+  private stepOrder(): Map<string, number> {
+    if (!this.order) {
+      this.order = new Map();
+      let n = 0;
+      for (const page of this.survey.pages) for (const el of page.elements) this.order.set(el.id, n++);
+    }
+    return this.order;
+  }
+
   private visiblePageIndexes(logic = this.state.logic): number[] {
     return this.survey.pages.flatMap((p, i) => (logic.visiblePages.has(p.id) ? [i] : []));
+  }
+
+  /** Validates one top-level element (a question, or every question in a panel). */
+  private validateElement(element: Element): boolean {
+    const { logic } = this.state;
+    const errors = { ...this.state.errors };
+    const { questions, repeats } = validationTargets([element]);
+    let ok = true;
+    for (const q of questions) {
+      const err = logic.visibleQuestions.has(q.id)
+        ? validateAnswer(q, logic.answers[q.id], {
+            required: logic.requiredQuestions.has(q.id),
+            validators: this.options.validators,
+            answers: logic.answers,
+            expression: this.expression,
+          })
+        : null;
+      if (err) {
+        errors[q.id] = err;
+        ok = false;
+      } else delete errors[q.id];
+    }
+    for (const panel of repeats) {
+      for (const k of Object.keys(errors)) if (k === panel.id || k.startsWith(`${panel.id}.`)) delete errors[k];
+      if (!logic.visiblePanels.has(panel.id)) continue;
+      for (const issue of validateRepeat(panel, this.state.answers[panel.id], logic, { validators: this.options.validators, expression: this.expression })) {
+        errors[issue.questionId] = issue.message;
+        ok = false;
+      }
+    }
+    this.update({ errors });
+    return ok;
+  }
+
+  /**
+   * One-question-at-a-time layout: validate the current step and go to the
+   * next visible one, crossing pages as needed. Returns false when the step
+   * has errors or it is the last step (then call `complete`).
+   */
+  nextStep(): boolean {
+    const { steps, stepIndex, uploading } = this.state;
+    const step = steps[stepIndex];
+    if (!step || uploading.length) return false;
+    const element = this.survey.pages[step.pageIndex]!.elements.find((e) => e.id === step.id);
+    if (element && !this.validateElement(element)) return false;
+    const next = this.state.steps[this.state.stepIndex + 1];
+    if (!next) return false;
+    this.update({ pageIndex: next.pageIndex, stepId: next.id });
+    return true;
+  }
+
+  /** One-question-at-a-time layout: go back one visible step. */
+  prevStep(): boolean {
+    const prev = this.state.steps[this.state.stepIndex - 1];
+    if (!prev) return false;
+    this.update({ pageIndex: prev.pageIndex, stepId: prev.id });
+    return true;
   }
 
   next(): boolean {
     if (this.state.isLastPage || this.state.uploading.length || !this.validatePage()) return false;
     const nextIndex = this.visiblePageIndexes().find((i) => i > this.state.pageIndex);
     if (nextIndex === undefined) return false;
-    this.update({ pageIndex: nextIndex });
+    this.update({ pageIndex: nextIndex, stepId: null });
     return true;
   }
 
   prev(): boolean {
     const prevIndex = this.visiblePageIndexes().filter((i) => i < this.state.pageIndex).at(-1);
     if (prevIndex === undefined) return false;
-    this.update({ pageIndex: prevIndex });
+    this.update({ pageIndex: prevIndex, stepId: null });
     return true;
   }
 
@@ -524,7 +627,19 @@ export class SurveyModel {
       this.state && s.answers === this.state.answers ? this.state.logic : resolveLogic(this.survey, s.answers, this.logicOptions);
     const visible = this.visiblePageIndexes(logic);
     const page = this.survey.pages[s.pageIndex]!;
+    const steps = this.stepsOf(logic, visible);
+    // The current step: the remembered element if it is still shown, otherwise the next shown one on or after it.
+    let stepIndex = s.stepId === null ? -1 : steps.findIndex((st) => st.id === s.stepId);
+    if (stepIndex < 0) {
+      const order = this.stepOrder();
+      const at = s.stepId === null ? -1 : (order.get(s.stepId) ?? -1);
+      stepIndex = steps.findIndex((st) => (at >= 0 ? (order.get(st.id) ?? 0) >= at : st.pageIndex >= s.pageIndex));
+      if (stepIndex < 0) stepIndex = Math.max(0, steps.length - 1);
+    }
     return {
+      steps,
+      stepIndex,
+      stepId: s.stepId,
       answers: s.answers,
       errors: s.errors,
       pageIndex: s.pageIndex,

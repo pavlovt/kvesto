@@ -6,8 +6,11 @@
     survey,
     selected = null,
     onselect,
+    layout,
   }: {
     survey: Survey;
+    /** Preview a page at a time or one question at a time. Default: the survey's own setting. */
+    layout?: "page" | "question";
     /** Id of the question or panel to highlight. */
     selected?: string | null;
     /** Called with the id of the question or panel the user clicks. Makes the preview a selection surface. */
@@ -23,6 +26,7 @@
     result = null;
     const view = mountSurvey(target, {
       survey,
+      ...(layout ? { layout } : {}),
       onComplete: ({ response }) => {
         result = JSON.stringify(response, null, 2);
       },

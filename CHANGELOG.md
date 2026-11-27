@@ -22,6 +22,9 @@ All six packages (`kvesto`, `@kvesto/schema`, `core`, `server`, `editor`, `dashb
   plus `searchable` dropdowns, with validation, rendering, summaries and editor support.
 - Signature (M18): a `signature` question drawn on a canvas and uploaded as a PNG through the file path, with
   dashboard thumbnails for image uploads.
+- One question at a time (M19): `settings.layout: "question"` (or the `layout` render option) with a progress bar,
+  Enter to continue, number keys and auto-advance; `nextStep` / `prevStep` on the model; a preview toggle in the
+  editor. `mountSurvey` now passes every render option on (it used to drop all but `labels`).
 
 ## 0.2.0
 

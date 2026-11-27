@@ -28,7 +28,20 @@ export interface RenderOptions {
    * DOMPurify). Without it `html` is never shown: only the block's Markdown is.
    */
   sanitizeHtml?: (html: string) => string;
+  /**
+   * `"page"` (default) shows a page at a time; `"question"` one question,
+   * panel or block at a time, with Enter to go on and number keys for choices.
+   * Default: the survey's `settings.layout`.
+   */
+  layout?: "page" | "question";
+  /** Show a progress bar. Default: the survey's `settings.progressBar`, else on in the question layout only. */
+  progressBar?: boolean;
+  /** In the question layout, go on by itself after a single-choice, yes/no or rating answer. Default: `settings.autoAdvance`, else true. */
+  autoAdvance?: boolean;
 }
+
+/** Question types answered with one click, which auto-advance and take number keys. */
+const ONE_CLICK = new Set(["single-choice", "boolean", "rating", "image-choice"]);
 
 const defaultLabels = {
   next: "Next",
@@ -46,6 +59,9 @@ const defaultLabels = {
   removeItem: "Remove",
   /** Title of each item of a repeating panel; `{n}` is the item number. */
   itemTitle: "Item {n}",
+  /** Progress text; `{n}` is the current step or page, `{total}` how many there are. */
+  progress: "{n} of {total}",
+  progressLabel: "Progress",
   uploading: "Uploading…",
   /** A slider nobody has moved yet. */
   notSet: "Not set",
@@ -119,6 +135,15 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
   let renderedPage = -1;
   let renderedStatus: SurveyState["status"] | null = null;
   let views: QuestionView[] = [];
+  const settings = model.survey.settings ?? {};
+  const byQuestion = (options.layout ?? settings.layout ?? "page") === "question";
+  const showProgress = options.progressBar ?? settings.progressBar ?? byQuestion;
+  const autoAdvance = byQuestion && (options.autoAdvance ?? settings.autoAdvance ?? true);
+  /** The page's top-level elements, by id: in the question layout only the current step's is shown. */
+  let topNodes: [string, El][] = [];
+  let renderedStep: string | undefined;
+  const currentStep = (s: SurveyState) => s.steps[s.stepIndex];
+  const isLastStep = (s: SurveyState) => s.stepIndex >= s.steps.length - 1;
   /** Refreshers for display text with answer placeholders, on the current page (or the repeat item being built). */
   let texts: ((state: SurveyState) => void)[] = [];
 
@@ -142,10 +167,46 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
   const onSubmit = (e: Event) => {
     e.preventDefault();
     const s = model.snapshot;
-    if (s.isLastPage) void model.complete();
+    if (byQuestion) {
+      if (isLastStep(s)) void model.complete();
+      else model.nextStep();
+    } else if (s.isLastPage) void model.complete();
     else model.next();
   };
   root.addEventListener("submit", onSubmit);
+
+  const stepNode = () => {
+    const step = currentStep(model.snapshot);
+    return step ? topNodes.find(([id]) => id === step.id)?.[1] : undefined;
+  };
+  const stepQuestion = () => {
+    const step = currentStep(model.snapshot);
+    return step ? model.survey.pages[step.pageIndex]!.elements.find((e) => e.id === step.id) : undefined;
+  };
+  // Number keys pick the nth option of a one-click question (or that rating).
+  const onKeydown = (e: KeyboardEvent) => {
+    if (!byQuestion || !/^[0-9]$/.test(e.key) || e.ctrlKey || e.metaKey || e.altKey) return;
+    const target = e.target as HTMLElement;
+    if (target.closest("input:not([type=radio]):not([type=checkbox]), textarea, select")) return;
+    const q = stepQuestion();
+    const node = stepNode();
+    if (!q || !node || !(ONE_CLICK.has(q.type) || q.type === "multiple-choice")) return;
+    const radios = [...node.querySelectorAll<HTMLInputElement>("input[type=radio], input[type=checkbox]")];
+    const pick = q.type === "rating" ? radios.find((r) => r.value === e.key) : radios[Number(e.key) - 1];
+    if (!pick) return;
+    e.preventDefault();
+    pick.click();
+  };
+  root.addEventListener("keydown", onKeydown);
+  // After a one-click answer, go on to the next step (never submit by itself).
+  const onChange = (e: Event) => {
+    if (!autoAdvance || !(e.target instanceof HTMLInputElement) || e.target.type !== "radio") return;
+    const q = stepQuestion();
+    if (!q || !ONE_CLICK.has(q.type) || (q.type === "image-choice" && q.multiple)) return;
+    if (!stepNode()?.contains(e.target) || isLastStep(model.snapshot)) return;
+    queueMicrotask(() => model.nextStep());
+  };
+  root.addEventListener("change", onChange);
 
   const unsubscribe = model.subscribe((state) => {
     if (state.status === "completed") {
@@ -165,13 +226,34 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
     }
     for (const v of views) v.update(state);
     for (const t of texts) t(state);
+    if (byQuestion) {
+      const step = currentStep(state);
+      for (const [id, node] of topNodes) if (id !== step?.id) node.hidden = true;
+      if (step && step.id !== renderedStep) {
+        // Move focus to the new step, except on the first render.
+        if (renderedStep !== undefined) {
+          topNodes.find(([id]) => id === step.id)?.[1].querySelector<HTMLElement>("input, select, textarea, button, canvas")?.focus();
+        }
+        renderedStep = step.id;
+      }
+    }
+    const progress = root.querySelector<HTMLProgressElement>(".kv-progress-bar");
+    if (progress) {
+      const n = byQuestion ? state.stepIndex + 1 : state.visiblePageIndex + 1;
+      const total = byQuestion ? state.steps.length : state.pages.length;
+      progress.max = Math.max(total, 1);
+      progress.value = Math.min(n, total);
+      const text = labels.progress.replaceAll("{n}", String(n)).replaceAll("{total}", String(total));
+      progress.setAttribute("aria-valuetext", text);
+      root.querySelector(".kv-progress-text")!.textContent = text;
+    }
     const submit = root.querySelector<HTMLButtonElement>(".kv-next");
     if (submit) {
       submit.disabled = state.status === "submitting" || state.uploading.length > 0;
-      submit.textContent = state.isLastPage ? labels.complete : labels.next;
+      submit.textContent = (byQuestion ? isLastStep(state) : state.isLastPage) ? labels.complete : labels.next;
     }
     const back = root.querySelector<HTMLButtonElement>(".kv-prev");
-    if (back) back.hidden = state.isFirstPage;
+    if (back) back.hidden = byQuestion ? state.stepIndex === 0 : state.isFirstPage;
     const err = root.querySelector<El>(".kv-submit-error");
     if (err) {
       err.textContent = state.submitError ?? "";
@@ -184,16 +266,32 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
     const parts: Node[] = [];
     views = [];
     texts = [];
+    topNodes = [];
+    if (showProgress) {
+      parts.push(
+        h(
+          doc,
+          "div",
+          { class: "kv-progress" },
+          h(doc, "progress", { class: "kv-progress-bar", "aria-label": labels.progressLabel }),
+          h(doc, "span", { class: "kv-progress-text", "aria-hidden": "true" }),
+        ),
+      );
+    }
     if (state.visiblePageIndex === 0) {
       parts.push(h(doc, "h2", { class: "kv-title" }, txt(state.survey.title)));
       if (state.survey.description) parts.push(h(doc, "p", { class: "kv-description" }, txt(state.survey.description)));
     }
     if (state.page.title) parts.push(h(doc, "h3", { class: "kv-page-title" }, txt(state.page.title)));
-    parts.push(...state.page.elements.map((el) => renderElement(el, state)));
+    for (const el of state.page.elements) {
+      const node = renderElement(el, state);
+      topNodes.push([el.id, node]);
+      parts.push(node);
+    }
 
     const nav = h(doc, "div", { class: "kv-nav" });
     const back = h(doc, "button", { type: "button", class: "kv-prev" }, labels.prev);
-    back.addEventListener("click", () => model.prev());
+    back.addEventListener("click", () => (byQuestion ? model.prevStep() : model.prev()));
     nav.append(back, h(doc, "button", { type: "submit", class: "kv-next" }, labels.next));
     parts.push(h(doc, "p", { class: "kv-submit-error", role: "alert", hidden: "" }), nav);
     root.replaceChildren(...parts);
@@ -998,6 +1096,8 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
     destroy() {
       unsubscribe();
       root.removeEventListener("submit", onSubmit);
+      root.removeEventListener("keydown", onKeydown);
+      root.removeEventListener("change", onChange);
       root.remove();
     },
   };
@@ -1005,6 +1105,9 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
 
 /** One-call embed: create the model and render it into `target`. */
 export function mountSurvey(target: El, options: CreateSurveyOptions & RenderOptions): RenderedSurvey {
-  const { labels, ...modelOptions } = options;
-  return renderSurvey(target, createSurvey(modelOptions), labels ? { labels } : {});
+  const { labels, sanitizeHtml, layout, progressBar, autoAdvance, ...modelOptions } = options;
+  const render: RenderOptions = { labels, sanitizeHtml, layout, progressBar, autoAdvance };
+  // Leave unset options out, so the survey's own settings apply.
+  for (const k of Object.keys(render) as (keyof RenderOptions)[]) if (render[k] === undefined) delete render[k];
+  return renderSurvey(target, createSurvey(modelOptions), render);
 }

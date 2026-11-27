@@ -70,3 +70,5 @@
 .kv-signature-clear { font: inherit; cursor: pointer; }
 .kv-signature-clear[hidden] { display: none; }
 .kv-signature-status { margin: 0; font-size: 0.9em; opacity: 0.75; }
+.kv-progress { display: flex; gap: 0.6rem; align-items: center; font-size: 0.85em; }
+.kv-progress-bar { flex: 1; height: 0.5rem; accent-color: var(--kv-accent); }

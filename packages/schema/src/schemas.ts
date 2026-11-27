@@ -579,6 +579,17 @@ export type ImageElement = z.infer<typeof ImageElementSchema>;
 /** Something shown on a page that takes no answer. */
 export type DisplayElement = ContentElement | ImageElement;
 
+/** How the survey is presented and behaves. Every field is optional. */
+export const SurveySettingsSchema = z.looseObject({
+  /** `"page"` shows a page at a time (default); `"question"` one question (or panel, or block) at a time. */
+  layout: z.enum(["page", "question"]).optional(),
+  /** Show a progress bar. Default: on in the question layout, off in the page layout. */
+  progressBar: z.boolean().optional(),
+  /** In the question layout, go on by itself after a single-choice, yes/no or rating answer. Default true. */
+  autoAdvance: z.boolean().optional(),
+});
+export type SurveySettings = z.infer<typeof SurveySettingsSchema>;
+
 /** Survey JSON for a panel as authored, before defaults are applied. */
 export interface PanelInput {
   type: "panel";
@@ -734,6 +745,8 @@ export const SurveySchema = z
     variables: z.array(VariableSchema).optional(),
     /** Actions run when a condition becomes true: set or copy a value, skip to a page, or submit. */
     triggers: z.array(TriggerSchema).optional(),
+    /** Presentation and behaviour settings. */
+    settings: SurveySettingsSchema.optional(),
   })
   .superRefine((survey, ctx) => {
     // Questions seen so far, in survey order (conditions may only look back), with the repeating panel they are in.

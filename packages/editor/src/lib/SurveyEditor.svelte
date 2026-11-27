@@ -80,6 +80,11 @@
     }
   }
 
+  // The preview's layout starts from the survey's own setting.
+  let previewByQuestion = $state(startsByQuestion());
+  function startsByQuestion() {
+    return (survey as { settings?: { layout?: string } } | undefined)?.settings?.layout === "question";
+  }
   // Read once: custom question types are registered before the editor is mounted.
   const paletteItems = palette();
   function add(kind: PaletteKind) {
@@ -175,7 +180,16 @@
 
   snippet livePreview() {
     if parsed.survey {
-      SurveyPreview survey={parsed.survey} selected={docState.selected} onselect={(id) => doc.select(id)}
+      label.kv-editor-layout {
+        input type=checkbox checked={previewByQuestion} onchange={(e) => (previewByQuestion = e.currentTarget.checked)}
+        span 'One question at a time'
+      }
+      SurveyPreview(
+        survey={parsed.survey}
+        selected={docState.selected}
+        onselect={(id) => doc.select(id)}
+        layout={previewByQuestion ? "question" : "page"}
+      )
     } else {
       p.kv-editor-muted 'The preview appears when the survey is valid.'
     }
@@ -245,5 +259,6 @@
   .kv-editor-palette button { touch-action: none; }
   .kv-editor-ghost { position: fixed; z-index: 1000; pointer-events: none; background: #1f2937; color: white; font-size: 0.8rem; padding: 0.2rem 0.5rem; border-radius: 0.3rem; box-shadow: 0 2px 6px rgb(0 0 0 / 0.2); }
   .kv-editor-muted { color: #6b7280; font-size: 0.9rem; }
+  .kv-editor-layout { display: flex; gap: 0.35rem; align-items: center; font-size: 0.85rem; margin-bottom: 0.5rem; }
   .kv-editor-error { color: #b91c1c; white-space: pre-wrap; overflow: auto; margin: 0; }
 </style>

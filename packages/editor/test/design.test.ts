@@ -275,3 +275,17 @@ describe("input question types in the editor", () => {
     ui.editor.destroy();
   });
 });
+
+describe("preview layout", () => {
+  it("switches the preview to one question at a time", async () => {
+    const ui = setup(true);
+    await tick();
+    const visible = () => [...ui.target.querySelectorAll<HTMLElement>(".kv-preview [data-question]")].filter((e) => !e.hidden && !e.closest("[hidden]")).length;
+    expect(visible()).toBeGreaterThan(1);
+    const toggle = ui.$<HTMLInputElement>(".kv-editor-layout input");
+    toggle.click();
+    await tick();
+    expect(visible()).toBe(1);
+    ui.editor.destroy();
+  });
+});

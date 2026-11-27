@@ -315,6 +315,15 @@ createApp({ repository, authorize, validators });          // on the server
 
 A `custom` validator whose function isn't registered never passes, so a missing registration can't let bad data in.
 
+#### One question at a time
+
+Set `"settings": { "layout": "question" }` on the survey, or pass `layout: "question"` to `mountSurvey` /
+`renderSurvey`, to show one question (or panel, or content block) per screen with a progress bar. Enter goes on,
+number keys pick the nth option of a choice question (or that value of a rating), and a single-choice, yes/no or
+rating answer moves on by itself (`autoAdvance: false` turns that off). Logic still works per page; steps follow
+it, so hidden questions and pages are skipped. Custom UIs can use `model.nextStep()`, `model.prevStep()`,
+`state.steps` and `state.stepIndex`. `progressBar: true` adds the bar to the page layout too.
+
 #### Content blocks and images
 
 Pages and panels can also hold elements that show something but take no answer:
