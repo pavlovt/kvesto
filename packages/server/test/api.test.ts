@@ -463,3 +463,42 @@ describe("documentation", () => {
     expect(res.headers.get("content-type")).toMatch(/text\/html/);
   });
 });
+
+describe("expressions", () => {
+  const exprSurvey = {
+    schemaVersion: 1,
+    id: "expr",
+    title: "Expressions",
+    pages: [
+      {
+        id: "p1",
+        elements: [
+          { id: "age", type: "text", inputType: "number", title: "Age" },
+          { id: "vat", type: "text", title: "VAT", required: true, visibleIf: { expr: "adult({age}) and {age} < 100" } },
+        ],
+      },
+    ],
+  };
+  const functions = { adult: (age: unknown) => Number(age) >= 18 };
+
+  it("refuses a survey that calls a function the server does not have", async () => {
+    const res = await send("POST", "/surveys", exprSurvey);
+    expect(res.status).toBe(400);
+    expect(JSON.stringify(await res.json())).toContain('Unknown expression function \\"adult\\"');
+    expect((await send("PUT", "/surveys/expr", exprSurvey)).status).toBe(400);
+  });
+
+  it("refuses an expression that does not parse", async () => {
+    const res = await send("POST", "/surveys", { ...exprSurvey, pages: [{ id: "p1", elements: [{ id: "a", type: "text", title: "A", visibleIf: { expr: "{a" } }] }] });
+    expect(res.status).toBe(400);
+  });
+
+  it("validates responses with registered functions", async () => {
+    app = createApp({ repository: drizzleRepository(createSqliteDb(":memory:")), authorize: openAccess, functions });
+    expect((await send("POST", "/surveys", exprSurvey)).status).toBe(201);
+    expect((await send("POST", "/surveys/expr/responses", { answers: { age: "30" } })).status).toBe(400);
+    expect((await send("POST", "/surveys/expr/responses", { answers: { age: "12", vat: "x" } })).status).toBe(201);
+    const ok = await send("POST", "/surveys/expr/responses", { answers: { age: "30", vat: "BG1" } });
+    expect(ok.status).toBe(201);
+  });
+});

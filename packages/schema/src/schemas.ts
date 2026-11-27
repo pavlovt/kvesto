@@ -6,6 +6,7 @@
  */
 import { z } from "zod";
 import { walkElements } from "./elements.js";
+import { ExpressionError, MAX_EXPRESSION_LENGTH, expressionRefs, parseExpression, type ExpressionRef } from "./expression.js";
 
 export const SURVEY_SCHEMA_VERSION = 1 as const;
 
@@ -62,7 +63,27 @@ export const ComparisonSchema = z.object({
 export type ConditionValue = z.infer<typeof ConditionValueSchema>;
 export type ConditionOperator = z.infer<typeof ConditionOperatorSchema>;
 export type Comparison = z.infer<typeof ComparisonSchema>;
-export type Condition = Comparison | { all: Condition[] } | { any: Condition[] } | { not: Condition };
+/** A condition written in the expression language, e.g. `{ "expr": "{age} >= 18 and {role} = 'dev'" }`. */
+export interface ExpressionCondition {
+  expr: string;
+}
+export type Condition = Comparison | ExpressionCondition | { all: Condition[] } | { any: Condition[] } | { not: Condition };
+
+/** Expression text that must parse. */
+export const ExpressionTextSchema = z
+  .string()
+  .min(1)
+  .max(MAX_EXPRESSION_LENGTH)
+  .superRefine((text, ctx) => {
+    try {
+      parseExpression(text);
+    } catch (e) {
+      if (!(e instanceof ExpressionError)) throw e;
+      ctx.addIssue({ code: "custom", message: `${e.message} (at character ${e.position + 1})` });
+    }
+  });
+
+export const ExpressionConditionSchema = z.object({ expr: ExpressionTextSchema }).strict();
 
 /**
  * Conditional logic as plain JSON data (never evaluated as code).
@@ -75,6 +96,7 @@ export type Condition = Comparison | { all: Condition[] } | { any: Condition[] }
 export const ConditionSchema: z.ZodType<Condition> = z.lazy(() =>
   z.union([
     ComparisonSchema.strict(),
+    ExpressionConditionSchema,
     z.object({ all: z.array(ConditionSchema).min(1) }).strict(),
     z.object({ any: z.array(ConditionSchema).min(1) }).strict(),
     z.object({ not: ConditionSchema }).strict(),
@@ -447,12 +469,31 @@ export function validatorProblem(question: Question, validator: Validator): stri
   }
 }
 
-/** Every comparison inside a condition tree. */
+/** Every comparison inside a condition tree (expression conditions are not comparisons). */
 export function conditionComparisons(condition: Condition): Comparison[] {
   if ("all" in condition) return condition.all.flatMap(conditionComparisons);
   if ("any" in condition) return condition.any.flatMap(conditionComparisons);
   if ("not" in condition) return conditionComparisons(condition.not);
+  if ("expr" in condition) return [];
   return [condition];
+}
+
+/** The text of every expression condition inside a condition tree. */
+export function conditionExpressions(condition: Condition): string[] {
+  if ("all" in condition) return condition.all.flatMap(conditionExpressions);
+  if ("any" in condition) return condition.any.flatMap(conditionExpressions);
+  if ("not" in condition) return conditionExpressions(condition.not);
+  if ("expr" in condition) return [condition.expr];
+  return [];
+}
+
+/** The references of an expression, or none when it does not parse (the schema reports that separately). */
+export function safeExpressionRefs(text: string): ExpressionRef[] {
+  try {
+    return expressionRefs(parseExpression(text));
+  } catch {
+    return [];
+  }
 }
 
 const uniqueValues = (items: { value: string }[]) => new Set(items.map((i) => i.value)).size === items.length;
@@ -498,6 +539,37 @@ export const SurveySchema = z
           issue(`"${c.row}" is not a row of matrix question "${c.question}"`);
         }
       }
+      for (const text of conditionExpressions(condition)) {
+        for (const message of refProblems(safeExpressionRefs(text), earlierOnly, repeat)) {
+          ctx.addIssue({ code: "custom", path, message });
+        }
+      }
+    };
+
+    /** What is wrong with each expression reference, given the questions allowed at this point. */
+    const refProblems = (refs: ExpressionRef[], earlierOnly: Set<string>, repeat: string | undefined): string[] => {
+      const out: string[] = [];
+      for (const r of refs) {
+        const target = seen.get(r.name);
+        const shown = `{${r.scope ? "$item." : ""}${[r.name, ...r.path].join(".")}}`;
+        if (!target || !earlierOnly.has(r.name)) out.push(`${shown} does not refer to an earlier question`);
+        else if (r.scope === "item" && !repeat) out.push(`${shown}: $item can only be used inside a repeating panel`);
+        else if (r.scope === "item" && target.repeat !== repeat) out.push(`${shown}: "${r.name}" is not in the same repeating panel`);
+        else if (r.scope !== "item" && target.repeat) {
+          out.push(
+            repeat === target.repeat
+              ? `${shown}: "${r.name}" is in this repeating panel, use {$item.${r.name}} for the same item`
+              : `${shown}: "${r.name}" is inside a repeating panel, so it has no single answer here`,
+          );
+        } else if (r.path.length) {
+          const q = target.question;
+          const [row, column, ...rest] = r.path;
+          const rowOk = (q.type === "matrix" || q.type === "grid") && q.rows.some((x) => x.value === row);
+          const columnOk = column === undefined || (q.type === "grid" && q.columns.some((x) => x.value === column));
+          if (!rowOk || !columnOk || rest.length) out.push(`${shown}: "${r.path.join(".")}" is not a part of "${r.name}"`);
+        }
+      }
+      return out;
     };
 
     const elementIds = new Set<string>();

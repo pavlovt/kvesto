@@ -188,6 +188,40 @@ questions that come earlier in the survey (a page condition: questions on earlie
 Hidden questions are skipped by validation, hidden pages by navigation, and answers to hidden questions are left
 out of the response.
 
+#### Expressions
+
+Wherever a condition goes, `{ "expr": "..." }` can stand in for a comparison, alone or inside `all` / `any` / `not`:
+
+```json
+{ "id": "discount", "type": "text", "title": "Discount code",
+  "visibleIf": { "expr": "age({birthdate}) >= 65 or ({members} > 3 and {plan} = 'family')" } }
+```
+
+Expressions are parsed by Kvesto's own small parser into a syntax tree and evaluated over it, never with `eval`.
+The schema checks that an expression parses and only refers to earlier questions.
+
+| Syntax | |
+| --- | --- |
+| `{q}`, `{matrix.row}`, `{grid.row.column}` | An earlier answer. Inside a repeating panel, `{$item.q}` is the same item's answer. An unanswered question is `null`. |
+| `1`, `2.5`, `'text'`, `"text"`, `true`, `false`, `null` | Literals |
+| `or`, `and`, `not` | Logic, loosest first |
+| `=` (`==`), `!=` (`<>`), `<`, `<=`, `>`, `>=` | Comparisons. Numeric text compares as a number; dates as `YYYY-MM-DD` text. |
+| `+`, `-`, `*`, `/`, `%` | Arithmetic. `+` joins text when either side isn't a number. Division by zero gives `null`. |
+
+Functions: `iif(cond, a, b)`, `isEmpty(x)`, `count(x)`, `sum(…)`, `avg(…)`, `min(…)`, `max(…)`, `round(x, digits)`,
+`abs(x)`, `number(x)`, `length(x)`, `lower(x)`, `upper(x)`, `trim(x)`, `concat(…)`, `contains(list or text, x)`,
+`today()`, `age(date)`, `dateDiff(from, to, "days" | "months" | "years")` and `year(date)`. Register your own on
+both sides under the same name:
+
+```ts
+const functions = { vatValid: (code) => checkVat(String(code)) };
+createSurvey({ survey, functions });                     // in the browser
+createApp({ repository, authorize, functions });          // on the server
+```
+
+A survey that calls a function the runner or the server doesn't have is refused when it is loaded or saved, and an
+expression that fails while it runs counts as false.
+
 #### Validators
 
 Any question takes a `validators` list. Each rule runs on a non-empty answer, in order, in the runner and on the

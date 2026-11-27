@@ -6,6 +6,7 @@ import {
   comparisonFor,
   conditionSources,
   describeCondition,
+  expressionError,
   invalidReferences,
   operatorsFor,
   setAt,
@@ -249,6 +250,36 @@ describe("logic builder in the property panel", () => {
     ui.click("Show this page only when…");
     expect(ui.changes.at(-1)!.pages[1]!.visibleIf).toEqual({ question: "notes", op: "eq", value: "" });
     ui.editor.destroy();
+  });
+
+  it("writes an expression condition, shows syntax errors and mixes it with rules", () => {
+    const ui = setup();
+    ui.select("nick");
+    ui.click("Write an expression");
+    expect(ui.find("nick")!.visibleIf).toEqual({ expr: "{age} != null" });
+    const type = (text: string) => {
+      const input = ui.$<HTMLInputElement>(".kv-props .kv-cond-expr-input");
+      input.value = text;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      flushSync();
+    };
+    type("{age} >= 18 and");
+    expect(ui.$(".kv-props .kv-cond-expr .kv-cond-error").textContent).toMatch(/Unexpected end of expression/);
+    type("{age} >= 18 and {role} = 'dev'");
+    expect(ui.$$(".kv-props .kv-cond-expr .kv-cond-error")).toHaveLength(0);
+    expect(ui.summary()).toContain("the expression {age} >= 18 and {role} = 'dev' holds");
+    ui.click("Add rule");
+    const cond = ui.find("nick")!.visibleIf as { all: Condition[] };
+    expect(cond.all[0]).toEqual({ expr: "{age} >= 18 and {role} = 'dev'" });
+    expect(cond.all).toHaveLength(2);
+    ui.editor.destroy();
+  });
+
+  it("checks expression syntax and references in the model", () => {
+    expect(expressionError("{a} +")).toMatch(/Unexpected end/);
+    expect(expressionError("{a} + 1")).toBeNull();
+    expect(invalidReferences(survey, { element: "age" }, { expr: "{role} = 'dev' and {nick} = 'x'" })).toEqual(["nick"]);
+    expect(describeCondition(survey, { not: { expr: "{age} > 1" } })).toBe("not (the expression {age} > 1 holds)");
   });
 
   it("flags a condition that refers to a question it can't use", () => {

@@ -17,6 +17,7 @@ import {
 import type { SurveyStorage } from "./storage.js";
 import { fileToDataUrl } from "./files.js";
 import { repeatItems, resolveLogic, visibleElements, type SurveyLogic } from "./logic.js";
+import { unknownFunctions, type ExpressionFunctions } from "./expression.js";
 import { itemKey, validateAnswer, validateFile, validateRepeat, validationTargets } from "./validate.js";
 import type { CustomValidators } from "./validators.js";
 
@@ -35,6 +36,10 @@ export interface CreateSurveyOptions {
   meta?: Record<string, unknown>;
   /** Functions for the survey's `custom` validators, by name. Register the same ones on the server. */
   validators?: CustomValidators;
+  /** Functions the survey's expressions may call, by name. Register the same ones on the server. */
+  functions?: ExpressionFunctions;
+  /** The clock for `today()` and `age()` in expressions. Default: the system clock. */
+  now?: () => Date;
 }
 
 export interface CompletionResult {
@@ -93,6 +98,10 @@ export class SurveyModel {
 
   constructor(private readonly options: CreateSurveyOptions) {
     this.survey = migrateSurvey(options.survey);
+    const missing = unknownFunctions(this.survey, options.functions);
+    if (missing.length) {
+      throw new Error(`The survey's expressions call unknown functions: ${missing.join(", ")}. Register them with createSurvey({ functions }).`);
+    }
     walkElements(this.survey, (el, at) => {
       if (at.repeat) this.repeatOf.set(el.id, at.repeat);
       else if (el.type === "panel" && el.repeat) this.repeats.set(el.id, el);
@@ -358,7 +367,7 @@ export class SurveyModel {
 
   private compute(s: BaseState): SurveyState {
     const logic =
-      this.state && s.answers === this.state.answers ? this.state.logic : resolveLogic(this.survey, s.answers);
+      this.state && s.answers === this.state.answers ? this.state.logic : resolveLogic(this.survey, s.answers, { functions: this.options.functions, now: this.options.now });
     const visible = this.visiblePageIndexes(logic);
     const page = this.survey.pages[s.pageIndex]!;
     return {

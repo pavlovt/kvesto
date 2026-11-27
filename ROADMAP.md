@@ -1167,6 +1167,7 @@ Decided:
 | M8 · Structure view and property panel | Done (0.2.0) |
 | M9 · Drag and drop | Done (0.2.0). Not yet: auto-scroll while dragging, dragging in the preview |
 | M10 · Visual logic builder | Done (0.2.0) |
-| M11 – M79 | Planned |
+| M11 · Expression engine | Done (unreleased) |
+| M12 – M79 | Planned |
 
 Update this table as milestones land, with the release they shipped in.

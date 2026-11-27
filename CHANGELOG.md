@@ -2,6 +2,12 @@
 
 All six packages (`kvesto`, `@kvesto/schema`, `core`, `server`, `editor`, `dashboard`) share one version.
 
+## Unreleased
+
+- Expressions (M11): `{ "expr": "{age} >= 18 and {role} = 'dev'" }` conditions, a safe parser and evaluator with
+  built-in functions, and custom functions through `createSurvey({ functions })` and `createApp({ functions })`.
+  The editor's logic builder can write expressions.
+
 ## 0.2.0
 
 Survey format (`schemaVersion` stays 1; every change is additive, so 0.1 surveys still load):

@@ -6,6 +6,8 @@
     comparisonFor,
     conditionSources,
     describeCondition,
+    expressionError,
+    expressionFor,
     groupItems,
     invalidReferences,
     isGroup,
@@ -62,6 +64,7 @@
     const c = fresh();
     if (c) onchange(c, false);
   }
+  const addExpression = (path: ConditionPath, at: Condition) => put(path, addTo(at, expressionFor(sources.at(-1))));
 
   const sourceOf = (c: Comparison): ConditionSource | undefined => {
     const s = byId.get(c.question);
@@ -166,6 +169,23 @@
         .kv-cond-actions {
           button type=button onclick={() => addRule(path, c)} 'Add rule'
           button type=button onclick={() => addGroup(path, c)} 'Add group'
+          button type=button onclick={() => addExpression(path, c)} 'Add expression'
+        }
+      }
+    } else if "expr" in c {
+      @const error = expressionError(c.expr)
+      .kv-cond-rule.kv-cond-expr class:kv-cond-rule--bad={!!error} {
+        input.kv-cond-expr-input(
+          aria-label="Expression"
+          spellcheck=false
+          placeholder={"{age} >= 18 and {role} = 'dev'"}
+          value={c.expr}
+          oninput={(e) => put(path, { expr: e.currentTarget.value }, true)}
+        )
+        button type=button title="Negate this expression" onclick={() => put(path, toggleNot(c))} 'Not'
+        button type=button title="Remove this expression" aria-label="Remove expression" onclick={() => put(path, undefined)} '×'
+        if error {
+          p.kv-cond-error role=alert '{error}'
         }
       }
     } else {
@@ -207,7 +227,10 @@
   .kv-cond {
     if !condition {
       if sources.length {
-        button.kv-cond-start type=button onclick={start} '{addLabel}'
+        .kv-cond-actions {
+          button.kv-cond-start type=button onclick={start} '{addLabel}'
+          button type=button onclick={() => onchange(expressionFor(sources.at(-1)), false)} 'Write an expression'
+        }
       } else {
         p.kv-cond-none 'No earlier questions to base a condition on.'
       }
@@ -224,6 +247,7 @@
         if !isGroup(condition) {
           button type=button disabled={!sources.length} onclick={() => addRule([], condition!)} 'Add rule'
           button type=button disabled={!sources.length} onclick={() => addGroup([], condition!)} 'Add group'
+          button type=button onclick={() => addExpression([], condition!)} 'Add expression'
         }
         button.kv-cond-clear type=button onclick={() => onchange(undefined, false)} 'Remove condition'
       }
@@ -247,4 +271,6 @@
   .kv-cond select, .kv-cond input:not([type="checkbox"]) { padding: 0.15rem 0.3rem; min-width: 0; max-width: 100%; }
   .kv-cond button { cursor: pointer; }
   .kv-cond-start, .kv-cond-clear { justify-self: start; }
+  .kv-cond-expr-input { flex: 1 1 14rem; font-family: ui-monospace, monospace !important; }
+  .kv-cond-expr .kv-cond-error { flex-basis: 100%; }
 </style>

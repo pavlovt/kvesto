@@ -2,7 +2,16 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { Scalar } from "@scalar/hono-api-reference";
 import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
-import { findElement, formatBytes, validateAnswers, validateFile, type CustomValidators } from "@kvesto/core";
+import {
+  findElement,
+  formatBytes,
+  unknownFunctions,
+  validateAnswers,
+  validateFile,
+  type CustomValidators,
+  type ExpressionFunctions,
+  type Survey,
+} from "@kvesto/core";
 import { openAccess, type Authorize, type KvestoAction } from "./auth.js";
 import type { SurveyRepository } from "./repository.js";
 import * as routes from "./routes.js";
@@ -23,6 +32,8 @@ export interface CreateAppOptions {
   authorize?: Authorize;
   /** Functions for surveys' `custom` validators, by name: the same ones the runner uses. */
   validators?: CustomValidators;
+  /** Functions surveys' expressions may call, by name: the same ones the runner uses. */
+  functions?: ExpressionFunctions;
 }
 
 /** Types a browser may show inline. Anything else is served as a download, so an uploaded page can't run as this origin. */
@@ -85,8 +96,21 @@ export function createApp(options: CreateAppOptions) {
 
   app.openapi(routes.listSurveys, async (c) => c.json({ items: await repo.listSurveys() }, 200));
 
+  /** A 400 body when the survey calls expression functions this server doesn't have, so they can't silently fail later. */
+  const missingFunctions = (survey: Survey) => {
+    const missing = unknownFunctions(survey, options.functions);
+    return missing.length
+      ? {
+          error: "Invalid survey JSON",
+          issues: missing.map((name) => ({ path: [] as (string | number)[], message: `Unknown expression function "${name}"` })),
+        }
+      : null;
+  };
+
   app.openapi(routes.createSurvey, async (c) => {
     const survey = c.req.valid("json");
+    const bad = missingFunctions(survey);
+    if (bad) return c.json(bad, 400);
     if (await repo.surveyExists(survey.id)) {
       return c.json({ error: `Survey "${survey.id}" already exists` }, 409);
     }
@@ -104,6 +128,8 @@ export function createApp(options: CreateAppOptions) {
     if (survey.id !== id) {
       return c.json({ error: "Body id must match the path", issues: [{ path: ["id"], message: `Expected "${id}"` }] }, 400);
     }
+    const bad = missingFunctions(survey);
+    if (bad) return c.json(bad, 400);
     return c.json(await repo.saveSurvey(survey), 200);
   });
 
@@ -119,7 +145,10 @@ export function createApp(options: CreateAppOptions) {
     const input = c.req.valid("json");
     const survey = await repo.loadSurvey(id);
     if (!survey) return c.json({ error: "Survey not found" }, 404);
-    const { issues, answers } = validateAnswers(survey, input.answers, { validators: options.validators });
+    const { issues, answers } = validateAnswers(survey, input.answers, {
+      validators: options.validators,
+      functions: options.functions,
+    });
     if (issues.length) {
       return c.json(
         {

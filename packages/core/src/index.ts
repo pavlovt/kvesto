@@ -14,7 +14,23 @@ export {
   type ValidateOptions,
 } from "./validate.js";
 export { runValidators, type CustomValidatorFn, type CustomValidatorContext, type CustomValidators } from "./validators.js";
-export { evaluateCondition, resolveLogic, isEmptyAnswer, repeatItems, type SurveyLogic, type ItemLogic } from "./logic.js";
+export { evaluateCondition, resolveLogic, isEmptyAnswer, repeatItems, type SurveyLogic, type ItemLogic, type LogicOptions } from "./logic.js";
+export {
+  BUILTIN_FUNCTIONS,
+  ExpressionEvaluationError,
+  compileExpression,
+  evaluateExpression,
+  evaluateExpressionCondition,
+  evaluateNode,
+  isEmptyValue,
+  isTruthy,
+  surveyExpressions,
+  toNumber,
+  unknownFunctions,
+  type EvaluateOptions,
+  type ExpressionFunction,
+  type ExpressionFunctions,
+} from "./expression.js";
 export { fileToDataUrl } from "./files.js";
 export { summarizeResponses, type QuestionSummary, type PanelHeading, type MatrixRowSummary, type GridRowSummary, type GridCellSummary, type RankingSummary } from "./summary.js";
 export type { SurveyStorage, SurveySummary } from "./storage.js";

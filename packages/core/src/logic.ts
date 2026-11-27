@@ -1,3 +1,4 @@
+import { evaluateExpressionCondition, type ExpressionFunctions } from "./expression.js";
 import { pageQuestions, type AnswerValue, type Element, type RepeatItem, type Answers, type Comparison, type Condition, type ConditionValue, type Page, type Question, type Survey } from "@kvesto/schema";
 
 export function isEmptyAnswer(value: AnswerValue | undefined): boolean {
@@ -72,14 +73,24 @@ function evaluateComparison(c: Comparison, answers: Answers): boolean {
   }
 }
 
+/** What conditions and expressions may use besides the answers. */
+export interface LogicOptions {
+  /** Functions callable from expressions, by name. */
+  functions?: ExpressionFunctions;
+  /** The clock for `today()` and `age()`. */
+  now?: () => Date;
+}
+
 /**
  * Evaluate a condition against answers. Pure data in, boolean out: conditions
- * are never compiled or run as code.
+ * are never compiled or run as code. `item` holds the answers of the current
+ * item of a repeating panel.
  */
-export function evaluateCondition(condition: Condition, answers: Answers, item?: Answers): boolean {
-  if ("all" in condition) return condition.all.every((c) => evaluateCondition(c, answers, item));
-  if ("any" in condition) return condition.any.some((c) => evaluateCondition(c, answers, item));
-  if ("not" in condition) return !evaluateCondition(condition.not, answers, item);
+export function evaluateCondition(condition: Condition, answers: Answers, item?: Answers, options: LogicOptions = {}): boolean {
+  if ("all" in condition) return condition.all.every((c) => evaluateCondition(c, answers, item, options));
+  if ("any" in condition) return condition.any.some((c) => evaluateCondition(c, answers, item, options));
+  if ("not" in condition) return !evaluateCondition(condition.not, answers, item, options);
+  if ("expr" in condition) return evaluateExpressionCondition(condition.expr, answers, { ...options, ...(item ? { item } : {}) });
   // `scope: "item"` compares an answer in the current item of a repeating panel.
   return evaluateComparison(condition, condition.scope === "item" ? (item ?? {}) : answers);
 }
@@ -120,7 +131,8 @@ export function repeatItems(value: AnswerValue | undefined): RepeatItem[] {
  * one pass in survey order is enough, and the answer of a hidden question
  * counts as empty for every condition after it.
  */
-export function resolveLogic(survey: Survey, answers: Answers): SurveyLogic {
+export function resolveLogic(survey: Survey, answers: Answers, options: LogicOptions = {}): SurveyLogic {
+  const holds = (c: Condition, item?: Answers) => evaluateCondition(c, effective, item, options);
   const visiblePages = new Set<string>();
   const effective: Answers = {};
   const top: ItemLogic = { visibleQuestions: new Set(), visiblePanels: new Set(), requiredQuestions: new Set(), answers: effective };
@@ -133,7 +145,7 @@ export function resolveLogic(survey: Survey, answers: Answers): SurveyLogic {
    */
   const visit = (elements: readonly Element[], parentVisible: boolean, into: ItemLogic, item: RepeatItem | undefined) => {
     for (const el of elements) {
-      const visible = parentVisible && (!el.visibleIf || evaluateCondition(el.visibleIf, effective, into.answers));
+      const visible = parentVisible && (!el.visibleIf || holds(el.visibleIf, into.answers));
       if (el.type === "panel") {
         if (visible) into.visiblePanels.add(el.id);
         if (el.repeat && !item) {
@@ -153,7 +165,7 @@ export function resolveLogic(survey: Survey, answers: Answers): SurveyLogic {
       }
       if (!visible) continue;
       into.visibleQuestions.add(el.id);
-      if (el.required || (el.requiredIf && evaluateCondition(el.requiredIf, effective, into.answers))) {
+      if (el.required || (el.requiredIf && holds(el.requiredIf, into.answers))) {
         into.requiredQuestions.add(el.id);
       }
       const v = (item ?? answers)[el.id];
@@ -162,7 +174,7 @@ export function resolveLogic(survey: Survey, answers: Answers): SurveyLogic {
   };
 
   for (const page of survey.pages) {
-    const pageVisible = !page.visibleIf || evaluateCondition(page.visibleIf, effective);
+    const pageVisible = !page.visibleIf || holds(page.visibleIf);
     if (pageVisible) visiblePages.add(page.id);
     visit(page.elements, pageVisible, top, undefined);
   }

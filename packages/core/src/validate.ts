@@ -11,7 +11,7 @@ import {
   type Question,
   type Survey,
 } from "@kvesto/schema";
-import { isEmptyAnswer, repeatItems, resolveLogic, type SurveyLogic } from "./logic.js";
+import { isEmptyAnswer, repeatItems, resolveLogic, type LogicOptions, type SurveyLogic } from "./logic.js";
 import { runValidators, type CustomValidators } from "./validators.js";
 
 export interface ValidateOptions {
@@ -280,9 +280,9 @@ export function validationTargets(elements: readonly Element[]): { questions: Qu
 export function validateAnswers(
   survey: Survey,
   answers: Answers,
-  options: Pick<ValidateOptions, "validators"> = {},
+  options: Pick<ValidateOptions, "validators"> & LogicOptions = {},
 ): { issues: AnswerIssue[]; answers: Answers } {
-  const logic = resolveLogic(survey, answers);
+  const logic = resolveLogic(survey, answers, { functions: options.functions, now: options.now });
   const { questions, repeats } = validationTargets(survey.pages.flatMap((p) => p.elements));
   const known = new Set([...questions, ...repeats].map((q) => q.id));
   const issues: AnswerIssue[] = Object.keys(answers)

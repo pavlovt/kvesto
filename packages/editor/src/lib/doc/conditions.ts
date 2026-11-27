@@ -4,14 +4,17 @@
  * tree by path, and saying a condition in plain words. Pure functions over
  * survey JSON as authored.
  */
-import type {
-  Comparison,
-  Condition,
-  ConditionOperator,
-  ConditionValue,
-  ElementInput,
-  PanelInput,
-  SurveyInput,
+import {
+  ExpressionError,
+  parseExpression,
+  safeExpressionRefs,
+  type Comparison,
+  type Condition,
+  type ConditionOperator,
+  type ConditionValue,
+  type ElementInput,
+  type PanelInput,
+  type SurveyInput,
 } from "@kvesto/core";
 
 // Survey JSON as authored may be mid-edit, so question fields are read loosely.
@@ -61,7 +64,12 @@ const labelOf = (el: Loose) => (typeof el.title === "string" && el.title ? el.ti
  * panels, plus earlier questions of the owner's own repeating panel, which
  * compare the same item. Grids can't be compared.
  */
-export function conditionSources(survey: SurveyInput, owner: ConditionOwner): ConditionSource[] {
+export function conditionSources(
+  survey: SurveyInput,
+  owner: ConditionOwner,
+  /** Also list grids: expressions can refer to a grid cell (`{grid.row.column}`), comparisons can't. */
+  { includeGrids = false }: { includeGrids?: boolean } = {},
+): ConditionSource[] {
   const all = walk(survey);
   let end: number;
   let repeat: string | undefined;
@@ -78,7 +86,7 @@ export function conditionSources(survey: SurveyInput, owner: ConditionOwner): Co
   const out: ConditionSource[] = [];
   for (const w of all.slice(0, end)) {
     const el = w.element as Loose;
-    if (el.type === "panel" || el.type === "grid") continue;
+    if (el.type === "panel" || (el.type === "grid" && !includeGrids)) continue;
     if (w.repeat && w.repeat !== repeat) continue;
     out.push({
       id: el.id,
@@ -294,6 +302,7 @@ export function describeCondition(survey: SurveyInput, condition: Condition): st
   const byId = new Map(walk(survey).map((w) => [w.element.id, w.element as Loose]));
   const say = (c: Condition, nested: boolean): string => {
     if ("not" in c) return `not (${say(c.not, false)})`;
+    if ("expr" in c) return `the expression ${c.expr.trim() || "…"} holds`;
     if (isGroup(c)) {
       const parts = groupItems(c).map((x) => say(x, true));
       const text = parts.join("all" in c ? " and " : " or ");
@@ -320,13 +329,38 @@ export function describeCondition(survey: SurveyInput, condition: Condition): st
   return say(condition, false);
 }
 
-/** Comparisons in a condition that refer to a question the owner may not use. */
+/** The syntax error in expression text, or null when it parses. */
+export function expressionError(text: string): string | null {
+  try {
+    parseExpression(text);
+    return null;
+  } catch (e) {
+    if (e instanceof ExpressionError) return `${e.message} (at character ${e.position + 1})`;
+    throw e;
+  }
+}
+
+/** A new expression condition, starting from the last question the owner may use. */
+export function expressionFor(source: ConditionSource | undefined): Condition {
+  return { expr: source ? `{${source.scope ? "$item." : ""}${source.id}} != null` : "" };
+}
+
+/** Comparisons and expression references in a condition that refer to a question the owner may not use. */
 export function invalidReferences(survey: SurveyInput, owner: ConditionOwner, condition: Condition): string[] {
-  const allowed = new Map(conditionSources(survey, owner).map((s) => [s.id, s]));
+  const sources = conditionSources(survey, owner, { includeGrids: true });
+  const allowed = new Map(sources.filter((s) => s.type !== "grid").map((s) => [s.id, s]));
+  const anyType = new Map(sources.map((s) => [s.id, s]));
   const bad: string[] = [];
   const visit = (c: Condition) => {
     if ("not" in c) return visit(c.not);
     if (isGroup(c)) return groupItems(c).forEach(visit);
+    if ("expr" in c) {
+      for (const r of safeExpressionRefs(c.expr)) {
+        const s = anyType.get(r.name);
+        if (!s || (s.scope ?? undefined) !== (r.scope ?? undefined)) bad.push(r.name);
+      }
+      return;
+    }
     const s = allowed.get(c.question);
     if (!s || (s.scope ?? undefined) !== (c.scope ?? undefined)) bad.push(c.question);
   };
