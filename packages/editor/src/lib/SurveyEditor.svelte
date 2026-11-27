@@ -16,123 +16,78 @@
 </script>
 
 <script lang="ts">
-  import { allQuestions, SurveySchema, walkElements, type QuestionType } from "@kvesto/core";
+  import { SurveySchema } from "@kvesto/core";
   import SurveyPreview from "./SurveyPreview.svelte";
   import { starterSurvey } from "./starter.js";
+  import { SurveyDocument } from "./doc/document.js";
+  import { PALETTE, newElement, type PaletteKind } from "./doc/factory.js";
 
   let { survey = starterSurvey, storage, onchange, onsave, preview = true }: SurveyEditorProps = $props();
 
-  const questionTypes: QuestionType[] = [
-    "text",
-    "comment",
-    "single-choice",
-    "multiple-choice",
-    "dropdown",
-    "rating",
-    "boolean",
-    "matrix",
-    "ranking",
-    "file",
-    "grid",
-  ];
-
-  // The `survey` prop is only the starting point; edits live in `source`.
+  // The `survey` prop is only the starting point; edits live in the document.
   // svelte-ignore state_referenced_locally
-  let source = $state(JSON.stringify(survey, null, 2));
+  const doc = new SurveyDocument(survey);
+  let docState = $state(doc.state);
+  let source = $state(JSON.stringify(doc.survey, null, 2));
+  /** JSON syntax error in the source view, while it can't be parsed. */
+  let sourceError = $state<string | null>(null);
   let status = $state("");
+  let editingSource = false;
+
+  doc.subscribe((s) => {
+    docState = s;
+    if (!editingSource) {
+      source = JSON.stringify(s.survey, null, 2);
+      sourceError = null;
+    }
+  });
 
   const parsed = $derived.by(() => {
-    try {
-      const result = SurveySchema.safeParse(JSON.parse(source));
-      if (result.success) return { survey: result.data, error: null };
-      const error = result.error.issues.map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`).join("\n");
-      return { survey: null, error };
-    } catch (e) {
-      return { survey: null, error: (e as Error).message };
-    }
+    const result = SurveySchema.safeParse(docState.survey);
+    if (result.success) return { survey: result.data, error: null };
+    const error = result.error.issues.map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`).join("\n");
+    return { survey: null, error };
   });
 
   $effect(() => {
     if (parsed.survey) onchange?.(parsed.survey);
   });
 
-  function addQuestion(type: QuestionType) {
-    let doc: SurveyInput;
+  function onSourceInput(event: Event) {
+    source = (event.currentTarget as HTMLTextAreaElement).value;
+    let json: SurveyInput;
     try {
-      doc = JSON.parse(source);
-    } catch {
-      status = "Fix the JSON before adding questions.";
+      json = JSON.parse(source);
+    } catch (e) {
+      sourceError = (e as Error).message;
       return;
     }
-    const page = doc.pages.at(-1);
-    if (!page) return;
-    const n = allQuestions(doc).length + 1;
-    const base = { id: `q${n}`, title: `Question ${n}` };
-    const choices = [
-      { value: "a", label: "Option A" },
-      { value: "b", label: "Option B" },
-    ];
-    page.elements.push(
-      type === "single-choice" || type === "multiple-choice" || type === "dropdown" || type === "ranking"
-        ? { ...base, type, choices }
-        : type === "rating"
-          ? { ...base, type, min: 1, max: 5 }
-          : type === "matrix"
-            ? {
-                ...base,
-                type,
-                rows: [
-                  { value: "row1", label: "Statement 1" },
-                  { value: "row2", label: "Statement 2" },
-                ],
-                columns: [
-                  { value: "disagree", label: "Disagree" },
-                  { value: "neutral", label: "Neutral" },
-                  { value: "agree", label: "Agree" },
-                ],
-              }
-            : type === "grid"
-              ? {
-                  ...base,
-                  type,
-                  rows: [
-                    { value: "row1", label: "Item 1" },
-                    { value: "row2", label: "Item 2" },
-                  ],
-                  columns: [
-                    { value: "name", label: "Name", cellType: "text" as const },
-                    { value: "amount", label: "Amount", cellType: "number" as const },
-                  ],
-                }
-              : type === "file"
-              ? { ...base, type, maxFiles: 1, maxSize: 5 * 1024 * 1024 }
-              : { ...base, type },
-    );
-    source = JSON.stringify(doc, null, 2);
+    sourceError = null;
+    editingSource = true;
+    try {
+      doc.replace(json, { mergeKey: "source" });
+    } finally {
+      editingSource = false;
+    }
   }
 
-  function addPanel(repeat = false) {
-    let doc: SurveyInput;
-    try {
-      doc = JSON.parse(source);
-    } catch {
-      status = "Fix the JSON before adding a panel.";
+  function add(kind: PaletteKind) {
+    if (sourceError) {
+      status = "Fix the JSON before adding.";
       return;
     }
-    const page = doc.pages.at(-1);
-    if (!page) return;
-    const ids = new Set<string>();
-    walkElements(doc, (el) => void ids.add(el.id));
-    let n = 1;
-    while (ids.has(`panel${n}`)) n++;
-    page.elements.push({
-      id: `panel${n}`,
-      type: "panel",
-      title: `Group ${n}`,
-      ...(repeat ? { repeat: { min: 1 } } : {}),
-      elements: repeat ? [{ id: `panel${n}-q1`, type: "text", title: "Name" }] : [],
-    });
-    source = JSON.stringify(doc, null, 2);
+    doc.addElement(newElement(kind, doc.survey));
+  }
+
+  function onKeydown(event: KeyboardEvent) {
+    if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "z" && event.key.toLowerCase() !== "y") return;
+    // Text fields keep their own undo.
+    const target = event.target as HTMLElement | null;
+    if (target?.closest("input, textarea, select, [contenteditable]")) return;
+    event.preventDefault();
+    const redo = event.key.toLowerCase() === "y" || event.shiftKey;
+    if (redo) doc.redo();
+    else doc.undo();
   }
 
   async function save() {
@@ -148,22 +103,34 @@
 </script>
 
 <template lang="braceml">
-  .kv-editor class:kv-editor--single={!preview} {
+  /* svelte-ignore a11y_no_static_element_interactions */
+  .kv-editor class:kv-editor--single={!preview} onkeydown={onKeydown} {
     section.kv-editor-pane {
       .kv-editor-toolbar {
-        span.kv-editor-muted 'Add question:'
-        each questionTypes as type {
-          button type=button onclick={() => addQuestion(type)} '{type}'
+        button.kv-editor-undo(
+          type=button
+          onclick={() => doc.undo()}
+          disabled={!docState.canUndo}
+          title={docState.undoLabel ? `Undo ${docState.undoLabel}` : "Undo"}
+        ) 'Undo'
+        button.kv-editor-redo(
+          type=button
+          onclick={() => doc.redo()}
+          disabled={!docState.canRedo}
+          title={docState.redoLabel ? `Redo ${docState.redoLabel}` : "Redo"}
+        ) 'Redo'
+        span.kv-editor-muted 'Add:'
+        each PALETTE as item (item.kind) {
+          button type=button onclick={() => add(item.kind)} '{item.label}'
         }
-        button type=button onclick={() => addPanel()} 'panel'
-        button type=button onclick={() => addPanel(true)} 'repeating panel'
-
         if storage {
           button.kv-editor-primary type=button onclick={save} disabled={!parsed.survey} 'Save'
         }
       }
-      textarea.kv-editor-json bind:value={source} spellcheck=false aria-label="Survey JSON"
-      if parsed.error {
+      textarea.kv-editor-json value={source} oninput={onSourceInput} spellcheck=false aria-label="Survey JSON"
+      if sourceError {
+        pre.kv-editor-error '{sourceError}'
+      } else if parsed.error {
         pre.kv-editor-error '{parsed.error}'
       }
       if status {
@@ -176,7 +143,7 @@
         if parsed.survey {
           SurveyPreview survey={parsed.survey}
         } else {
-          p.kv-editor-muted 'The preview appears when the JSON is valid.'
+          p.kv-editor-muted 'The preview appears when the survey is valid.'
         }
       }
     }

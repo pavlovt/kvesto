@@ -1,0 +1,91 @@
+import type { ElementInput, QuestionType, SurveyInput } from "@kvesto/core";
+import { usedIds } from "./document.js";
+
+/** What the palette can add: every question type, plus panels and repeating panels. */
+export type PaletteKind = QuestionType | "panel" | "repeat";
+
+export const QUESTION_TYPES: readonly QuestionType[] = [
+  "text",
+  "comment",
+  "single-choice",
+  "multiple-choice",
+  "dropdown",
+  "rating",
+  "boolean",
+  "matrix",
+  "grid",
+  "ranking",
+  "file",
+];
+
+export const PALETTE: readonly { kind: PaletteKind; label: string }[] = [
+  ...QUESTION_TYPES.map((kind) => ({ kind, label: kind })),
+  { kind: "panel", label: "panel" },
+  { kind: "repeat", label: "repeating panel" },
+];
+
+const firstFree = (survey: SurveyInput, prefix: string, start: number) => {
+  const ids = usedIds(survey);
+  let n = start;
+  while (ids.has(`${prefix}${n}`)) n++;
+  return n;
+};
+
+const twoChoices = () => [
+  { value: "a", label: "Option A" },
+  { value: "b", label: "Option B" },
+];
+
+/** A new element of a kind, with sensible defaults and an id not yet used in `survey`. */
+export function newElement(kind: PaletteKind, survey: SurveyInput): ElementInput {
+  if (kind === "panel" || kind === "repeat") {
+    const n = firstFree(survey, "panel", 1);
+    const id = `panel${n}`;
+    return kind === "panel"
+      ? { id, type: "panel", title: `Group ${n}`, elements: [] }
+      : { id, type: "panel", title: `Group ${n}`, repeat: { min: 1 }, elements: [{ id: `${id}-q1`, type: "text", title: "Name" }] };
+  }
+  const count = usedIds(survey).size - survey.pages.length;
+  const n = firstFree(survey, "q", count + 1);
+  const base = { id: `q${n}`, title: `Question ${n}` };
+  switch (kind) {
+    case "single-choice":
+    case "multiple-choice":
+    case "dropdown":
+    case "ranking":
+      return { ...base, type: kind, choices: twoChoices() };
+    case "rating":
+      return { ...base, type: kind, min: 1, max: 5 };
+    case "matrix":
+      return {
+        ...base,
+        type: kind,
+        rows: [
+          { value: "row1", label: "Statement 1" },
+          { value: "row2", label: "Statement 2" },
+        ],
+        columns: [
+          { value: "disagree", label: "Disagree" },
+          { value: "neutral", label: "Neutral" },
+          { value: "agree", label: "Agree" },
+        ],
+      };
+    case "grid":
+      return {
+        ...base,
+        type: kind,
+        rows: [
+          { value: "row1", label: "Item 1" },
+          { value: "row2", label: "Item 2" },
+        ],
+        columns: [
+          { value: "name", label: "Name", cellType: "text" },
+          { value: "amount", label: "Amount", cellType: "number" },
+        ],
+      };
+    case "file":
+      return { ...base, type: kind, maxFiles: 1, maxSize: 5 * 1024 * 1024 };
+    default:
+      return { ...base, type: kind };
+  }
+}

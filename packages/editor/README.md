@@ -49,6 +49,23 @@ const editor = mountEditor(document.getElementById("editor")!, {
 
 The component's own styles are scoped and use `kv-editor-*` class names.
 
+## Undo, redo and the document model
+
+Every edit, including typing in the JSON view, is an undoable step: use the Undo and Redo buttons or Ctrl/Cmd+Z and
+Ctrl/Cmd+Shift+Z (text fields keep their own undo). The model behind it, `SurveyDocument`, is plain TypeScript with no
+DOM, so you can drive or test edits headlessly:
+
+```ts
+import { SurveyDocument, newElement } from "@kvesto/editor";
+
+const doc = new SurveyDocument(survey);
+const id = doc.addElement(newElement("rating", doc.survey), { container: { page: "p1" } });
+doc.moveElement(id!, { panel: "details" }, 0);
+doc.updateElement(id!, { title: "How likely?" }, { mergeKey: `${id}.title` }); // typing merges into one step
+doc.undo();
+doc.subscribe((state) => console.log(state.survey, state.canUndo, state.undoLabel));
+```
+
 ## License
 
 MIT
