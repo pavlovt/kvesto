@@ -134,6 +134,7 @@ React, Vue or Svelte instead of using the bundled renderer.
 | `slider` | number | `min` (default 0), `max` (default 100), `step` (default 1), `unit`; unanswered until moved |
 | `tags` | values (and typed entries) | searchable `choices`, `allowCustom`, `maxTags` |
 | `image-choice` | choice value(s) | `choices` with `imageUrl`; `multiple` for several |
+| `signature` | `[{ name, type, size, url }]` | drawn with a mouse, pen or finger and uploaded as one PNG like a file; `width`, `height`, `penColor`, `maxSize` (default 512 KB) |
 
 `dropdown` also takes `searchable: true`, which lets respondents type to find a choice in a long list.
 

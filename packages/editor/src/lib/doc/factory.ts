@@ -21,6 +21,7 @@ export const QUESTION_TYPES: readonly QuestionType[] = [
   "slider",
   "tags",
   "image-choice",
+  "signature",
 ];
 
 export const PALETTE: readonly { kind: PaletteKind; label: string }[] = [

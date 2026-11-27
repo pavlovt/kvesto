@@ -4,6 +4,7 @@ import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import {
   checkQuestionTypes,
+  fileRules,
   findElement,
   registerQuestionType,
   formatBytes,
@@ -186,11 +187,11 @@ export function createApp(options: CreateAppOptions) {
     const survey = await repo.loadSurvey(id);
     if (!survey) return c.json({ error: "Survey not found" }, 404);
     const question = findElement(survey, questionId)?.element;
-    if (!question || question.type !== "file") {
+    if (!question || (question.type !== "file" && question.type !== "signature")) {
       return c.json({ error: "Not a file question", issues: [{ path: ["questionId"], message: `No file question "${questionId}"` }] }, 400);
     }
     if (file.size > maxFileSize) return c.json({ error: `Files are limited to ${formatBytes(maxFileSize)}` }, 413);
-    const message = validateFile(question, file);
+    const message = validateFile(fileRules(question), file);
     if (message) return c.json({ error: message, issues: [{ path: ["file"], message }] }, 400);
 
     const stored = await repo.saveFile(

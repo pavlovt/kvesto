@@ -567,3 +567,27 @@ describe("custom question types", () => {
     unregisterQuestionType("x-stars");
   });
 });
+
+describe("signatures", () => {
+  it("uploads a signature as a PNG and accepts it in a response", async () => {
+    const signed = {
+      schemaVersion: 1,
+      id: "signed",
+      title: "Signed",
+      pages: [{ id: "p1", elements: [{ id: "sig", type: "signature", title: "Sign", required: true }] }],
+    };
+    expect((await send("POST", "/surveys", signed)).status).toBe(201);
+    const upload = (file: File) => {
+      const form = new FormData();
+      form.set("questionId", "sig");
+      form.set("file", file);
+      return app.request("http://kvesto.test/surveys/signed/files", { method: "POST", body: form });
+    };
+    expect((await upload(new File(["x"], "s.jpg", { type: "image/jpeg" }))).status).toBe(400);
+    const res = await upload(new File([new Uint8Array(8)], "signature.png", { type: "image/png" }));
+    expect(res.status).toBe(201);
+    const entry = await res.json();
+    expect((await send("POST", "/surveys/signed/responses", { answers: { sig: [entry] } })).status).toBe(201);
+    expect((await app.request(entry.url)).headers.get("content-type")).toBe("image/png");
+  });
+});

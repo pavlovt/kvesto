@@ -1,4 +1,5 @@
 import {
+  signatureFileRules,
   gridCellQuestion,
   isQuestion,
   panelQuestions,
@@ -251,6 +252,8 @@ function checkShape(question: Question, value: AnswerValue, required: boolean, o
       if (!def) return `This answer can't be checked (unknown question type "${question.type}").`;
       return def.validate?.(question, value) ?? null;
     }
+    case "signature":
+      return checkShape(signatureFileRules(question), value, required, options);
     case "file": {
       if (!Array.isArray(value) || !value.every(isFileAnswer)) return "Expected uploaded files.";
       if (value.length > question.maxFiles) {

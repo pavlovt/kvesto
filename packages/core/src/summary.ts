@@ -195,6 +195,7 @@ export function summarizeResponses(survey: Survey, responses: SurveyResponse[], 
             .sort((a, b) => a.averageRank - b.averageRank);
           break;
         }
+        case "signature":
         case "file": {
           const all = values.flatMap((v) => (Array.isArray(v) ? (v as FileAnswer[]).filter((f) => typeof f === "object") : []));
           summary.fileCount = all.length;

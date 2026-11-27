@@ -51,6 +51,8 @@ const defaultLabels = {
   notSet: "Not set",
   /** The list of picked tags, for screen readers. */
   selected: "Selected",
+  clearSignature: "Clear",
+  signed: "Signed.",
 };
 
 export interface RenderedSurvey {
@@ -542,6 +544,9 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
       case "tags":
         refresh = renderTags(q, qid, wrap, b);
         break;
+      case "signature":
+        refresh = renderSignature(q, qid, wrap, b);
+        break;
       case "image-choice": {
         const multi = Boolean(q.multiple);
         const inputs: [HTMLInputElement, string][] = [];
@@ -600,6 +605,82 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
         err.hidden = !s.errors[b.key];
         refresh(s);
       },
+    };
+  }
+
+  /**
+   * A signature pad: draw with a mouse, pen or finger (pointer events). Each
+   * finished stroke saves the drawing as a PNG through `model.addFiles`, so it
+   * is uploaded and checked like any file.
+   */
+  function renderSignature(q: Extract<Question, { type: "signature" }>, qid: string, wrap: El, b: Binding) {
+    const canvas = h(doc, "canvas", {
+      id: qid,
+      class: "kv-signature-pad",
+      width: String(q.width),
+      height: String(q.height),
+      role: "img",
+      "aria-labelledby": `${qid}-title`,
+    });
+    canvas.style.touchAction = "none";
+    const clear = h(doc, "button", { type: "button", class: "kv-signature-clear" }, labels.clearSignature);
+    const status = h(doc, "p", { class: "kv-signature-status", "aria-live": "polite" });
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      ctx.lineWidth = 2;
+      ctx.lineCap = "round";
+      ctx.strokeStyle = q.penColor ?? "#000";
+    }
+    let drawing = false;
+    let strokes = 0;
+    const point = (e: PointerEvent) => {
+      const r = canvas.getBoundingClientRect();
+      const sx = r.width ? canvas.width / r.width : 1;
+      const sy = r.height ? canvas.height / r.height : 1;
+      return [(e.clientX - r.left) * sx, (e.clientY - r.top) * sy] as const;
+    };
+    canvas.addEventListener("pointerdown", (e) => {
+      if (!ctx) return;
+      drawing = true;
+      canvas.setPointerCapture?.(e.pointerId);
+      const [x, y] = point(e);
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+    });
+    canvas.addEventListener("pointermove", (e) => {
+      if (!drawing || !ctx) return;
+      const [x, y] = point(e);
+      ctx.lineTo(x, y);
+      ctx.stroke();
+    });
+    const finish = () => {
+      if (!drawing) return;
+      drawing = false;
+      strokes++;
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        const file = new File([blob], "signature.png", { type: "image/png" });
+        void model.addFiles(q.id, [file]);
+      }, "image/png");
+    };
+    canvas.addEventListener("pointerup", finish);
+    canvas.addEventListener("pointercancel", finish);
+    clear.addEventListener("click", () => {
+      ctx?.clearRect(0, 0, canvas.width, canvas.height);
+      strokes = 0;
+      b.set(undefined);
+    });
+    wrap.append(canvas, h(doc, "div", { class: "kv-signature-actions" }, clear, status));
+    return (s: SurveyState) => {
+      const v = b.get(s);
+      const signed = Array.isArray(v) && v.length > 0;
+      clear.hidden = !signed && strokes === 0;
+      status.textContent = s.uploading.includes(q.id) ? labels.uploading : signed ? labels.signed : "";
+      // Cleared from outside (a reset): wipe the pad too.
+      if (!signed && strokes > 0 && !s.uploading.includes(q.id) && !drawing && ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        strokes = 0;
+      }
     };
   }
 

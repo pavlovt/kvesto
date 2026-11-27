@@ -20,6 +20,8 @@ All six packages (`kvesto`, `@kvesto/schema`, `core`, `server`, `editor`, `dashb
   `html` only through a host `sanitizeHtml`), and `image` elements, both with `visibleIf` and in the editor palette.
 - Input question types (M17): `multi-text`, `slider`, `tags` (searchable, optional own entries) and `image-choice`,
   plus `searchable` dropdowns, with validation, rendering, summaries and editor support.
+- Signature (M18): a `signature` question drawn on a canvas and uploaded as a PNG through the file path, with
+  dashboard thumbnails for image uploads.
 
 ## 0.2.0
 

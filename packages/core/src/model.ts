@@ -1,5 +1,6 @@
 import {
   allQuestions,
+  fileRules,
   isQuestion,
   migrateSurvey,
   walkElements,
@@ -384,12 +385,14 @@ export class SurveyModel {
    * Returns false (and sets an error) if any file was rejected or failed.
    */
   async addFiles(questionId: string, files: Iterable<File>): Promise<boolean> {
-    const q = this.question(questionId);
-    if (q.type !== "file") throw new Error(`"${questionId}" is not a file question`);
+    const question = this.question(questionId);
+    if (question.type !== "file" && question.type !== "signature") throw new Error(`"${questionId}" is not a file question`);
+    const q = fileRules(question);
     const list = [...files];
+    // A new signature replaces the old one.
     const current = () => {
       const v = this.state.answers[questionId];
-      return Array.isArray(v) ? (v as FileAnswer[]) : [];
+      return Array.isArray(v) && question.type !== "signature" ? (v as FileAnswer[]) : [];
     };
     const fail = (message: string) => {
       this.update({ errors: { ...this.state.errors, [questionId]: message } });

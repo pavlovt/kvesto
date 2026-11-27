@@ -144,7 +144,12 @@
             p.kv-dash-muted '{item.fileCount} {item.fileCount === 1 ? "file" : "files"}, latest first'
             ul {
               each item.files as file {
-                li > a href={file.url} download={file.name} target=_blank rel=noopener '{file.name}'
+                li {
+                  if file.type.startsWith("image/") {
+                    img.kv-dash-thumb src={file.url} alt={file.name} loading=lazy
+                  }
+                  a href={file.url} download={file.name} target=_blank rel=noopener '{file.name}'
+                }
               }
             }
           }
@@ -162,6 +167,7 @@
 </template>
 
 <style>
+  .kv-dash-thumb { display: block; max-width: 12rem; max-height: 5rem; border: 1px solid #e5e7eb; border-radius: 0.25rem; margin-bottom: 0.2rem; background: #fff; }
   .kv-dash-results h1 { font-size: 1.5rem; margin: 0 0 0.25rem; }
   .kv-dash-card { background: white; border: 1px solid #e5e7eb; border-radius: 0.5rem; padding: 1rem; margin-bottom: 1rem; max-width: 48rem; }
   .kv-dash-group { font-weight: 700; font-size: 0.95rem; color: #374151; margin: 1.25rem 0 0.5rem; max-width: 48rem; }

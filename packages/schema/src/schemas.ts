@@ -429,6 +429,23 @@ export const TriggerSchema = z.object({ when: ConditionSchema, action: TriggerAc
 export type Trigger = z.infer<typeof TriggerSchema>;
 export type TriggerAction = z.infer<typeof TriggerActionSchema>;
 
+/**
+ * A signature drawn with a mouse, pen or finger. Saved as a PNG through the
+ * storage adapter's `uploadFile`, like a file question, so the answer is a
+ * one-item list of files.
+ */
+export const SignatureQuestionSchema = z.object({
+  ...questionBase,
+  type: z.literal("signature"),
+  /** Drawing area in CSS pixels. */
+  width: z.number().int().min(100).max(2000).default(400),
+  height: z.number().int().min(50).max(1000).default(160),
+  /** Pen colour, a CSS colour. Default black. */
+  penColor: z.string().regex(/^#[0-9a-fA-F]{3,8}$/).optional(),
+  /** Largest PNG in bytes. Default 512 KB. */
+  maxSize: z.number().int().positive().optional(),
+});
+
 /** The type name of a custom question type: `x-` and then lower-case letters, digits and dashes. */
 export const CustomQuestionTypeSchema = z.templateLiteral(["x-", z.string().regex(/^[a-z0-9][a-z0-9-]*$/)]);
 export type CustomQuestionType = z.infer<typeof CustomQuestionTypeSchema>;
@@ -459,9 +476,26 @@ export const BuiltinQuestionSchema = z.discriminatedUnion("type", [
   SliderQuestionSchema,
   TagsQuestionSchema,
   ImageChoiceQuestionSchema,
+  SignatureQuestionSchema,
 ]);
 
 export const QuestionSchema = z.union([BuiltinQuestionSchema, CustomQuestionSchema]);
+
+/** Largest signature image accepted by default, in bytes. */
+export const DEFAULT_SIGNATURE_MAX_SIZE = 512 * 1024;
+
+/**
+ * The upload rules of a signature, as a file question: one PNG, up to
+ * `maxSize`. Signatures are stored and checked exactly like uploaded files.
+ */
+export function signatureFileRules(q: SignatureQuestion): FileQuestion {
+  return { ...q, type: "file", accept: ["image/png"], maxSize: q.maxSize ?? DEFAULT_SIGNATURE_MAX_SIZE, maxFiles: 1 } as FileQuestion;
+}
+
+/** A file or signature question as the file rules that apply to it. */
+export function fileRules(q: FileQuestion | SignatureQuestion): FileQuestion {
+  return q.type === "signature" ? signatureFileRules(q) : q;
+}
 
 /** Is this a question of a registered custom type (`x-…`)? */
 export function isCustomQuestion(q: { type: string }): q is CustomQuestion {
@@ -882,8 +916,8 @@ export const SurveySchema = z
       checkCondition(q.resetIf, [...path, "resetIf"], earlier, repeat);
       checkExpression(q.defaultExpr, [...path, "defaultExpr"], earlier, repeat);
       if (q.type === "computed") checkExpression(q.expr, [...path, "expr"], earlier, repeat);
-      if (repeat && q.type === "file") {
-        ctx.addIssue({ code: "custom", path: [...path, "type"], message: "File questions are not supported in repeating panels yet" });
+      if (repeat && (q.type === "file" || q.type === "signature")) {
+        ctx.addIssue({ code: "custom", path: [...path, "type"], message: `${q.type === "file" ? "File" : "Signature"} questions are not supported in repeating panels yet` });
       }
       if (!isCustomQuestion(q) && "choices" in q && !uniqueValues(q.choices)) {
         ctx.addIssue({ code: "custom", path: [...path, "choices"], message: "Choice values must be unique" });
@@ -1039,6 +1073,7 @@ export type Choice = z.infer<typeof ChoiceSchema>;
 export type MatrixQuestion = z.infer<typeof MatrixQuestionSchema>;
 export type RankingQuestion = z.infer<typeof RankingQuestionSchema>;
 export type FileQuestion = z.infer<typeof FileQuestionSchema>;
+export type SignatureQuestion = z.infer<typeof SignatureQuestionSchema>;
 export type FileAnswer = z.infer<typeof FileAnswerSchema>;
 export type MatrixAnswer = z.infer<typeof MatrixAnswerSchema>;
 export type GridAnswer = z.infer<typeof GridAnswerSchema>;
