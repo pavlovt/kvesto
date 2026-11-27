@@ -16,6 +16,7 @@ import type { SurveyStorage } from "./storage.js";
 import { fileToDataUrl } from "./files.js";
 import { resolveLogic, visibleElements, type SurveyLogic } from "./logic.js";
 import { validateAnswer, validateFile } from "./validate.js";
+import type { CustomValidators } from "./validators.js";
 
 export interface CreateSurveyOptions {
   /** Survey JSON. Validated (and migrated from older schema versions) on creation. */
@@ -30,6 +31,8 @@ export interface CreateSurveyOptions {
   initialAnswers?: Answers;
   /** Extra data stored with the response (e.g. source, user id). */
   meta?: Record<string, unknown>;
+  /** Functions for the survey's `custom` validators, by name. Register the same ones on the server. */
+  validators?: CustomValidators;
 }
 
 export interface CompletionResult {
@@ -194,7 +197,11 @@ export class SurveyModel {
     const questions = pageQuestions(page);
     for (const q of questions) {
       const err = logic.visibleQuestions.has(q.id)
-        ? validateAnswer(q, this.state.answers[q.id], { required: logic.requiredQuestions.has(q.id) })
+        ? validateAnswer(q, this.state.answers[q.id], {
+            required: logic.requiredQuestions.has(q.id),
+            validators: this.options.validators,
+            answers: logic.answers,
+          })
         : null;
       if (err) errors[q.id] = err;
       else delete errors[q.id];

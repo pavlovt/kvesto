@@ -1,9 +1,22 @@
-import { allQuestions, type AnswerValue, type Answers, type FileAnswer, type FileQuestion, type Question, type Survey } from "@kvesto/schema";
+import {
+  allQuestions,
+  type AnswerValue,
+  type Answers,
+  type FileAnswer,
+  type FileQuestion,
+  type Question,
+  type Survey,
+} from "@kvesto/schema";
 import { isEmptyAnswer, resolveLogic } from "./logic.js";
+import { runValidators, type CustomValidators } from "./validators.js";
 
 export interface ValidateOptions {
   /** Override `question.required`, e.g. when a `requiredIf` condition holds. */
   required?: boolean;
+  /** Functions for `{ "type": "custom", "name": … }` validators, by name. */
+  validators?: CustomValidators;
+  /** All answers, passed to custom validators that compare questions. */
+  answers?: Answers;
 }
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -51,11 +64,22 @@ export function validateFile(question: FileQuestion, file: { name: string; type:
   return null;
 }
 
-/** Returns an error message for one answer, or null when it is valid. */
+/**
+ * Returns an error message for one answer, or null when it is valid: first
+ * `required`, then the answer's shape for its question type, then the
+ * question's `validators` in order.
+ */
 export function validateAnswer(question: Question, value: AnswerValue | undefined, options: ValidateOptions = {}): string | null {
   const required = options.required ?? question.required ?? false;
   if (isEmptyAnswer(value)) return required ? "This question is required." : null;
+  const shapeError = checkShape(question, value!, required);
+  if (shapeError) return shapeError;
+  return question.validators?.length
+    ? runValidators(question, value!, question.validators, { custom: options.validators, answers: options.answers ?? {} })
+    : null;
+}
 
+function checkShape(question: Question, value: AnswerValue, required: boolean): string | null {
   switch (question.type) {
     case "text":
     case "comment":
@@ -131,7 +155,11 @@ export interface AnswerIssue {
  * to unknown questions are reported. Used by the server; handy for your own
  * backend too.
  */
-export function validateAnswers(survey: Survey, answers: Answers): { issues: AnswerIssue[]; answers: Answers } {
+export function validateAnswers(
+  survey: Survey,
+  answers: Answers,
+  options: Pick<ValidateOptions, "validators"> = {},
+): { issues: AnswerIssue[]; answers: Answers } {
   const logic = resolveLogic(survey, answers);
   const questions = allQuestions(survey);
   const known = new Set(questions.map((q) => q.id));
@@ -140,7 +168,11 @@ export function validateAnswers(survey: Survey, answers: Answers): { issues: Ans
     .map((questionId) => ({ questionId, message: "Unknown question" }));
   for (const q of questions) {
     if (!logic.visibleQuestions.has(q.id)) continue;
-    const message = validateAnswer(q, answers[q.id], { required: logic.requiredQuestions.has(q.id) });
+    const message = validateAnswer(q, answers[q.id], {
+      required: logic.requiredQuestions.has(q.id),
+      validators: options.validators,
+      answers: logic.answers,
+    });
     if (message) issues.push({ questionId: q.id, message });
   }
   return { issues, answers: logic.answers };

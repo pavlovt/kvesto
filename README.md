@@ -147,6 +147,36 @@ questions that come earlier in the survey (a page condition: questions on earlie
 Hidden questions are skipped by validation, hidden pages by navigation, and answers to hidden questions are left
 out of the response.
 
+#### Validators
+
+Any question takes a `validators` list. Each rule runs on a non-empty answer, in order, in the runner and on the
+server; the first failure is shown, with the rule's optional `message` instead of the default one:
+
+```json
+{ "id": "zip", "type": "text", "title": "Postal code",
+  "validators": [{ "type": "pattern", "pattern": "[0-9]{4}", "message": "Use four digits" }] }
+```
+
+| Validator | Applies to | Fields |
+| --- | --- | --- |
+| `pattern` | text, comment | `pattern` (must match the whole answer), `flags` (`i`, `m`, `s`, `u`) |
+| `length` | text, comment | `min`, `max` characters |
+| `range` | rating, text with `inputType` number or date | `min`, `max` (numbers, or `YYYY-MM-DD` for dates) |
+| `count` | multiple-choice, file, matrix | `min`, `max` options picked, files attached, or rows answered |
+| `email`, `url` | text | |
+| `custom` | any | `name` of a function you register, optional `options` |
+
+Custom rules are functions registered on both sides under the same name. They get the answer, the validator's
+`options` and the visible answers, and return `true`, `false` or an error message:
+
+```ts
+const validators = { invite: (value) => isKnownInvite(String(value)) || "Unknown invite code" };
+createSurvey({ survey, validators });                     // in the browser
+createApp({ repository, authorize, validators });          // on the server
+```
+
+A `custom` validator whose function isn't registered never passes, so a missing registration can't let bad data in.
+
 #### File uploads
 
 Files are stored by the storage adapter's optional `uploadFile` as soon as the respondent picks them. `httpStorage`

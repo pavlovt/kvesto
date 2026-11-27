@@ -10,6 +10,7 @@ export {
   type AnswerIssue,
   type ValidateOptions,
 } from "./validate.js";
+export { runValidators, type CustomValidatorFn, type CustomValidatorContext, type CustomValidators } from "./validators.js";
 export { evaluateCondition, resolveLogic, isEmptyAnswer, type SurveyLogic } from "./logic.js";
 export { fileToDataUrl } from "./files.js";
 export { summarizeResponses, type QuestionSummary, type MatrixRowSummary, type RankingSummary } from "./summary.js";

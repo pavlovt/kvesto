@@ -219,6 +219,51 @@ describe("files", () => {
   });
 });
 
+describe("validators", () => {
+  const signup = {
+    schemaVersion: 1,
+    id: "signup",
+    title: "Signup",
+    pages: [
+      {
+        id: "p1",
+        elements: [
+          { id: "nick", type: "text", title: "Nick", validators: [{ type: "length", min: 3, message: "At least 3" }] },
+          { id: "invite", type: "text", title: "Invite code", validators: [{ type: "custom", name: "invite" }] },
+        ],
+      },
+    ],
+  };
+
+  it("rejects responses that break a validator, with its message", async () => {
+    app = createApp({
+      repository: drizzleRepository(createSqliteDb(":memory:")),
+      authorize: openAccess,
+      validators: { invite: (v) => v === "KV-1" || "Unknown invite code" },
+    });
+    expect((await send("POST", "/surveys", signup)).status).toBe(201);
+    const bad = await send("POST", "/surveys/signup/responses", { answers: { nick: "ab", invite: "nope" } });
+    expect(bad.status).toBe(400);
+    expect((await bad.json()).issues).toEqual([
+      { path: ["answers", "nick"], message: "At least 3" },
+      { path: ["answers", "invite"], message: "Unknown invite code" },
+    ]);
+    expect((await send("POST", "/surveys/signup/responses", { answers: { nick: "abc", invite: "KV-1" } })).status).toBe(201);
+  });
+
+  it("refuses answers to custom validators the server doesn't know", async () => {
+    expect((await send("POST", "/surveys", signup)).status).toBe(201);
+    const res = await send("POST", "/surveys/signup/responses", { answers: { invite: "KV-1" } });
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects surveys with invalid validators", async () => {
+    const broken = structuredClone(signup);
+    (broken.pages[0]!.elements[0] as { validators: unknown[] }).validators = [{ type: "pattern", pattern: "(" }];
+    expect((await send("POST", "/surveys", broken)).status).toBe(400);
+  });
+});
+
 describe("access control", () => {
   const KEY = "s3cret-key";
   const authed = (method: string, path: string, body?: unknown, key?: string) =>

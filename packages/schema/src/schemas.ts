@@ -74,6 +74,86 @@ export const ConditionSchema: z.ZodType<Condition> = z.lazy(() =>
   ]),
 ).meta({ id: "Condition", description: "Conditional logic: a comparison, or all / any / not of conditions." });
 
+/** An optional error message shown instead of the validator's default one. */
+const validatorMessage = { message: DisplayTextSchema.optional() };
+const bound = z.number().int().nonnegative();
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a YYYY-MM-DD date");
+
+/** Longest regular expression accepted in a `pattern` validator. */
+export const MAX_PATTERN_LENGTH = 500;
+
+/** Text must match a regular expression (the whole answer, so `^`/`$` are implied). For text and comment. */
+export const PatternValidatorSchema = z.object({
+  type: z.literal("pattern"),
+  pattern: z.string().min(1).max(MAX_PATTERN_LENGTH),
+  /** Regular expression flags: any of `i`, `m`, `s`, `u`. */
+  flags: z.string().regex(/^[imsu]*$/, "Use only the flags i, m, s and u").optional(),
+  ...validatorMessage,
+});
+
+/** Number of characters. For text and comment. */
+export const LengthValidatorSchema = z.object({
+  type: z.literal("length"),
+  min: bound.optional(),
+  max: bound.optional(),
+  ...validatorMessage,
+});
+
+/**
+ * Allowed values. Numbers for ratings and `inputType: "number"` text,
+ * YYYY-MM-DD dates for `inputType: "date"` text.
+ */
+export const RangeValidatorSchema = z.object({
+  type: z.literal("range"),
+  min: z.union([z.number(), isoDate]).optional(),
+  max: z.union([z.number(), isoDate]).optional(),
+  ...validatorMessage,
+});
+
+/** How many options are picked (multiple choice), files attached, or matrix rows answered. */
+export const CountValidatorSchema = z.object({
+  type: z.literal("count"),
+  min: bound.optional(),
+  max: bound.optional(),
+  ...validatorMessage,
+});
+
+/** A well-formed email address. For text. */
+export const EmailValidatorSchema = z.object({ type: z.literal("email"), ...validatorMessage });
+
+/** An absolute http(s) URL. For text. */
+export const UrlValidatorSchema = z.object({ type: z.literal("url"), ...validatorMessage });
+
+/**
+ * A rule implemented by the host application: a function registered under
+ * `name` with `createSurvey({ validators })` and the server's `createApp({ validators })`.
+ */
+export const CustomValidatorSchema = z.object({
+  type: z.literal("custom"),
+  name: id,
+  /** Passed to the registered function as-is. */
+  options: z.record(z.string(), z.unknown()).optional(),
+  ...validatorMessage,
+});
+
+export const ValidatorSchema = z
+  .discriminatedUnion("type", [
+    PatternValidatorSchema,
+    LengthValidatorSchema,
+    RangeValidatorSchema,
+    CountValidatorSchema,
+    EmailValidatorSchema,
+    UrlValidatorSchema,
+    CustomValidatorSchema,
+  ])
+  .meta({ id: "Validator", description: "A rule an answer must follow, checked by the runner and the server." });
+
+export type Validator = z.infer<typeof ValidatorSchema>;
+export type ValidatorType = Validator["type"];
+export type PatternValidator = z.infer<typeof PatternValidatorSchema>;
+export type RangeValidator = z.infer<typeof RangeValidatorSchema>;
+export type CustomValidator = z.infer<typeof CustomValidatorSchema>;
+
 const questionBase = {
   id,
   title: RequiredDisplayTextSchema,
@@ -83,6 +163,8 @@ const questionBase = {
   visibleIf: ConditionSchema.optional(),
   /** Make the question required while this condition holds (in addition to `required`). */
   requiredIf: ConditionSchema.optional(),
+  /** Extra rules for a non-empty answer. Empty answers are only checked by `required`. */
+  validators: z.array(ValidatorSchema).optional(),
 };
 
 export const ChoiceSchema = z.object({
@@ -193,6 +275,46 @@ export const PageSchema = z.object({
   elements: z.array(QuestionSchema),
 });
 
+/** Is `validator` meaningful for `question`? Returns the reason when not. */
+export function validatorProblem(question: Question, validator: Validator): string | null {
+  const textual = question.type === "text" || question.type === "comment";
+  switch (validator.type) {
+    case "pattern":
+      try {
+        new RegExp(validator.pattern, validator.flags);
+      } catch (e) {
+        return `Invalid regular expression: ${(e as Error).message}`;
+      }
+      return textual ? null : "pattern only applies to text and comment questions";
+    case "length":
+      return textual ? null : "length only applies to text and comment questions";
+    case "email":
+    case "url":
+      return question.type === "text" ? null : `${validator.type} only applies to text questions`;
+    case "count":
+      return question.type === "multiple-choice" || question.type === "file" || question.type === "matrix"
+        ? null
+        : "count only applies to multiple-choice, file and matrix questions";
+    case "range": {
+      const kind =
+        question.type === "rating" || (question.type === "text" && question.inputType === "number")
+          ? "number"
+          : question.type === "text" && question.inputType === "date"
+            ? "string"
+            : null;
+      if (!kind) return 'range only applies to ratings and text questions with inputType "number" or "date"';
+      for (const v of [validator.min, validator.max]) {
+        if (v !== undefined && typeof v !== kind) {
+          return kind === "number" ? "range bounds must be numbers here" : "range bounds must be YYYY-MM-DD dates here";
+        }
+      }
+      return null;
+    }
+    case "custom":
+      return null;
+  }
+}
+
 /** Every comparison inside a condition tree. */
 export function conditionComparisons(condition: Condition): Comparison[] {
   if ("all" in condition) return condition.all.flatMap(conditionComparisons);
@@ -255,6 +377,14 @@ export const SurveySchema = z
         if (q.type === "rating" && q.min > q.max) {
           ctx.addIssue({ code: "custom", path: [...path, "max"], message: "max must be at least min" });
         }
+        q.validators?.forEach((v, vi) => {
+          const vpath = [...path, "validators", vi];
+          const problem = validatorProblem(q, v);
+          if (problem) ctx.addIssue({ code: "custom", path: vpath, message: problem });
+          if ("min" in v && v.min !== undefined && v.max !== undefined && v.min > v.max) {
+            ctx.addIssue({ code: "custom", path: [...vpath, "max"], message: "max must be at least min" });
+          }
+        });
         seen.set(q.id, q);
       });
     });

@@ -2,7 +2,7 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { Scalar } from "@scalar/hono-api-reference";
 import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
-import { findElement, formatBytes, validateAnswers, validateFile } from "@kvesto/core";
+import { findElement, formatBytes, validateAnswers, validateFile, type CustomValidators } from "@kvesto/core";
 import { openAccess, type Authorize, type KvestoAction } from "./auth.js";
 import type { SurveyRepository } from "./repository.js";
 import * as routes from "./routes.js";
@@ -21,6 +21,8 @@ export interface CreateAppOptions {
    * allowed and a warning is logged; pass `openAccess` to allow everything quietly.
    */
   authorize?: Authorize;
+  /** Functions for surveys' `custom` validators, by name: the same ones the runner uses. */
+  validators?: CustomValidators;
 }
 
 /** Types a browser may show inline. Anything else is served as a download, so an uploaded page can't run as this origin. */
@@ -117,7 +119,7 @@ export function createApp(options: CreateAppOptions) {
     const input = c.req.valid("json");
     const survey = await repo.loadSurvey(id);
     if (!survey) return c.json({ error: "Survey not found" }, 404);
-    const { issues, answers } = validateAnswers(survey, input.answers);
+    const { issues, answers } = validateAnswers(survey, input.answers, { validators: options.validators });
     if (issues.length) {
       return c.json(
         {
