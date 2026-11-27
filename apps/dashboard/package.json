@@ -1,5 +1,5 @@
 {
-  "name": "@kvesto/dashboard",
+  "name": "@kvesto/dashboard-app",
   "version": "0.0.1",
   "private": true,
   "description": "Kvesto survey results dashboard (SvelteKit).",

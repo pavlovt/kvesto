@@ -1,5 +1,5 @@
 {
-  "name": "@kvesto/editor",
+  "name": "@kvesto/editor-app",
   "version": "0.0.1",
   "private": true,
   "description": "Kvesto visual survey builder (SvelteKit).",
