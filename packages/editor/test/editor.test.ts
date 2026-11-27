@@ -11,7 +11,7 @@ describe("mountEditor", () => {
     document.body.append(target);
     const storage = memoryStorage();
     const onsave = vi.fn();
-    const editor = mountEditor(target, { storage, onsave });
+    const editor = mountEditor(target, { storage, onsave, view: "json" });
     flushSync();
 
     const textarea = target.querySelector("textarea")!;
@@ -32,9 +32,10 @@ describe("mountEditor", () => {
     const target = document.createElement("div");
     const changes: Survey[] = [];
     const survey = { schemaVersion: 1 as const, id: "s", title: "S", pages: [{ id: "p", elements: [] }] };
-    mountEditor(target, { survey, preview: false, onchange: (s) => changes.push(s) });
+    mountEditor(target, { survey, preview: false, view: "json", onchange: (s) => changes.push(s) });
     flushSync();
-    expect(target.querySelectorAll("button")).toHaveLength(15); // undo, redo, one per question type, panel and repeating panel; no Save without storage
+    expect(target.querySelectorAll(".kv-editor-palette button")).toHaveLength(13); // one per question type, panel and repeating panel
+    expect(target.querySelector(".kv-editor-primary")).toBeNull(); // no Save without storage
 
     const rating = [...target.querySelectorAll("button")].find((b) => b.textContent === "rating")!;
     rating.click();

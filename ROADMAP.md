@@ -307,7 +307,8 @@ After that the phases can be taken in almost any order; dependencies are listed 
 
 - **Scope:** `DisplayTextSchema` (from M1) widens to `string | { [locale]: string }`, with `locales` and
   `defaultLocale` on the survey and a `locale` option on `createSurvey`/`mountSurvey`. Built-in UI labels become
-  locale packs (English first, plus Bulgarian; contributions welcome). Validation messages use the same packs. An
+  locale packs: English, Bulgarian, German, French, Spanish, Italian, Portuguese, Dutch, Polish and Russian, plus
+  Chinese and Japanese if they need nothing beyond translation (contributions welcome). Validation messages use the same packs. An
   editor translation tab lists every string per locale with missing ones highlighted.
 - **Depends on:** M1. Easier the earlier it lands, since every later milestone adds strings.
 - **Packages:** schema, core, editor, dashboard (labels in the selected locale).
@@ -445,9 +446,13 @@ These do not block the first milestones, but should be settled before the one th
 
 - **M11:** keep JSON comparisons as the canonical form and add `{ "expr": "..." }` (recommended), or store
   everything as text expressions.
-- **M5:** the name of the item scope in conditions (`scope: "item"` is the working name).
-- **M20:** which locales to ship beyond English and Bulgarian.
-- **M28:** whether Excel export is worth a dependency, or CSV is enough at first.
+
+Decided:
+
+- **M5:** the item scope in conditions is `scope: "item"`.
+- **M20:** ship English, Bulgarian, the major European languages (German, French, Spanish, Italian, Portuguese,
+  Dutch, Polish), Russian, and Chinese and Japanese if they don't need extra work beyond translation.
+- **M28:** include Excel export (in its own optional package), alongside CSV.
 
 ## Status
 
@@ -460,6 +465,7 @@ These do not block the first milestones, but should be settled before the one th
 | M5 · Repeating panels | Done (unreleased). Not yet: nested repeats, file questions inside repeats |
 | M6 · Grid questions | Done (unreleased). Not yet: respondent-added rows |
 | M7 · Editor document model, undo and redo | Done (unreleased) |
-| M8 – M32 | Planned |
+| M8 · Structure view and property panel | Done (unreleased) |
+| M9 – M32 | Planned |
 
 Update this table as milestones land, with the release they shipped in.

@@ -46,8 +46,18 @@ const editor = mountEditor(document.getElementById("editor")!, {
 | `onchange` | `(survey) => void` | Called with every valid edit. |
 | `onsave` | `(survey) => void` | Called after a successful save. |
 | `preview` | `boolean` | Show the live preview. Default `true`. |
+| `view` | `"design" \| "json"` | Which tab opens first. Default `"design"`. |
 
 The component's own styles are scoped and use `kv-editor-*` class names.
+
+## Design and JSON views
+
+The **Design** tab has three columns: an outline of pages, panels and questions (with buttons to move, duplicate and
+delete), the live preview (click a question or panel to select it), and a property panel for the selection. The
+property panel covers titles, descriptions, required, the type-specific settings, choice, row and column lists, grid
+columns, repeat settings and validation rules. With nothing selected it edits the survey and page titles. The palette
+adds a question after the selection, or inside the selected panel. The **JSON** tab edits the raw survey next to the
+preview.
 
 ## Undo, redo and the document model
 
