@@ -962,6 +962,6 @@ Decided:
 | M7 · Editor document model, undo and redo | Done (unreleased) |
 | M8 · Structure view and property panel | Done (unreleased) |
 | M9 · Drag and drop | Done (unreleased). Not yet: auto-scroll while dragging, dragging in the preview |
-| M10 – M32 | Planned |
+| M10 – M73 | Planned |
 
 Update this table as milestones land, with the release they shipped in.
