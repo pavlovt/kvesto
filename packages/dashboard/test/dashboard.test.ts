@@ -221,3 +221,59 @@ describe("quiz scores", () => {
     unmount(view);
   });
 });
+
+describe("table view and filters", () => {
+  const survey = {
+    schemaVersion: 1,
+    id: "t",
+    title: "T",
+    pages: [
+      {
+        id: "p",
+        elements: [
+          { id: "role", type: "single-choice", title: "Role", choices: [{ value: "dev", label: "Developer" }, { value: "pm", label: "Manager" }] },
+          { id: "m", type: "matrix", title: "Rate", rows: [{ value: "speed", label: "Speed" }], columns: [{ value: "good", label: "Good" }, { value: "bad", label: "Bad" }] },
+        ],
+      },
+    ],
+  };
+  const responses = [
+    { id: "1", surveyId: "t", createdAt: "2026-01-05T10:00:00.000Z", answers: { role: "dev", m: { speed: "good" } } },
+    { id: "2", surveyId: "t", createdAt: "2026-02-05T10:00:00.000Z", answers: { role: "pm", m: { speed: "bad" } } },
+    { id: "3", surveyId: "t", createdAt: "2026-03-05T10:00:00.000Z", answers: { role: "dev" } },
+  ];
+  const mountResults = async () => {
+    const { mount } = await import("svelte");
+    const { SurveyResults } = await import("../src/lib/index.js");
+    const target = document.createElement("div");
+    const view = mount(SurveyResults, { target, props: { survey: survey as never, responses: responses as never } });
+    flushSync();
+    return { target, view };
+  };
+  const pick = (el: HTMLSelectElement | HTMLInputElement, value: string) => {
+    el.value = value;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+    flushSync();
+  };
+
+  it("shows a table with flattened columns, sorts it, and filters the summary and the table", async () => {
+    const { target, view } = await mountResults();
+    [...target.querySelectorAll<HTMLButtonElement>(".kv-dash-views button")].find((b) => b.textContent === "Table")!.click();
+    flushSync();
+    const headers = [...target.querySelectorAll(".kv-dash-table thead th")].map((th) => th.textContent);
+    expect(headers).toEqual(["Submitted", "Role", "Rate: Speed"]);
+    const firstCol = () => [...target.querySelectorAll(".kv-dash-table tbody tr td:nth-child(2)")].map((td) => td.textContent);
+    expect(firstCol()).toEqual(["Developer", "Manager", "Developer"]);
+    target.querySelectorAll<HTMLButtonElement>(".kv-dash-table thead th button")[1]!.click();
+    flushSync();
+    expect(firstCol()).toEqual(["Developer", "Developer", "Manager"]);
+
+    pick(target.querySelector<HTMLSelectElement>('[aria-label="Question to filter by"]')!, "role");
+    pick(target.querySelector<HTMLSelectElement>('[aria-label="Answer to filter by"]')!, "dev");
+    expect(target.textContent).toContain("2 responses");
+    pick(target.querySelectorAll<HTMLInputElement>('.kv-dash-filters input[type="date"]')[0]!, "2026-02-01");
+    expect(target.textContent).toContain("1 responses");
+    const { unmount } = await import("svelte");
+    unmount(view);
+  });
+});

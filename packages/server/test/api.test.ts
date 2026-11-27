@@ -757,3 +757,28 @@ describe("quizzes", () => {
     expect((await ok.json()).meta.quiz).toMatchObject({ score: 1, timedOut: true, released: true });
   });
 });
+
+describe("response listing", () => {
+  it("pages with a cursor and filters by answer and date", async () => {
+    await send("POST", "/surveys", survey);
+    for (const score of [1, 2, 3, 4, 5]) await send("POST", "/surveys/feedback/responses", { answers: { email: `${score}@x.co`, score } });
+    const page = async (q: string) => (await send("GET", `/surveys/feedback/responses${q}`)).json();
+    // Responses made in the same millisecond are ordered by id; together the pages hold each one exactly once.
+    const scores = (p: { items: { answers: { score: number } }[] }) => p.items.map((r) => r.answers.score);
+    const first = await page("?limit=2");
+    const second = await page(`?limit=2&cursor=${first.nextCursor}`);
+    const last = await page(`?limit=2&cursor=${second.nextCursor}`);
+    expect([first, second, last].map((p) => p.items.length)).toEqual([2, 2, 1]);
+    expect([...scores(first), ...scores(second), ...scores(last)].sort()).toEqual([1, 2, 3, 4, 5]);
+    expect(last.nextCursor).toBeUndefined();
+    expect((await send("GET", "/surveys/feedback/responses?cursor=bogus")).status).toBe(400);
+
+    expect((await page("?answer=score:3")).total).toBe(1);
+    expect((await page("?answer=score:3&answer=email:3@x.co")).total).toBe(1);
+    expect((await page("?answer=score:9")).total).toBe(0);
+    const today = new Date().toISOString().slice(0, 10);
+    expect((await page(`?from=${today}`)).total).toBe(5);
+    expect((await page(`?to=${today}`)).total).toBe(5);
+    expect((await page("?to=2000-01-01")).total).toBe(0);
+  });
+});

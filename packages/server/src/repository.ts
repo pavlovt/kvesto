@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, count, desc, eq, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, lt, lte, or, sql } from "drizzle-orm";
 import type { SurveyStorage, SurveySummary } from "@kvesto/core";
 import { textOf, type ResponseInput, type Survey, type SurveyResponse } from "@kvesto/schema";
 
@@ -29,13 +29,27 @@ export interface ResponseFilter {
   status?: ResponseStatusFilter;
   /** Hidden field values the response must have. */
   hidden?: Record<string, string>;
+  /** Answers (top-level question id → value as text) the response must have. */
+  answers?: Record<string, string>;
+  /** Created on or after / on or before (ISO strings, compared as text). */
+  from?: string;
+  to?: string;
+}
+
+/** Where a page of responses starts: after this one (newest first). */
+export interface ResponseCursor {
+  createdAt: string;
+  id: string;
 }
 
 export interface SurveyRepository extends Required<Omit<SurveyStorage, "uploadFile" | "saveProgress" | "loadProgress">> {
   surveyExists(id: string): Promise<boolean>;
   createSurvey(survey: Survey): Promise<Survey>;
   countResponses(surveyId: string, filter?: ResponseFilter): Promise<number>;
-  listResponsesPage(surveyId: string, opts: { limit: number; offset: number } & ResponseFilter): Promise<SurveyResponse[]>;
+  listResponsesPage(
+    surveyId: string,
+    opts: { limit: number; offset: number; after?: ResponseCursor } & ResponseFilter,
+  ): Promise<SurveyResponse[]>;
   /** Store a partial response with the hash of its resume token's secret. */
   savePartialResponse(surveyId: string, input: ResponseInput, tokenHash: string): Promise<SurveyResponse>;
   /** A response with its token hash, for checking a resume token. */
@@ -59,12 +73,16 @@ function toResponse(row: typeof responses.$inferSelect): SurveyResponse {
   };
 }
 
-const byFilter = (surveyId: string, { status = "complete", hidden = {} }: ResponseFilter = {}) =>
+const byFilter = (surveyId: string, { status = "complete", hidden = {}, answers = {}, from, to }: ResponseFilter = {}) =>
   and(
     eq(responses.surveyId, surveyId),
     ...(status === "all" ? [] : [eq(responses.status, status)]),
     // Names are checked by the API (letters, digits, - and _), and values are bound parameters.
     ...Object.entries(hidden).map(([name, value]) => sql`json_extract(${responses.meta}, ${`$.hidden.${name}`}) = ${value}`),
+    // Numbers and booleans compare as their text, so `score:5` matches 5.
+    ...Object.entries(answers).map(([q, value]) => sql`CAST(json_extract(${responses.answers}, ${`$.${q}`}) AS TEXT) = ${value}`),
+    ...(from ? [gte(responses.createdAt, from)] : []),
+    ...(to ? [lte(responses.createdAt, to)] : []),
   );
 
 export function drizzleRepository(db: KvestoDb): SurveyRepository {
@@ -162,14 +180,18 @@ export function drizzleRepository(db: KvestoDb): SurveyRepository {
       const row = await db.select({ n: count() }).from(responses).where(byFilter(surveyId, filter)).get();
       return row?.n ?? 0;
     },
-    async listResponsesPage(surveyId, { limit, offset, ...filter }) {
+    async listResponsesPage(surveyId, { limit, offset, after, ...filter }) {
+      // Keyset paging: newest first, ties broken by id, so pages never skip or repeat a response.
+      const page = after
+        ? or(lt(responses.createdAt, after.createdAt), and(eq(responses.createdAt, after.createdAt), lt(responses.id, after.id)))
+        : undefined;
       const rows = await db
         .select()
         .from(responses)
-        .where(byFilter(surveyId, filter))
-        .orderBy(desc(responses.createdAt))
+        .where(and(byFilter(surveyId, filter), page))
+        .orderBy(desc(responses.createdAt), desc(responses.id))
         .limit(limit)
-        .offset(offset)
+        .offset(after ? 0 : offset)
         .all();
       return rows.map(toResponse);
     },

@@ -512,6 +512,14 @@ Files are stored by the storage adapter's optional `uploadFile` as soon as the r
 sends them to the server; `memoryStorage`, `localStorageStorage` and runs without storage embed them in the answer
 as base64 `data:` URLs (set `maxSize`: browsers cap localStorage at a few MB).
 
+## Results
+
+The dashboard shows a summary per question and a sortable, paged table of responses (one column per answer part:
+matrix rows, grid cells, multi-text fields and each repeat item). Both follow its filters: dates, one answer,
+hidden fields and partial responses. The same pieces are in the core for your own reports: `summarizeResponses`,
+`responseColumns` and `responseRow`, and `filterResponses(responses, { from, to, status, hidden, where })`, where
+`where` is a condition in the survey's own format.
+
 ## Accessibility
 
 Kvesto aims for WCAG 2.2 AA. axe-core checks the runner and the editor on every test run, every question type works
@@ -530,7 +538,7 @@ KVESTO_DB=./data/kvesto.db PORT=8080 pnpm --filter @kvesto/server start
 | GET | `/health` | Health check |
 | GET, POST | `/surveys` | List / create surveys |
 | GET, PUT, DELETE | `/surveys/{id}` | Read / create-or-replace / delete a survey |
-| GET, POST | `/surveys/{id}/responses` | List (paginated) / submit responses |
+| GET, POST | `/surveys/{id}/responses` | List / submit responses. Lists take `limit` with `cursor` (from `nextCursor`) or `offset`, and filter with `status`, `from`, `to`, `answer=q:value` and `hidden=name:value`. |
 | POST | `/surveys/{id}/files` | Upload a file for a file question (multipart: `questionId`, `file`) |
 | GET | `/surveys/{id}/files/{fileId}` | Download an uploaded file |
 | GET | `/openapi.json`, `/docs` | OpenAPI 3.1 document and Scalar API reference |

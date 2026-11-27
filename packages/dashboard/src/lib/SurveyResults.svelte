@@ -23,7 +23,8 @@
 </script>
 
 <script lang="ts">
-  import { completionStats, localizeSurvey, summarizeResponses, type GridCellSummary, type QuestionSummary } from "@kvesto/core";
+  import ResponseTable from "./ResponseTable.svelte";
+  import { completionStats, filterResponses, localizeSurvey, summarizeResponses, type Condition, type GridCellSummary, type QuestionSummary } from "@kvesto/core";
 
   let props: SurveyResultsProps = $props();
 
@@ -64,14 +65,39 @@
       values: [...new Set(all.map((r) => hiddenOf(r)[name]).filter((v): v is string => typeof v === "string"))].sort(),
     })),
   );
+  // Filters: dates, one answer, and the hidden fields and partial toggle above.
+  let from = $state("");
+  let to = $state("");
+  let answerQuestion = $state("");
+  let answerValue = $state("");
+  let view = $state<"summary" | "table">("summary");
+  /** Questions an answer filter can pick a value for. */
+  const filterable = $derived(
+    (survey ? summarizeResponses(survey, []) : [])
+      .filter((s) => !s.repeat && s.counts)
+      .map((s) => ({ id: s.question.id, title: String(s.question.title), options: s.counts! })),
+  );
+  const where = $derived.by((): Condition | undefined => {
+    const q = filterable.find((f) => f.id === answerQuestion);
+    if (!q || !answerValue) return undefined;
+    const type = survey ? summarizeResponses(survey, []).find((s) => s.question.id === q.id)?.question.type : undefined;
+    // Lists contain the value; single answers equal it (booleans and ratings compare as their typed value).
+    if (type === "multiple-choice" || type === "tags" || type === "ranking") return { question: q.id, op: "contains", value: answerValue };
+    if (type === "boolean") return { question: q.id, op: "eq", value: answerValue === "true" };
+    if (type === "rating" || type === "slider") return { question: q.id, op: "eq", value: Number(answerValue) };
+    return { question: q.id, op: "eq", value: answerValue };
+  });
   const responses = $derived(
-    all.filter(
-      (r) =>
-        (includePartial || r.status !== "partial") &&
-        Object.entries(hiddenFilter).every(([name, value]) => !value || hiddenOf(r)[name] === value),
-    ),
+    filterResponses(all, {
+      status: includePartial ? "all" : "complete",
+      ...(from ? { from } : {}),
+      ...(to ? { to } : {}),
+      hidden: hiddenFilter,
+      ...(where ? { where } : {}),
+    }),
   );
   const summary = $derived<QuestionSummary[]>(survey ? summarizeResponses(survey, responses) : []);
+  const shownSummary = $derived(view === "summary" ? summary : []);
   const completion = $derived(survey && partials ? completionStats(survey, all) : null);
   // Quiz scores, as the server worked them out.
   const scores = $derived.by(() => {
@@ -115,8 +141,39 @@
     .kv-dash-results {
       h1 '{survey.title}'
       p.kv-dash-muted '{responses.length} responses'
-      if hiddenValues.some((h) => h.values.length) {
-        .kv-dash-filters {
+      .kv-dash-filters {
+        .kv-dash-views role=group aria-label="View" {
+          button type=button aria-pressed={view === "summary"} onclick={() => (view = "summary")} 'Summary'
+          button type=button aria-pressed={view === "table"} onclick={() => (view = "table")} 'Table'
+        }
+        label {
+          span 'From'
+          input type=date value={from} onchange={(e) => (from = e.currentTarget.value)}
+        }
+        label {
+          span 'To'
+          input type=date value={to} onchange={(e) => (to = e.currentTarget.value)}
+        }
+        if filterable.length {
+          label {
+            span 'Answer'
+            select aria-label="Question to filter by" value={answerQuestion} onchange={(e) => ((answerQuestion = e.currentTarget.value), (answerValue = ""))} {
+              option value="" 'Any question'
+              each filterable as f (f.id) {
+                option value={f.id} '{f.title}'
+              }
+            }
+          }
+          if answerQuestion {
+            select aria-label="Answer to filter by" value={answerValue} onchange={(e) => (answerValue = e.currentTarget.value)} {
+              option value="" 'Any answer'
+              each filterable.find((f) => f.id === answerQuestion)?.options ?? [] as o (o.value) {
+                option value={o.value} '{o.label}'
+              }
+            }
+          }
+        }
+        if hiddenValues.some((h) => h.values.length) {
           each hiddenValues as h (h.name) {
             label {
               span '{h.name}'
@@ -130,7 +187,10 @@
           }
         }
       }
-      if scores {
+      if view === "table" {
+        ResponseTable survey={survey} responses={responses}
+      }
+      if view === "summary" && scores {
         section.kv-dash-card.kv-dash-scores {
           h2 'Scores'
           p 'Average {scores.average}% over {scores.n} scored {scores.n === 1 ? "response" : "responses"}{scores.passRate !== null ? `, ${scores.passRate}% passed` : ""}.'
@@ -143,7 +203,7 @@
           }
         }
       }
-      if completion {
+      if view === "summary" && completion {
         section.kv-dash-card.kv-dash-completion {
           h2 'Completion'
           p '{completion.completed} of {completion.started} started responses were completed ({pct(completion.completed, completion.started)}%).'
@@ -163,8 +223,8 @@
           }
         }
       }
-      each summary as item, i (item.question.id) {
-        if groupLabel(item) && groupLabel(item) !== groupLabel(summary[i - 1]) {
+      each shownSummary as item, i (item.question.id) {
+        if groupLabel(item) && groupLabel(item) !== groupLabel(shownSummary[i - 1]) {
           p.kv-dash-group '{groupLabel(item)}'
         }
         section.kv-dash-card {
@@ -268,6 +328,10 @@
   .kv-dash-dropoff { list-style: none; margin: 0; padding: 0; }
   .kv-dash-filters { display: flex; flex-wrap: wrap; gap: 0.75rem; margin: 0 0 1rem; font-size: 0.9rem; }
   .kv-dash-filters label { display: flex; gap: 0.35rem; align-items: center; }
+  .kv-dash-filters input, .kv-dash-filters select, .kv-dash-views button { font: inherit; font-size: 0.85rem; }
+  .kv-dash-views { display: flex; }
+  .kv-dash-views button { cursor: pointer; border: 1px solid var(--kv-ui-border-strong, #d1d5db); background: var(--kv-ui-surface, white); color: inherit; padding: 0.2rem 0.6rem; }
+  .kv-dash-views button[aria-pressed="true"] { background: var(--kv-ui-accent-soft, #eff6ff); border-color: var(--kv-ui-accent-line, #93c5fd); }
   .kv-dash-completion h3 { font-size: 0.95rem; margin: 0.75rem 0 0.25rem; }
   .kv-dash-toggle { display: flex; gap: 0.4rem; align-items: center; font-size: 0.9rem; }
   .kv-dash-bar-row { display: grid; grid-template-columns: 10rem 1fr 3rem; gap: 0.5rem; align-items: center; margin: 0.3rem 0; }

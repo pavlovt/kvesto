@@ -172,7 +172,10 @@ export const listResponses = createRoute({
   request: { params: SurveyIdParam, query: Pagination },
   responses: {
     ...refused,
-    200: json(ResponseList, "Responses, newest first"), 404: error("Survey not found") },
+    200: json(ResponseList, "Responses, newest first"),
+    400: error("Invalid cursor"),
+    404: error("Survey not found"),
+  },
 });
 
 export const uploadFile = createRoute({

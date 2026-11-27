@@ -66,6 +66,22 @@ function withHidden<T extends { meta?: Record<string, unknown> }>(input: T, hidd
   return { ...input, ...(Object.keys(next).length ? { meta: next } : { meta: undefined }) };
 }
 
+/** `name:value` query values as an object; names must be ids (letters, digits, - and _). */
+function pairs(values: string[] | undefined): Record<string, string> {
+  return Object.fromEntries(
+    (values ?? [])
+      .filter((v) => v.includes(":"))
+      .map((v) => [v.slice(0, v.indexOf(":")), v.slice(v.indexOf(":") + 1)] as const)
+      .filter(([k]) => /^[A-Za-z0-9_-]+$/.test(k)),
+  );
+}
+
+const encodeCursor = (r: { createdAt: string; id: string }) => Buffer.from(`${r.createdAt}|${r.id}`).toString("base64url");
+function decodeCursor(cursor: string): { createdAt: string; id: string } | undefined {
+  const [createdAt, id] = Buffer.from(cursor, "base64url").toString("utf8").split("|");
+  return createdAt && id && /^\d{4}-\d{2}-\d{2}T/.test(createdAt) ? { createdAt, id } : undefined;
+}
+
 /** A submission after a time limit ran out: accepted unchecked only when the survey has a time limit. */
 function timedOut(survey: Survey, meta: Record<string, unknown> | undefined): boolean {
   const claimed = Boolean((meta?.quiz as { timedOut?: unknown } | undefined)?.timedOut ?? meta?.timedOut);
@@ -383,15 +399,24 @@ export function createApp(options: CreateAppOptions) {
     const { limit, offset, status } = c.req.valid("query");
     if (!(await repo.surveyExists(id))) return c.json({ error: "Survey not found" }, 404);
     // `?hidden=source:newsletter` (repeatable) keeps responses whose hidden field has that value.
-    const hidden = Object.fromEntries(
-      c.req
-        .queries("hidden")
-        ?.map((h) => [h.slice(0, h.indexOf(":")), h.slice(h.indexOf(":") + 1)] as const)
-        .filter(([k]) => /^[A-Za-z0-9_-]+$/.test(k)) ?? [],
-    );
-    const filter = { status, ...(Object.keys(hidden).length ? { hidden } : {}) };
-    const [items, total] = await Promise.all([repo.listResponsesPage(id, { limit, offset, ...filter }), repo.countResponses(id, filter)]);
-    return c.json({ items, total, limit, offset }, 200);
+    const hidden = pairs(c.req.queries("hidden"));
+    const answers = pairs(c.req.queries("answer"));
+    const { from, to, cursor } = c.req.valid("query");
+    // A bare date for `to` means the whole of that day.
+    const until = to && /^\d{4}-\d{2}-\d{2}$/.test(to) ? `${to}T23:59:59.999Z` : to;
+    const filter = {
+      status,
+      ...(Object.keys(hidden).length ? { hidden } : {}),
+      ...(Object.keys(answers).length ? { answers } : {}),
+      ...(from ? { from } : {}),
+      ...(until ? { to: until } : {}),
+    };
+    const after = cursor ? decodeCursor(cursor) : undefined;
+    if (cursor && !after) return c.json({ error: "Invalid cursor", issues: [{ path: ["cursor"], message: "Not a cursor from this API" }] }, 400);
+    const [items, total] = await Promise.all([repo.listResponsesPage(id, { limit, offset, ...filter, ...(after ? { after } : {}) }), repo.countResponses(id, filter)]);
+    const last = items.at(-1);
+    const more = items.length === limit && last;
+    return c.json({ items, total, limit, offset, ...(more ? { nextCursor: encodeCursor(last) } : {}) }, 200);
   });
 
   if (options.docs !== false) {

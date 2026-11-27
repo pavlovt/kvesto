@@ -56,6 +56,8 @@ export const ResponseList = z
     total: z.number().int(),
     limit: z.number().int(),
     offset: z.number().int(),
+    /** Pass as `cursor` for the next page; absent on the last page. */
+    nextCursor: z.string().optional(),
   })
   .openapi("ResponseList");
 
@@ -82,6 +84,17 @@ export const Pagination = z.object({
     .union([z.string(), z.array(z.string())])
     .optional()
     .openapi({ param: { name: "hidden", in: "query", description: "name:value, repeatable" } }),
+  /** `questionId:value`, repeatable: keep responses whose answer is exactly that value (top-level questions). */
+  answer: z
+    .union([z.string(), z.array(z.string())])
+    .optional()
+    .openapi({ param: { name: "answer", in: "query", description: "questionId:value, repeatable" } }),
+  /** Created on or after this date or date-time (ISO 8601). */
+  from: z.string().max(40).optional().openapi({ param: { name: "from", in: "query" } }),
+  /** Created on or before this date (the whole day) or date-time. */
+  to: z.string().max(40).optional().openapi({ param: { name: "to", in: "query" } }),
+  /** The `nextCursor` of the previous page: faster than `offset` for large surveys. */
+  cursor: z.string().max(200).optional().openapi({ param: { name: "cursor", in: "query" } }),
 });
 
 export const ResponseParams = z.object({

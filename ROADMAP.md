@@ -4,8 +4,8 @@ This is the plan for growing Kvesto from today's skeleton into a full survey too
 Each milestone is meant to be one focused change on `main`: it builds, type-checks and passes tests on its own, and
 can ship in a patch or minor release without waiting for the next one.
 
-> **Where we are now:** M26 (framework wrappers) is the latest finished milestone. Next up:
-> M27 (dashboard table view and filters). The [Status](#status) table at the bottom lists every milestone.
+> **Where we are now:** M27 (dashboard table view and filters) is the latest finished milestone. Next up:
+> M28 (export). The [Status](#status) table at the bottom lists every milestone.
 
 Milestones marked **★** are ideas that go beyond the original feature list. They come from looking at how other
 form and survey tools solve the same problems (conversational forms, headless form renderers, open source
@@ -1189,6 +1189,7 @@ Decided:
 | M24 · Quiz mode and scoring | Done (unreleased). Not yet: choice scores in the editor's choice list (they can be set in JSON) |
 | M25 · Accessibility audit | Done (unreleased). Not yet: the manual NVDA and VoiceOver pass, and machine-checked colour contrast (see ACCESSIBILITY.md) |
 | M26 · Framework wrappers | Done (unreleased). Angular is left for when someone asks |
-| M27 – M79 | Planned |
+| M27 · Dashboard table view and filters | Done (unreleased) |
+| M28 – M79 | Planned |
 
 Update this table as milestones land, with the release they shipped in.

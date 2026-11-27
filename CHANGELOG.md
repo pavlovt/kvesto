@@ -44,6 +44,9 @@ All packages (`kvesto`, `@kvesto/schema`, `core`, `server`, `editor`, `dashboard
   targets, `lang` on the survey, and ACCESSIBILITY.md with the keyboard map and a conformance report.
 - Framework wrappers (M26): a `<kvesto-survey>` custom element (`defineSurveyElement`), and new `@kvesto/react` and
   `@kvesto/vue` packages with a `<Survey>` component and a `useSurvey` hook or composable, in the release workflow.
+- Dashboard table view and filters (M27): a sortable, paged table of responses with flattened columns, filters by
+  date, answer, hidden field and status that also apply to the summaries, `filterResponses` / `responseColumns` /
+  `responseRow` in core, and cursor paging with date and answer filters on the server.
 
 ## 0.2.0
 
