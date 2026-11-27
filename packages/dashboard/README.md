@@ -45,9 +45,20 @@ const dashboard = mountDashboard(document.getElementById("results")!, {
 
 | Component | Props |
 | --- | --- |
-| `Dashboard` | `storage` (needs `listSurveys`, `loadSurvey`, `listResponses`), optional `surveyId` |
+| `Dashboard` | `storage` (needs `listSurveys`, `loadSurvey`, `listResponses`), optional `surveyId`, `api` |
 | `SurveyList` | `storage` (needs `listSurveys`), `href(id)` or `onselect(id)`, optional `emptyText` |
-| `SurveyResults` | `storage` + `surveyId`, or `survey` + `responses` |
+| `SurveyResults` | `storage` + `surveyId`, or `survey` + `responses`; optional `api` |
+| `ApiTokens` | `api`: create, list and revoke API tokens (needs `token:manage`) |
+| `AuditLog` | `api`, optional `pageSize`: the audit log with filters and a CSV download (needs `audit:read`) |
+
+`api` takes the same options as `httpStorage` (`baseUrl`, `headers`, `fetch`). With it, `Dashboard` adds "API tokens"
+and "Audit log" sections and a Delete button on each response. A dashboard on another origin needs the server's
+`adminCors` (or `KVESTO_ADMIN_ORIGINS`). Answers masked for the viewer's role (`pii` questions) show as "redacted".
+
+```ts
+const options = { baseUrl: "/api/kvesto", headers: { authorization: `Bearer ${key}` } };
+mountDashboard(el, { storage: httpStorage(options), api: options });
+```
 
 The components' styles are scoped and use `kv-dash-*` class names.
 

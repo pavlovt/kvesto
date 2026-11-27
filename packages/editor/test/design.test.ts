@@ -449,6 +449,41 @@ describe("availability settings in the editor", () => {
   });
 });
 
+describe("privacy and spam settings in the editor", () => {
+  it("sets retention, anti-spam and the hidden fields an anonymous survey keeps", () => {
+    const ui = setup(false);
+    ui.type(field(ui, "Delete responses after"), "30");
+    field(ui, "Honeypot").click();
+    flushSync();
+    field(ui, "Require a CAPTCHA").click();
+    flushSync();
+    ui.type(field(ui, "Minimum seconds"), "5");
+    ui.type(field(ui, "Refuse duplicate answers"), "600");
+    expect(ui.last().settings).toEqual({ retentionDays: 30, antiSpam: { honeypot: true, challenge: true, minSeconds: 5, duplicateWindow: 600 } });
+
+    // The kept hidden fields only matter (and only show) for an anonymous survey.
+    expect(ui.$$(".kv-props label").some((l) => l.textContent?.includes("kept when anonymous"))).toBe(false);
+    field(ui, "Anonymous").click();
+    flushSync();
+    const kept = field(ui, "Hidden fields kept when anonymous");
+    kept.value = "campaign, bad id, source";
+    kept.dispatchEvent(new Event("change", { bubbles: true }));
+    flushSync();
+    expect(ui.last().settings).toMatchObject({ anonymous: true, anonymousHidden: ["campaign", "source"] });
+
+    // Clearing every anti-spam setting removes `antiSpam`.
+    field(ui, "Honeypot").click();
+    flushSync();
+    field(ui, "Require a CAPTCHA").click();
+    flushSync();
+    ui.type(field(ui, "Minimum seconds"), "");
+    ui.type(field(ui, "Refuse duplicate answers"), "");
+    ui.type(field(ui, "Delete responses after"), "");
+    expect(ui.last().settings).toEqual({ anonymous: true, anonymousHidden: ["campaign", "source"] });
+    ui.editor.destroy();
+  });
+});
+
 describe("share snippets", () => {
   it("shows link and embed snippets when the server address is known", () => {
     const target = document.createElement("div");

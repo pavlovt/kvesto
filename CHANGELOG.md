@@ -67,6 +67,7 @@ All packages (`kvesto`, `@kvesto/schema`, `core`, `server`, `editor`, `dashboard
 - Roles and scoped tokens: `ROLE_ACTIONS` (owner, editor, analyst, viewer), hashed and expiring API tokens with optional survey scopes (`POST/GET /tokens`, `DELETE /tokens/{id}`, `tokenAuth`), an OpenID Connect sign-in (`oidcLogin`) with signed session cookies and CSRF checks on cookie writes, and `anyAuthorize` to combine them (M39). New `token:manage` action.
 - Audit log: one hash-chained entry per admin request (actor, action, survey, status, address, request id), `GET /audit` and `GET /audit.csv` (`audit:read`), an `onAudit` hook, `setActor` for custom `authorize` functions, and `app.audit.verify()` to detect tampering (M40).
 - Security test suite: fast-check fuzzing of the survey schema, expressions and condition logic with fixed time budgets, an XSS corpus through every render path, an OWASP ZAP baseline scan in CI, and a release checklist in `SECURITY.md`. Pattern validators now refuse nested repetition and backreferences (`regexRisk`), which could take exponential time (M41).
+- Admin UI for the server features above: the editor sets `antiSpam`, `retentionDays` and `anonymousHidden` in the survey settings; the dashboard, given `api` (the `httpStorage` options), manages API tokens, shows the audit log with filters, paging and a CSV download, deletes a response, and marks answers masked as `[redacted]`.
 
 ## 0.2.0
 

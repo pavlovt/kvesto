@@ -1,9 +1,11 @@
 <script lang="ts" module>
-  import type { Survey, SurveyResponse, SurveyStorage } from "@kvesto/core";
+  import type { HttpStorageOptions, Survey, SurveyResponse, SurveyStorage } from "@kvesto/core";
 
   export type SurveyResultsProps = {
     /** Show the survey's texts in this locale (falling back to its default). Default: the survey's default locale. */
     locale?: string;
+    /** The Kvesto server, for admin actions storage has no method for: with it, a response can be deleted. */
+    api?: HttpStorageOptions;
   } & (
     | {
         /** Load the survey and its responses from storage. Needs `loadSurvey` and `listResponses`. */
@@ -24,6 +26,7 @@
 
 <script lang="ts">
   import ResponseTable from "./ResponseTable.svelte";
+  import { apiError, apiRequest } from "./api.js";
   import { responsesToXlsx } from "@kvesto/export";
   import { completionStats, filterResponses, localizeSurvey, responsesToCsv, summarizeResponses, type Condition, type GridCellSummary, type QuestionSummary } from "@kvesto/core";
 
@@ -53,7 +56,19 @@
   const source = $derived(props.survey ?? loaded?.survey ?? null);
   // Every text in the chosen locale, so the markup below only sees plain strings.
   const survey = $derived(source ? localizeSurvey(source, props.locale) : null);
-  const all = $derived(props.responses ?? loaded?.responses ?? []);
+  // Responses deleted here, left out until the next load.
+  let deleted = $state<string[]>([]);
+  const all = $derived((props.responses ?? loaded?.responses ?? []).filter((r) => !deleted.includes(r.id)));
+  async function deleteResponse(responseId: string) {
+    const { api } = props;
+    if (!api || !source) return;
+    try {
+      await apiRequest(api, "DELETE", `/surveys/${encodeURIComponent(source.id)}/responses/${encodeURIComponent(responseId)}`);
+    } catch (e) {
+      throw new Error(apiError(e));
+    }
+    deleted = [...deleted, responseId];
+  }
   // Partial responses (saved progress) are left out of the results unless asked for.
   let includePartial = $state(false);
   const partials = $derived(all.filter((r) => r.status === "partial").length);
@@ -209,7 +224,7 @@
         }
       }
       if view === "table" {
-        ResponseTable survey={survey} responses={responses}
+        ResponseTable survey={survey} responses={responses} ondelete={props.api ? deleteResponse : undefined}
       }
       if view === "summary" && scores {
         section.kv-dash-card.kv-dash-scores {

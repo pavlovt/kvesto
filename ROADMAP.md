@@ -1197,12 +1197,12 @@ Decided:
 | M32 · Survey availability settings | Done (unreleased). `oneResponsePer: "browser"` is best effort (a browser id in localStorage); closed messages translated for en, bg, de only |
 | M33 · Security baseline and disclosure process | Done (unreleased). Secret scanning, push protection and private reporting are repository settings to turn on in GitHub |
 | M34 · Hardened HTTP defaults and document limits | Done (unreleased). Admin routes no longer allow any origin by default: set `adminCors` (or `KVESTO_ADMIN_ORIGINS`); the URL guard shipped with M29 |
-| M35 · Rate limiting and spam protection | Done (unreleased). Rate limits are opt-in in `createApp` (on in `kvesto-server`); `antiSpam` has no editor UI yet |
+| M35 · Rate limiting and spam protection | Done (unreleased). Rate limits are opt-in in `createApp` (on in `kvesto-server`); `antiSpam` and retention are set in the editor's survey settings |
 | M36 · Upload hardening | Done (unreleased). Partial responses also keep their files; `httpStorage` needed no change, as file URLs are opaque |
 | M37 · Privacy controls (GDPR) | Done (unreleased). Webhooks always mask `pii` answers (no caller to authorize); respondent access uses the response token, not an emailed link |
 | M38 · Encryption of answers | Done (unreleased). At-rest encryption and rotation only; the end-to-end mode is not built |
-| M39 · Users, roles, scoped tokens and SSO | Done (unreleased). Core parts: no user or workspace tables, no SAML adapter, no token UI in the editor or dashboard |
-| M40 · Audit log | Done (unreleased). No audit view in the dashboard yet |
+| M39 · Users, roles, scoped tokens and SSO | Done (unreleased). Core parts: no user or workspace tables, no SAML adapter. The dashboard's "API tokens" section (with its `api` option) creates and revokes tokens |
+| M40 · Audit log | Done (unreleased). The dashboard's "Audit log" section filters, pages and downloads the CSV |
 | M41 · Security test suite | Done (unreleased). The ZAP scan runs in CI only (not checked locally); fails only on FAIL-level findings |
 | M42 – M79 | Planned |
 

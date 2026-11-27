@@ -1,15 +1,18 @@
 <script lang="ts">
-  import { responseColumns, responseRow, type Survey, type SurveyResponse } from "@kvesto/core";
+  import { MASKED, responseColumns, responseRow, type Survey, type SurveyResponse } from "@kvesto/core";
 
   let {
     survey,
     responses,
     pageSize = 25,
+    ondelete,
   }: {
     survey: Survey;
     responses: SurveyResponse[];
     /** Rows per page. */
     pageSize?: number;
+    /** Delete a response for good. Without it, there is no Delete button. */
+    ondelete?: (responseId: string) => Promise<void>;
   } = $props();
 
   const columns = $derived(responseColumns(survey, responses));
@@ -47,11 +50,41 @@
     window.print();
     document.documentElement.classList.remove("kv-dash-printing-one");
   }
+  // Delete asks twice: the first press arms the button.
+  let confirmDelete = $state(false);
+  let deleteError = $state<string | null>(null);
+  $effect(() => {
+    void open;
+    confirmDelete = false;
+    deleteError = null;
+  });
+  async function deleteOne() {
+    if (!opened || !ondelete) return;
+    if (!confirmDelete) {
+      confirmDelete = true;
+      return;
+    }
+    try {
+      await ondelete(opened.response.id);
+      open = null;
+    } catch (e) {
+      deleteError = e instanceof Error ? e.message : String(e);
+      confirmDelete = false;
+    }
+  }
   const ariaSort = (key: string) => (sortKey === key ? (descending ? "descending" : "ascending") : "none");
   const when = (iso: string) => iso.replace("T", " ").slice(0, 16);
 </script>
 
 <template lang="braceml">
+  // Masked personal data (a pii question) shows as a marker, not as text.
+  snippet cell(text: string | undefined) {
+    if text === MASKED {
+      span.kv-dash-redacted title="Personal data, masked for your role" 'redacted'
+    } else {
+      '{text}'
+    }
+  }
   .kv-dash-table-wrap {
     if !responses.length {
       p.kv-dash-muted 'No responses match.'
@@ -71,7 +104,9 @@
                 td > button.kv-dash-open type=button aria-label="Open response {row.response.id}" onclick={() => (open = row.response.id)} 'View'
                 td.kv-dash-when '{when(row.response.createdAt)}{row.response.status === "partial" ? " (partial)" : ""}'
                 each columns as col (col.key) {
-                  td '{row.cells[col.key]}'
+                  td {
+                    @render cell(row.cells[col.key])
+                  }
                 }
               }
             }
@@ -83,15 +118,23 @@
           .kv-dash-detail-head {
             h2 'Response {when(opened.response.createdAt)}'
             button type=button onclick={printOne} 'Print'
+            if ondelete {
+              button.kv-dash-delete type=button onclick={deleteOne} '{confirmDelete ? "Really delete?" : "Delete"}'
+            }
             button type=button onclick={() => (open = null)} 'Close'
           }
           dl {
             each columns as col (col.key) {
               if opened.cells[col.key] {
                 dt '{col.label}'
-                dd '{opened.cells[col.key]}'
+                dd {
+                  @render cell(opened.cells[col.key])
+                }
               }
             }
+          }
+          if deleteError {
+            p.kv-dash-error 'Could not delete: {deleteError}'
           }
         }
       }
@@ -124,6 +167,9 @@
   .kv-dash-detail-head h2 { font-size: 1rem; margin: 0 auto 0 0; }
   .kv-dash-detail-head button { font: inherit; font-size: 0.85rem; cursor: pointer; }
   .kv-dash-detail dt { font-weight: 600; margin-top: 0.5rem; }
+  .kv-dash-redacted { display: inline-block; font-size: 0.75rem; font-style: italic; padding: 0 0.35rem; border-radius: 0.25rem; background: var(--kv-ui-hover, #f3f4f6); color: var(--kv-ui-muted, #6b7280); }
+  .kv-dash-detail-head .kv-dash-delete { color: var(--kv-ui-danger, #b91c1c); }
+  .kv-dash-error { color: var(--kv-ui-danger, #b91c1c); }
   .kv-dash-detail dd { margin: 0.1rem 0 0; white-space: pre-wrap; }
   /* "Print" on one response prints only that response. */
   @media print {

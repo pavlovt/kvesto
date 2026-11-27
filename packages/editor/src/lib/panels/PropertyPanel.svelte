@@ -108,12 +108,26 @@
   }
   /** Set (or with undefined, remove) one of the survey's settings. */
   function setSetting(key: string, value: unknown) {
-    const settings: Loose = { ...((view.survey as Loose).settings ?? {}) };
+    // A snapshot: nested settings (antiSpam, quiz) are state proxies, which the document can't clone.
+    const settings: Loose = { ...$state.snapshot((view.survey as Loose).settings ?? {}) };
     if (value === undefined) delete settings[key];
     else settings[key] = value;
     doc.updateSurvey({ settings: Object.keys(settings).length ? settings : undefined } as Loose, { mergeKey: `survey.settings.${key}` });
   }
   const surveySettings = $derived(((view.survey as Loose).settings ?? {}) as Loose);
+  /** Set (or with undefined, remove) one anti-spam setting; no settings left removes `antiSpam`. */
+  function setAntiSpam(key: string, value: unknown) {
+    const next: Loose = { ...(surveySettings.antiSpam ?? {}) };
+    if (value === undefined) delete next[key];
+    else next[key] = value;
+    setSetting("antiSpam", Object.keys(next).length ? next : undefined);
+  }
+  const antiSpam = $derived((surveySettings.antiSpam ?? {}) as Loose);
+  /** Names separated by commas, as a list (or undefined when empty). */
+  const nameList = (text: string) => {
+    const names = [...new Set(text.split(",").map((s) => s.trim()).filter((s) => /^[A-Za-z0-9_-]+$/.test(s)))];
+    return names.length ? names : undefined;
+  };
   /** An ISO time as a datetime-local value, in this computer's time zone. */
   function localTime(iso: string | undefined): string {
     if (!iso) return "";
@@ -139,8 +153,7 @@
     set("feedback", Object.keys(next).length ? next : undefined);
   };
   function setHiddenFields(text: string) {
-    const names = [...new Set(text.split(",").map((s) => s.trim()).filter((s) => /^[A-Za-z0-9_-]+$/.test(s)))];
-    doc.updateSurvey({ hiddenFields: names.length ? names : undefined } as Loose);
+    doc.updateSurvey({ hiddenFields: nameList(text) } as Loose);
   }
   // Survey variables: named expressions.
   const variables = $derived(((view.survey as Loose).variables ?? []) as { name: string; expr: string }[]);
@@ -240,9 +253,40 @@
         input type=checkbox checked={Boolean(surveySettings.anonymous)} onchange={(e) => setSetting("anonymous", e.currentTarget.checked || undefined)}
         span 'Anonymous: keep no respondent id'
       }
+      if surveySettings.anonymous {
+        label {
+          span 'Hidden fields kept when anonymous'
+          input(
+            placeholder="source, campaign"
+            value={(surveySettings.anonymousHidden ?? []).join(", ")}
+            onchange={(e) => setSetting("anonymousHidden", nameList(e.currentTarget.value))}
+          )
+        }
+      }
       label {
         span 'Closed message'
         textarea rows=2 value={tx(surveySettings.closedMessage)} placeholder="This survey is closed." oninput={(e) => setSetting("closedMessage", e.currentTarget.value ? textValue(surveySettings.closedMessage, e.currentTarget.value) : undefined)}
+      }
+      h3 'Privacy and spam'
+      label {
+        span 'Delete responses after (days)'
+        input type=number min=1 max=36500 value={surveySettings.retentionDays ?? ""} oninput={(e) => setSetting("retentionDays", num(e.currentTarget.value))}
+      }
+      label.kv-props-check {
+        input type=checkbox checked={Boolean(antiSpam.honeypot)} onchange={(e) => setAntiSpam("honeypot", e.currentTarget.checked || undefined)}
+        span 'Honeypot: refuse responses that fill in a hidden field'
+      }
+      label.kv-props-check {
+        input type=checkbox checked={Boolean(antiSpam.challenge)} onchange={(e) => setAntiSpam("challenge", e.currentTarget.checked || undefined)}
+        span 'Require a CAPTCHA (checked by the server)'
+      }
+      label {
+        span 'Minimum seconds to answer'
+        input type=number min=1 max=3600 value={antiSpam.minSeconds ?? ""} oninput={(e) => setAntiSpam("minSeconds", num(e.currentTarget.value))}
+      }
+      label {
+        span 'Refuse duplicate answers within (seconds)'
+        input type=number min=1 max=86400 value={antiSpam.duplicateWindow ?? ""} oninput={(e) => setAntiSpam("duplicateWindow", num(e.currentTarget.value))}
       }
       h3 'Hidden fields'
       p.kv-props-hint 'Values your site passes in (a campaign, a user id), usable in conditions and text. Separate them with commas.'
