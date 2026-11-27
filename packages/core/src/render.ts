@@ -1,6 +1,7 @@
 import {
   type AnswerValue,
   type Element,
+  type Panel,
   type FileAnswer,
   type FileQuestion,
   type MatrixAnswer,
@@ -9,7 +10,8 @@ import {
   type RankingQuestion,
 } from "@kvesto/schema";
 import { createSurvey, type CreateSurveyOptions, type SurveyModel, type SurveyState } from "./model.js";
-import { formatBytes } from "./validate.js";
+import { repeatItems } from "./logic.js";
+import { formatBytes, itemKey } from "./validate.js";
 
 export interface RenderOptions {
   /** Text overrides for the built-in buttons and messages. */
@@ -28,6 +30,10 @@ const defaultLabels = {
   keepOrder: "Keep this order",
   rankingHint: "Drag the items, or use the arrow buttons, to put them in order.",
   removeFile: "Remove",
+  addItem: "Add",
+  removeItem: "Remove",
+  /** Title of each item of a repeating panel; `{n}` is the item number. */
+  itemTitle: "Item {n}",
   uploading: "Uploading…",
 };
 
@@ -49,6 +55,19 @@ function h<K extends keyof HTMLElementTagNameMap>(
   for (const [k, v] of Object.entries(props)) el.setAttribute(k, v);
   for (const c of children) el.append(c);
   return el;
+}
+
+/**
+ * Where a rendered question reads and writes its answer: the survey's answers
+ * for most questions, or one item of a repeating panel.
+ */
+interface Binding {
+  /** Error key in `state.errors`, and the unique part of DOM ids. */
+  key: string;
+  get(state: SurveyState): AnswerValue | undefined;
+  set(value: AnswerValue | undefined): void;
+  visible(state: SurveyState): boolean;
+  required(state: SurveyState): boolean;
 }
 
 /** A rendered question: its element, plus a hook to refresh it from new state. */
@@ -130,12 +149,23 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
   }
 
   /** Render a question or a panel (with its contents), registering a view for each. */
+  function topBinding(q: Question): Binding {
+    return {
+      key: q.id,
+      get: (s) => s.answers[q.id],
+      set: (v) => model.setValue(q.id, v),
+      visible: (s) => s.logic.visibleQuestions.has(q.id),
+      required: (s) => s.logic.requiredQuestions.has(q.id),
+    };
+  }
+
   function renderElement(el: Element, state: SurveyState): El {
     if (el.type !== "panel") {
-      const view = renderQuestion(el, state);
+      const view = renderQuestion(el, state, topBinding(el));
       views.push(view);
       return view.el;
     }
+    if (el.repeat) return renderRepeat(el, state);
     const wrap = h(doc, "fieldset", { class: "kv-panel", "data-panel": el.id });
     if (el.title) wrap.append(h(doc, "legend", { class: "kv-panel-title" }, el.title));
     if (el.description) wrap.append(h(doc, "p", { class: "kv-panel-description" }, el.description));
@@ -146,17 +176,101 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
     return wrap;
   }
 
-  function renderQuestion(q: Question, state: SurveyState): QuestionView {
-    const value = state.answers[q.id];
-    const qid = `kv-${model.survey.id}-${q.id}`;
-    const wrap = h(doc, "fieldset", { class: `kv-question kv-question--${q.type}`, "data-question": q.id });
+  /**
+   * A repeating panel: its items, each with its own copy of the panel's
+   * contents, plus add and remove buttons. Items are rebuilt only when their
+   * number changes, so typing never loses focus.
+   */
+  function renderRepeat(panel: Panel, state: SurveyState): El {
+    const repeat = panel.repeat ?? {};
+    const wrap = h(doc, "fieldset", { class: "kv-panel kv-repeat", "data-panel": panel.id });
+    if (panel.title) wrap.append(h(doc, "legend", { class: "kv-panel-title" }, panel.title));
+    if (panel.description) wrap.append(h(doc, "p", { class: "kv-panel-description" }, panel.description));
+    const list = h(doc, "div", { class: "kv-repeat-items" });
+    const add = h(doc, "button", { type: "button", class: "kv-repeat-add" }, repeat.addLabel ?? labels.addItem);
+    add.addEventListener("click", () => model.addItem(panel.id));
+    const err = h(doc, "p", { class: "kv-error", role: "alert", hidden: "" });
+    wrap.append(list, add, err);
+
+    let itemViews: QuestionView[] = [];
+    let renderedCount = -1;
+    const build = (s: SurveyState) => {
+      const items = repeatItems(s.answers[panel.id]);
+      itemViews = [];
+      list.replaceChildren(
+        ...items.map((_, index) => {
+          const item = h(doc, "div", { class: "kv-repeat-item", "data-item": String(index) });
+          const title = (repeat.itemTitle ?? labels.itemTitle).replaceAll("{n}", String(index + 1));
+          const remove = h(
+            doc,
+            "button",
+            { type: "button", class: "kv-repeat-remove", "aria-label": `${repeat.removeLabel ?? labels.removeItem}: ${title}` },
+            repeat.removeLabel ?? labels.removeItem,
+          );
+          remove.addEventListener("click", () => model.removeItem(panel.id, index));
+          item.append(h(doc, "div", { class: "kv-repeat-item-head" }, h(doc, "span", { class: "kv-repeat-item-title" }, title), remove));
+          const logicOf = (st: SurveyState) => st.logic.items[panel.id]?.[index];
+          const renderChild = (el: Element): El => {
+            if (el.type === "panel") {
+              const box = h(doc, "fieldset", { class: "kv-panel", "data-panel": el.id });
+              if (el.title) box.append(h(doc, "legend", { class: "kv-panel-title" }, el.title));
+              if (el.description) box.append(h(doc, "p", { class: "kv-panel-description" }, el.description));
+              const body = h(doc, "div", { class: "kv-panel-body" });
+              for (const c of el.elements) body.append(renderChild(c));
+              box.append(body);
+              itemViews.push({ el: box, update: (st) => void (box.hidden = !logicOf(st)?.visiblePanels.has(el.id)) });
+              return box;
+            }
+            const view = renderQuestion(el, s, {
+              key: itemKey(panel.id, index, el.id),
+              get: (st) => repeatItems(st.answers[panel.id])[index]?.[el.id],
+              set: (v) => model.setItemValue(panel.id, index, el.id, v),
+              visible: (st) => Boolean(logicOf(st)?.visibleQuestions.has(el.id)),
+              required: (st) => Boolean(logicOf(st)?.requiredQuestions.has(el.id)),
+            });
+            itemViews.push(view);
+            return view.el;
+          };
+          const body = h(doc, "div", { class: "kv-panel-body" });
+          for (const c of panel.elements) body.append(renderChild(c));
+          item.append(body);
+          return item;
+        }),
+      );
+    };
+
+    views.push({
+      el: wrap,
+      update(s) {
+        wrap.hidden = !s.logic.visiblePanels.has(panel.id);
+        const count = repeatItems(s.answers[panel.id]).length;
+        if (count !== renderedCount) {
+          renderedCount = count;
+          build(s);
+        }
+        const { min = 0, max } = repeat;
+        add.hidden = max !== undefined && count >= max;
+        for (const btn of list.querySelectorAll<HTMLButtonElement>(".kv-repeat-remove")) btn.hidden = count <= min;
+        err.textContent = s.errors[panel.id] ?? "";
+        err.hidden = !s.errors[panel.id];
+        for (const v of itemViews) v.update(s);
+      },
+    });
+    return wrap;
+  }
+
+  function renderQuestion(q: Question, state: SurveyState, b: Binding): QuestionView {
+    const value = b.get(state);
+    const qid = `kv-${model.survey.id}-${b.key}`;
+    const wrap = h(doc, "fieldset", { class: `kv-question kv-question--${q.type}`, "data-question": q.id, "data-key": b.key });
     const legend = h(doc, "legend", { class: "kv-question-title", id: `${qid}-title` }, q.title);
     const star = h(doc, "span", { class: "kv-required", "aria-hidden": "true" }, " *");
     legend.append(star);
     wrap.append(legend);
     if (q.description) wrap.append(h(doc, "p", { class: "kv-question-description" }, q.description));
 
-    const set = (v: AnswerValue | undefined) => model.setValue(q.id, v);
+    const set = b.set;
+    const current = () => b.get(model.snapshot);
     let refresh: (state: SurveyState) => void = () => {};
 
     switch (q.type) {
@@ -192,11 +306,11 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
           input.checked = multi ? Array.isArray(value) && (value as string[]).includes(c.value) : value === c.value;
           input.addEventListener("change", () => {
             if (!multi) return set(c.value);
-            const v = model.getValue(q.id);
-            const current = new Set(Array.isArray(v) ? (v as string[]) : []);
-            if (input.checked) current.add(c.value);
-            else current.delete(c.value);
-            set(q.choices.map((x) => x.value).filter((x) => current.has(x)));
+            const v = current();
+            const picked = new Set(Array.isArray(v) ? (v as string[]) : []);
+            if (input.checked) picked.add(c.value);
+            else picked.delete(c.value);
+            set(q.choices.map((x) => x.value).filter((x) => picked.has(x)));
           });
           wrap.append(h(doc, "label", { class: "kv-choice" }, input, ` ${c.label}`));
         }
@@ -226,10 +340,10 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
         break;
       }
       case "matrix":
-        wrap.append(renderMatrix(q, qid, value, set));
+        wrap.append(renderMatrix(q, qid, value, b));
         break;
       case "ranking":
-        refresh = renderRanking(q, wrap, set);
+        refresh = renderRanking(q, wrap, b);
         break;
       case "file":
         refresh = renderFile(q, qid, wrap);
@@ -241,18 +355,19 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
     return {
       el: wrap,
       update(s) {
-        wrap.hidden = !s.logic.visibleQuestions.has(q.id);
-        star.hidden = !s.logic.requiredQuestions.has(q.id);
-        err.textContent = s.errors[q.id] ?? "";
-        err.hidden = !s.errors[q.id];
+        wrap.hidden = !b.visible(s);
+        star.hidden = !b.required(s);
+        err.textContent = s.errors[b.key] ?? "";
+        err.hidden = !s.errors[b.key];
         refresh(s);
       },
     };
   }
 
-  function renderMatrix(q: MatrixQuestion, qid: string, value: AnswerValue | undefined, set: (v: AnswerValue | undefined) => void) {
+  function renderMatrix(q: MatrixQuestion, qid: string, value: AnswerValue | undefined, b: Binding) {
+    const set = b.set;
     const current = (): MatrixAnswer => {
-      const v = model.getValue(q.id);
+      const v = b.get(model.snapshot);
       return v && typeof v === "object" && !Array.isArray(v) ? (v as MatrixAnswer) : {};
     };
     const initial = value && typeof value === "object" && !Array.isArray(value) ? (value as MatrixAnswer) : {};
@@ -296,10 +411,11 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
     return h(doc, "div", { class: "kv-matrix-scroll" }, table);
   }
 
-  function renderRanking(q: RankingQuestion, wrap: El, set: (v: AnswerValue | undefined) => void) {
+  function renderRanking(q: RankingQuestion, wrap: El, b: Binding) {
+    const set = b.set;
     const labelOf = new Map(q.choices.map((c) => [c.value, c.label]));
     const order = (): string[] => {
-      const v = model.getValue(q.id);
+      const v = b.get(model.snapshot);
       const valid = Array.isArray(v) && v.length === q.choices.length && v.every((x) => typeof x === "string" && labelOf.has(x));
       return valid ? [...(v as string[])] : q.choices.map((c) => c.value);
     };
@@ -323,7 +439,7 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
     let focusAfter: { value: string; dir: "up" | "down" } | null = null;
 
     return (state: SurveyState) => {
-      const answered = Array.isArray(state.answers[q.id]);
+      const answered = Array.isArray(b.get(state));
       keep.hidden = answered;
       const items = order();
       const key = `${answered}:${items.join("\u0000")}`;

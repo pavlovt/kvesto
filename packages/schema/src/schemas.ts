@@ -48,6 +48,12 @@ export const ComparisonSchema = z.object({
   question: id,
   /** For matrix questions: the row whose answer is compared. */
   row: z.string().min(1).optional(),
+  /**
+   * Inside a repeating panel: `"item"` compares the answer in the same item
+   * (an earlier question of that panel). Without it, the question must be
+   * outside every repeating panel.
+   */
+  scope: z.literal("item").optional(),
   op: ConditionOperatorSchema,
   /** Omitted for `empty` / `notEmpty`; an array for `in` / `notIn`. */
   value: z.union([ConditionValueSchema, z.array(ConditionValueSchema)]).optional(),
@@ -281,8 +287,36 @@ export interface Panel {
   description?: DisplayText;
   /** Show the panel (and everything in it) only while this condition holds. */
   visibleIf?: Condition;
+  /** Make the panel repeatable: respondents add and remove copies of its contents. */
+  repeat?: Repeat;
   elements: Element[];
 }
+
+/**
+ * Settings of a repeating panel. Its answer is stored under the panel id as a
+ * list of items, each an object of answers keyed by question id:
+ * `{ "children": [{ "name": "Ana", "age": 7 }, { "name": "Ivo", "age": 4 }] }`.
+ */
+export interface Repeat {
+  /** Fewest items. The runner starts with this many. Default 0. */
+  min?: number;
+  /** Most items. Default: no limit. */
+  max?: number;
+  /** Text of the add button. */
+  addLabel?: DisplayText;
+  /** Text of each item's remove button. */
+  removeLabel?: DisplayText;
+  /** Title of each item; `{n}` is replaced by the item number. */
+  itemTitle?: DisplayText;
+}
+
+export const RepeatSchema: z.ZodType<Repeat> = z.object({
+  min: z.number().int().nonnegative().optional(),
+  max: z.number().int().positive().optional(),
+  addLabel: DisplayTextSchema.optional(),
+  removeLabel: DisplayTextSchema.optional(),
+  itemTitle: DisplayTextSchema.optional(),
+});
 
 /** Survey JSON for a panel as authored, before defaults are applied. */
 export interface PanelInput {
@@ -291,6 +325,7 @@ export interface PanelInput {
   title?: DisplayText;
   description?: DisplayText;
   visibleIf?: Condition;
+  repeat?: Repeat;
   elements: ElementInput[];
 }
 
@@ -306,6 +341,7 @@ export const PanelSchema: z.ZodType<Panel, PanelInput> = z
     title: DisplayTextSchema.optional(),
     description: DisplayTextSchema.optional(),
     visibleIf: ConditionSchema.optional(),
+    repeat: RepeatSchema.optional(),
     get elements() {
       return z.array(ElementSchema);
     },
@@ -386,20 +422,34 @@ export const SurveySchema = z
     pages: z.array(PageSchema).min(1),
   })
   .superRefine((survey, ctx) => {
-    // Question ids seen so far, in survey order: conditions may only look back.
-    const seen = new Map<string, Question>();
-    const checkCondition = (condition: Condition | undefined, path: (string | number)[], earlierOnly: Set<string>) => {
+    // Questions seen so far, in survey order (conditions may only look back), with the repeating panel they are in.
+    const seen = new Map<string, { question: Question; repeat: string | undefined }>();
+    const repeats = new Set<string>();
+    const repeatOf = (panels: string[]) => panels.find((p) => repeats.has(p));
+    const checkCondition = (
+      condition: Condition | undefined,
+      path: (string | number)[],
+      earlierOnly: Set<string>,
+      repeat: string | undefined,
+    ) => {
       if (!condition) return;
       for (const c of conditionComparisons(condition)) {
         const target = seen.get(c.question);
+        const issue = (message: string) => ctx.addIssue({ code: "custom", path, message });
         if (!target || !earlierOnly.has(c.question)) {
-          ctx.addIssue({
-            code: "custom",
-            path,
-            message: `Condition refers to "${c.question}", which is not an earlier question`,
-          });
-        } else if (c.row !== undefined && (target.type !== "matrix" || !target.rows.some((r) => r.value === c.row))) {
-          ctx.addIssue({ code: "custom", path, message: `"${c.row}" is not a row of matrix question "${c.question}"` });
+          issue(`Condition refers to "${c.question}", which is not an earlier question`);
+        } else if (c.scope === "item" && !repeat) {
+          issue(`scope "item" can only be used inside a repeating panel`);
+        } else if (c.scope === "item" && target.repeat !== repeat) {
+          issue(`"${c.question}" is not in the same repeating panel`);
+        } else if (c.scope !== "item" && target.repeat) {
+          issue(
+            repeat === target.repeat
+              ? `"${c.question}" is in this repeating panel: add "scope": "item" to compare the same item`
+              : `"${c.question}" is inside a repeating panel, so it has no single answer here`,
+          );
+        } else if (c.row !== undefined && (target.question.type !== "matrix" || !target.question.rows.some((r) => r.value === c.row))) {
+          issue(`"${c.row}" is not a row of matrix question "${c.question}"`);
         }
       }
     };
@@ -411,18 +461,34 @@ export const SurveySchema = z
         pageIndex = at.pageIndex;
         // A page condition can only use questions from earlier pages.
         const page = survey.pages[pageIndex]!;
-        checkCondition(page.visibleIf, ["pages", pageIndex, "visibleIf"], new Set(seen.keys()));
+        checkCondition(page.visibleIf, ["pages", pageIndex, "visibleIf"], new Set(seen.keys()), undefined);
       }
       const path = at.path;
       const earlier = new Set(seen.keys());
-      checkCondition(el.visibleIf, [...path, "visibleIf"], earlier);
+      const repeat = repeatOf(at.panels);
+      checkCondition(el.visibleIf, [...path, "visibleIf"], earlier, repeat);
       if (elementIds.has(el.id)) {
         ctx.addIssue({ code: "custom", path: [...path, "id"], message: `Duplicate element id "${el.id}"` });
       }
       elementIds.add(el.id);
-      if (el.type === "panel") return;
+      if (el.type === "panel") {
+        if (el.repeat) {
+          if (repeat) {
+            ctx.addIssue({ code: "custom", path: [...path, "repeat"], message: "Repeating panels cannot be nested" });
+          }
+          repeats.add(el.id);
+          const { min, max } = el.repeat;
+          if (min !== undefined && max !== undefined && min > max) {
+            ctx.addIssue({ code: "custom", path: [...path, "repeat", "max"], message: "max must be at least min" });
+          }
+        }
+        return;
+      }
       const q = el;
-      checkCondition(q.requiredIf, [...path, "requiredIf"], earlier);
+      checkCondition(q.requiredIf, [...path, "requiredIf"], earlier, repeat);
+      if (repeat && q.type === "file") {
+        ctx.addIssue({ code: "custom", path: [...path, "type"], message: "File questions are not supported in repeating panels yet" });
+      }
       if ("choices" in q && !uniqueValues(q.choices)) {
         ctx.addIssue({ code: "custom", path: [...path, "choices"], message: "Choice values must be unique" });
       }
@@ -443,11 +509,13 @@ export const SurveySchema = z
           ctx.addIssue({ code: "custom", path: [...vpath, "max"], message: "max must be at least min" });
         }
       });
-      seen.set(q.id, q);
+      seen.set(q.id, { question: q, repeat });
     });
     // Pages without elements still get their condition checked.
     survey.pages.forEach((page, pi) => {
-      if (page.elements.length === 0) checkCondition(page.visibleIf, ["pages", pi, "visibleIf"], new Set(seen.keys()));
+      if (page.elements.length === 0) {
+        checkCondition(page.visibleIf, ["pages", pi, "visibleIf"], new Set(seen.keys()), undefined);
+      }
     });
   });
 
@@ -465,10 +533,27 @@ export const FileAnswerSchema = z.object({
 /** A matrix answer: row value → column value (or values with `multiple`). */
 export const MatrixAnswerSchema = z.record(z.string(), z.union([z.string(), z.array(z.string())]));
 
+export const ItemAnswerValueSchema = z.union([
+  z.string(),
+  z.number(),
+  z.boolean(),
+  z.array(z.string()),
+  z.array(FileAnswerSchema),
+  MatrixAnswerSchema,
+  z.null(),
+]);
+
+/** One item of a repeating panel: answers keyed by question id. */
+export const RepeatItemSchema = z.record(z.string(), ItemAnswerValueSchema);
+
+/** The answer of a repeating panel: its items, in order. */
+export const RepeatAnswerSchema = z.array(RepeatItemSchema);
+
 /**
  * A single answer value. Shape depends on the question type:
  * text/choice → string, rating → number, boolean → boolean,
- * multiple-choice/ranking → string[], file → FileAnswer[], matrix → object.
+ * multiple-choice/ranking → string[], file → FileAnswer[], matrix → object,
+ * and a repeating panel → a list of answer objects.
  */
 export const AnswerValueSchema = z.union([
   z.string(),
@@ -477,6 +562,7 @@ export const AnswerValueSchema = z.union([
   z.array(z.string()),
   z.array(FileAnswerSchema),
   MatrixAnswerSchema,
+  RepeatAnswerSchema,
   z.null(),
 ]);
 
@@ -508,6 +594,7 @@ export type Survey = z.infer<typeof SurveySchema>;
 /** Survey JSON as authored, before defaults are applied. */
 export type SurveyInput = z.input<typeof SurveySchema>;
 export type AnswerValue = z.infer<typeof AnswerValueSchema>;
+export type RepeatItem = z.infer<typeof RepeatItemSchema>;
 export type Answers = z.infer<typeof AnswersSchema>;
 export type ResponseInput = z.infer<typeof ResponseInputSchema>;
 export type SurveyResponse = z.infer<typeof SurveyResponseSchema>;

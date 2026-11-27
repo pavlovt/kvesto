@@ -37,12 +37,19 @@ export interface ElementLocation {
   index: number;
   /** Ids of the panels around the element, outermost first. Empty at the top of a page. */
   panels: string[];
+  /** Id of the repeating panel the element is inside, if any. Its answers live in that panel's items. */
+  repeat?: string;
   /** Path from the survey root, e.g. `["pages", 0, "elements", 2, "elements", 0]`, for error messages. */
   path: (string | number)[];
 }
 
 export function isPanel<E extends ElementLike>(element: E): element is PanelOf<E> & E {
   return element.type === "panel";
+}
+
+/** A panel with `repeat` settings: its contents are answered once per item. */
+export function isRepeatingPanel<E extends ElementLike>(element: E): element is PanelOf<E> & E {
+  return isPanel(element) && Boolean((element as { repeat?: unknown }).repeat);
 }
 
 const childrenOf = <E extends ElementLike>(element: E): readonly E[] =>
@@ -57,19 +64,25 @@ export function walkElements<E extends ElementLike>(
   survey: SurveyLike<E>,
   visit: (element: E, location: ElementLocation) => void | boolean | "skip",
 ): boolean {
-  const walk = (elements: readonly E[], pageIndex: number, panels: string[], path: (string | number)[]): boolean => {
+  const walk = (
+    elements: readonly E[],
+    pageIndex: number,
+    panels: string[],
+    repeat: string | undefined,
+    path: (string | number)[],
+  ): boolean => {
     for (const [index, element] of elements.entries()) {
       const at = [...path, "elements", index];
-      const verdict = visit(element, { pageIndex, index, panels, path: at });
+      const verdict = visit(element, { pageIndex, index, panels, ...(repeat ? { repeat } : {}), path: at });
       if (verdict === false) return false;
-      if (verdict !== "skip" && isPanel(element) && !walk(childrenOf(element), pageIndex, [...panels, element.id], at)) {
-        return false;
-      }
+      if (verdict === "skip" || !isPanel(element)) continue;
+      const inner = repeat ?? (isRepeatingPanel(element) ? element.id : undefined);
+      if (!walk(childrenOf(element), pageIndex, [...panels, element.id], inner, at)) return false;
     }
     return true;
   };
   for (const [pageIndex, page] of survey.pages.entries()) {
-    if (!walk(page.elements, pageIndex, [], ["pages", pageIndex])) return false;
+    if (!walk(page.elements, pageIndex, [], undefined, ["pages", pageIndex])) return false;
   }
   return true;
 }
@@ -82,7 +95,10 @@ function collectQuestions<E extends ElementLike>(elements: readonly E[], out: Qu
   return out;
 }
 
-/** The questions of one page, in order, including those inside panels. */
+/**
+ * The questions of one page, in order, including those inside panels (also
+ * repeating ones: use `walkElements` and `location.repeat` to tell them apart).
+ */
 export function pageQuestions<E extends ElementLike>(page: PageLike<E>): QuestionOf<E>[] {
   return collectQuestions(page.elements, []);
 }

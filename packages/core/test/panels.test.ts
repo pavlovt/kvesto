@@ -20,7 +20,7 @@ describe("panels in the logic", () => {
 
   it("validates questions inside visible panels only, with flat answers", () => {
     expect(validateAnswers(survey, { hasPet: false }).issues).toEqual([]);
-    expect(validateAnswers(survey, { hasPet: true }).issues).toEqual([{ questionId: "petName", message: "This question is required." }]);
+    expect(validateAnswers(survey, { hasPet: true }).issues).toEqual([{ questionId: "petName", message: "This question is required.", path: ["petName"] }]);
   });
 
   it("completes through the model with flat answers", async () => {

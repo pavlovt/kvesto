@@ -24,6 +24,12 @@
 .kv-panel-title { font-weight: 700; padding: 0 0.25rem; }
 .kv-panel-description { margin: 0; color: #4b5563; }
 .kv-panel-body { display: grid; gap: var(--kv-gap); }
+.kv-repeat-items { display: grid; gap: var(--kv-gap); }
+.kv-repeat-item { border: 1px dashed #d1d5db; border-radius: 0.5rem; padding: 0.75rem; display: grid; gap: 0.75rem; }
+.kv-repeat-item-head { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+.kv-repeat-item-title { font-weight: 600; }
+.kv-repeat-add, .kv-repeat-remove { font: inherit; cursor: pointer; justify-self: start; }
+.kv-repeat-add[hidden], .kv-repeat-remove[hidden] { display: none; }
 .kv-matrix-scroll { overflow-x: auto; }
 .kv-matrix { border-collapse: collapse; }
 .kv-matrix th, .kv-matrix td { padding: 0.35rem 0.6rem; text-align: center; }

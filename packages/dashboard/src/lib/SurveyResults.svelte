@@ -70,7 +70,7 @@
         }
         section.kv-dash-card {
           h2 '{item.question.title}'
-          p.kv-dash-muted '{item.answered} answered'
+          p.kv-dash-muted '{item.answered} answered{item.repeat ? " (counting every item)" : ""}'
           if item.average !== undefined {
             p 'Average: {item.average.toFixed(1)}'
           }

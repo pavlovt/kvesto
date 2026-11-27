@@ -252,6 +252,39 @@ describe("panels", () => {
   });
 });
 
+describe("repeating panels", () => {
+  it("validates items and stores them under the panel id", async () => {
+    const family = {
+      schemaVersion: 1,
+      id: "family",
+      title: "Family",
+      pages: [
+        {
+          id: "p1",
+          elements: [
+            {
+              id: "kids",
+              type: "panel",
+              repeat: { min: 1, max: 2 },
+              elements: [
+                { id: "name", type: "text", title: "Name", required: true },
+                { id: "age", type: "rating", title: "Age", min: 0, max: 18 },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    expect((await send("POST", "/surveys", family)).status).toBe(201);
+    const bad = await send("POST", "/surveys/family/responses", { answers: { kids: [{ age: 3 }] } });
+    expect(bad.status).toBe(400);
+    expect((await bad.json()).issues).toEqual([{ path: ["answers", "kids", 0, "name"], message: "This question is required." }]);
+    const ok = await send("POST", "/surveys/family/responses", { answers: { kids: [{ name: "Ana", age: 7 }, { name: "Ivo" }] } });
+    expect(ok.status).toBe(201);
+    expect((await ok.json()).answers).toEqual({ kids: [{ name: "Ana", age: 7 }, { name: "Ivo" }] });
+  });
+});
+
 describe("validators", () => {
   const signup = {
     schemaVersion: 1,

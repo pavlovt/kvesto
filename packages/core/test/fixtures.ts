@@ -135,3 +135,40 @@ export const panelSurvey: SurveyInput = {
     },
   ],
 };
+
+/** A repeating panel with an item-scoped condition and a condition on an outside question. */
+export const repeatSurvey: SurveyInput = {
+  schemaVersion: 1,
+  id: "family",
+  title: "Family",
+  pages: [
+    {
+      id: "p1",
+      elements: [
+        { id: "hasKids", type: "boolean", title: "Do you have children?" },
+        {
+          id: "children",
+          type: "panel",
+          title: "Children",
+          visibleIf: { question: "hasKids", op: "eq", value: true },
+          repeat: { min: 1, max: 3, addLabel: "Add a child", itemTitle: "Child {n}" },
+          elements: [
+            { id: "name", type: "text", title: "Name", required: true },
+            { id: "age", type: "rating", title: "Age", min: 0, max: 18 },
+            {
+              id: "school",
+              type: "single-choice",
+              title: "School",
+              visibleIf: { question: "age", op: "gte", value: 6, scope: "item" },
+              choices: [
+                { value: "public", label: "Public" },
+                { value: "private", label: "Private" },
+              ],
+            },
+          ],
+        },
+        { id: "notes", type: "comment", title: "Notes" },
+      ],
+    },
+  ],
+};

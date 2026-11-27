@@ -163,7 +163,7 @@ describe("validators in the runtime", () => {
   it("is applied by validateAnswers with custom validators", () => {
     const survey = SurveySchema.parse(input);
     expect(validateAnswers(survey, { code: "3" }, { validators: { even } }).issues).toEqual([
-      { questionId: "code", message: "This answer is not valid." },
+      { questionId: "code", message: "This answer is not valid.", path: ["code"] },
     ]);
     expect(validateAnswers(survey, { code: "2" }, { validators: { even } }).issues).toEqual([]);
   });

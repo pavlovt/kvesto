@@ -1,4 +1,5 @@
-import { allQuestions, walkElements, type FileAnswer, type Question, type Survey, type SurveyResponse } from "@kvesto/schema";
+import { repeatItems } from "./logic.js";
+import { allQuestions, walkElements, type AnswerValue, type FileAnswer, type Question, type Survey, type SurveyResponse } from "@kvesto/schema";
 
 export interface MatrixRowSummary {
   value: string;
@@ -26,6 +27,8 @@ export interface QuestionSummary {
   question: Question;
   /** The panels the question sits in, outermost first (for group headings). Empty when it is not in a panel. */
   panels: PanelHeading[];
+  /** For questions inside a repeating panel: that panel's id. Counts are then over all items, not responses. */
+  repeat?: string;
   answered: number;
   /** For choice, dropdown, boolean and rating questions: count per option. */
   counts?: { value: string; label: string; count: number }[];
@@ -46,14 +49,28 @@ export interface QuestionSummary {
 export function summarizeResponses(survey: Survey, responses: SurveyResponse[], sampleSize = 5): QuestionSummary[] {
   const headings = new Map<string, PanelHeading>();
   const panelsOf = new Map<string, PanelHeading[]>();
+  const repeatOf = new Map<string, string>();
   walkElements(survey, (el, at) => {
     if (el.type === "panel") headings.set(el.id, { id: el.id, ...(el.title ? { title: el.title } : {}) });
     else panelsOf.set(el.id, at.panels.map((id) => headings.get(id)!));
+    if (at.repeat) repeatOf.set(el.id, at.repeat);
   });
+  // A question inside a repeating panel is summarised over every item of every response.
+  const answersTo = (questionId: string): (AnswerValue | undefined)[] => {
+    const repeat = repeatOf.get(questionId);
+    return repeat
+      ? responses.flatMap((r) => repeatItems(r.answers[repeat]).map((item) => item[questionId]))
+      : responses.map((r) => r.answers[questionId]);
+  };
   return allQuestions(survey)
     .map((question) => {
-      const values = responses.map((r) => r.answers[question.id]).filter((v) => v !== undefined && v !== null && v !== "");
-      const summary: QuestionSummary = { question, panels: panelsOf.get(question.id) ?? [], answered: values.length };
+      const values = answersTo(question.id).filter((v) => v !== undefined && v !== null && v !== "");
+      const summary: QuestionSummary = {
+        question,
+        panels: panelsOf.get(question.id) ?? [],
+        ...(repeatOf.has(question.id) ? { repeat: repeatOf.get(question.id)! } : {}),
+        answered: values.length,
+      };
 
       const tally = (options: { value: string; label: string }[], key: (v: unknown) => string[]) => {
         const counts = new Map(options.map((o) => [o.value, 0]));

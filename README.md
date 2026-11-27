@@ -144,6 +144,31 @@ answers stay flat, keyed by question id.
   ] }
 ```
 
+#### Repeating panels
+
+Give a panel `repeat` and respondents add and remove copies of its contents, for example one per child. The answer
+is stored under the panel id as a list of items, each keyed by question id:
+
+```json
+{ "id": "children", "type": "panel", "title": "Children",
+  "repeat": { "min": 1, "max": 5, "addLabel": "Add a child", "itemTitle": "Child {n}" },
+  "elements": [
+    { "id": "name", "type": "text", "title": "Name", "required": true },
+    { "id": "age", "type": "rating", "title": "Age", "min": 0, "max": 18 },
+    { "id": "school", "type": "text", "title": "School",
+      "visibleIf": { "question": "age", "op": "gte", "value": 6, "scope": "item" } }
+  ] }
+```
+
+```json
+{ "children": [{ "name": "Ana", "age": 7, "school": "Elm Street" }, { "name": "Ivo", "age": 4 }] }
+```
+
+A condition inside a repeating panel compares the same item with `"scope": "item"`, or any earlier question outside
+the panel without it. Questions outside cannot refer to questions inside, since those have one answer per item. The
+runner starts with `min` items; `SurveyModel` has `addItem`, `removeItem`, `setItemValue` and `getItems`, and item
+errors use keys like `children.0.name`. Repeating panels cannot be nested, and cannot hold file questions yet.
+
 #### Conditional logic
 
 Any question takes `visibleIf` and `requiredIf`; pages and panels take `visibleIf`. A condition is plain JSON, never code:

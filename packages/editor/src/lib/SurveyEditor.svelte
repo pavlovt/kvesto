@@ -97,7 +97,7 @@
     source = JSON.stringify(doc, null, 2);
   }
 
-  function addPanel() {
+  function addPanel(repeat = false) {
     let doc: SurveyInput;
     try {
       doc = JSON.parse(source);
@@ -111,7 +111,13 @@
     walkElements(doc, (el) => void ids.add(el.id));
     let n = 1;
     while (ids.has(`panel${n}`)) n++;
-    page.elements.push({ id: `panel${n}`, type: "panel", title: `Group ${n}`, elements: [] });
+    page.elements.push({
+      id: `panel${n}`,
+      type: "panel",
+      title: `Group ${n}`,
+      ...(repeat ? { repeat: { min: 1 } } : {}),
+      elements: repeat ? [{ id: `panel${n}-q1`, type: "text", title: "Name" }] : [],
+    });
     source = JSON.stringify(doc, null, 2);
   }
 
@@ -135,7 +141,8 @@
         each questionTypes as type {
           button type=button onclick={() => addQuestion(type)} '{type}'
         }
-        button type=button onclick={addPanel} 'panel'
+        button type=button onclick={() => addPanel()} 'panel'
+        button type=button onclick={() => addPanel(true)} 'repeating panel'
 
         if storage {
           button.kv-editor-primary type=button onclick={save} disabled={!parsed.survey} 'Save'

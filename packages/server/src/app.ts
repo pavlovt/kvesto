@@ -124,7 +124,7 @@ export function createApp(options: CreateAppOptions) {
       return c.json(
         {
           error: "Answers do not match the survey",
-          issues: issues.map((i) => ({ path: ["answers", i.questionId], message: i.message })),
+          issues: issues.map((i) => ({ path: ["answers", ...i.path], message: i.message })),
         },
         400,
       );

@@ -457,6 +457,7 @@ These do not block the first milestones, but should be settled before the one th
 | M2 · Server access control | Done (unreleased) |
 | M3 · Validators | Done (unreleased) |
 | M4 · Panels | Done (unreleased) |
-| M5 – M32 | Planned |
+| M5 · Repeating panels | Done (unreleased). Not yet: nested repeats, file questions inside repeats |
+| M6 – M32 | Planned |
 
 Update this table as milestones land, with the release they shipped in.
