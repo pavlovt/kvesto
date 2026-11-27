@@ -63,6 +63,12 @@ palette button into the outline to add a question at that spot. A line shows whe
 From the keyboard, focus an item's handle and press Space to pick it up, the arrow keys (or Home and End) to move it,
 Space to drop and Escape to cancel; each step is announced to screen readers. Every drop is a single undo step.
 
+Under **Logic**, the property panel builds `visibleIf` and `requiredIf` conditions (and `visibleIf` for every page
+after the first) without writing JSON: pick a question, an operator and a value, combine rules into "all" or "any"
+groups, and negate any rule or group. It only offers questions the condition is allowed to use (earlier ones, and
+inside a repeating panel the same item's answers), shows the condition in plain words ("Shown when Role is
+"Developer" and Age is at least 18"), and flags conditions that refer to a question they can't use.
+
 The **JSON** tab edits the raw survey next to the
 preview.
 

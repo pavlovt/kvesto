@@ -1,7 +1,9 @@
 <script lang="ts">
   import { gridCellQuestion, type Choice, type GridColumn, type Question, type Validator } from "@kvesto/core";
   import type { DocumentState, SurveyDocument } from "../doc/document.js";
+  import type { Condition } from "@kvesto/core";
   import ChoiceList from "./ChoiceList.svelte";
+  import ConditionBuilder from "./ConditionBuilder.svelte";
   import ValidatorList from "./ValidatorList.svelte";
 
   let { doc, docState: view }: { doc: SurveyDocument; docState: DocumentState } = $props();
@@ -36,6 +38,10 @@
     }
     if (!doc.updateElement(el.id, { id: idDraft })) idError = `"${idDraft}" is already used.`;
   }
+  const setCondition = (key: "visibleIf" | "requiredIf", c: Condition | undefined, typing: boolean) =>
+    el && doc.updateElement(el.id, { [key]: c }, typing ? { mergeKey: `${el.id}.${key}` } : {});
+  const setPageCondition = (id: string, c: Condition | undefined, typing: boolean) =>
+    doc.updatePage(id, { visibleIf: c }, typing ? { mergeKey: `page.${id}.visibleIf` } : {});
   const setSurvey = (key: string, value: string) =>
     doc.updateSurvey({ [key]: value === "" && key !== "title" ? undefined : value }, { mergeKey: `survey.${key}` });
   const setPage = (id: string, key: string, value: string) =>
@@ -84,10 +90,22 @@
         textarea rows=2 value={view.survey.description ?? ""} oninput={(e) => setSurvey("description", e.currentTarget.value)}
       }
       h3 'Pages'
-      each view.survey.pages as page (page.id) {
+      each view.survey.pages as page, pi (page.id) {
         label {
           span '{page.id}'
           input value={page.title ?? ""} placeholder="Page title" oninput={(e) => setPage(page.id, "title", e.currentTarget.value)}
+        }
+        if pi > 0 {
+          .kv-props-logic {
+            ConditionBuilder(
+              survey={view.survey}
+              owner={{ page: page.id }}
+              condition={page.visibleIf as Condition | undefined}
+              prefix="Page shown when"
+              addLabel="Show this page only when…"
+              onchange={(c, typing) => setPageCondition(page.id, c, typing)}
+            )
+          }
         }
       }
       p.kv-props-hint 'Select a question or panel in the outline or the preview to edit it.'
@@ -107,6 +125,25 @@
       label {
         span 'Description'
         textarea rows=2 value={el.description ?? ""} oninput={(e) => set("description", e.currentTarget.value)}
+      }
+      h4 'Logic'
+      ConditionBuilder(
+        survey={view.survey}
+        owner={{ element: el.id }}
+        condition={el.visibleIf}
+        prefix="Shown when"
+        addLabel="Show only when…"
+        onchange={(c, typing) => setCondition("visibleIf", c, typing)}
+      )
+      if el.type !== "panel" {
+        ConditionBuilder(
+          survey={view.survey}
+          owner={{ element: el.id }}
+          condition={el.requiredIf}
+          prefix="Required when"
+          addLabel="Require only when…"
+          onchange={(c, typing) => setCondition("requiredIf", c, typing)}
+        )
       }
       if el.type !== "panel" {
         label.kv-props-check {
@@ -281,6 +318,7 @@
   .kv-props-id { font-family: ui-monospace, monospace; }
   .kv-props-column { border: 1px solid #e5e7eb; border-radius: 0.375rem; padding: 0.4rem; display: grid; gap: 0.3rem; }
   .kv-props button { font: inherit; font-size: 0.85rem; cursor: pointer; justify-self: start; }
+  .kv-props-logic { padding-left: 6.9rem; }
   .kv-props-hint { color: #6b7280; font-size: 0.85rem; }
   .kv-props-error { color: #b91c1c; font-size: 0.85rem; margin: 0; }
 </style>
