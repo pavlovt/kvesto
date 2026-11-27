@@ -1,6 +1,6 @@
 {
   "name": "kvesto",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Open source survey library: define surveys as JSON and render them anywhere. One install for the Kvesto core, plus a ready-made <script> bundle.",
   "license": "MIT",
   "keywords": [

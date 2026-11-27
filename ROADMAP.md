@@ -1173,37 +1173,37 @@ Decided:
 | M8 · Structure view and property panel | Done (0.2.0) |
 | M9 · Drag and drop | Done (0.2.0). Not yet: auto-scroll while dragging, dragging in the preview |
 | M10 · Visual logic builder | Done (0.2.0) |
-| M11 · Expression engine | Done (unreleased) |
-| M12 · Answer piping | Done (unreleased) |
-| M13 · Calculated values and expression fields | Done (unreleased) |
-| M14 · Triggers | Done (unreleased) |
-| M15 · Question type registry (custom question types) | Done (unreleased). Not yet: the built-in types still have their own code paths instead of being registered the same way |
-| M16 · Content blocks | Done (unreleased) |
-| M17 · Input question types | Done (unreleased). Built in to the schema rather than through the registry, so they get JSON Schema and server checks like the other built-ins |
-| M18 · Signature | Done (unreleased). Not yet: a keyboard alternative to drawing (planned with the accessibility audit, M25) |
-| M19 · One question at a time | Done (unreleased) |
-| M20 · Localization | Done (unreleased). Not yet: Intl number and date formatting of piped values; rarely shown messages for malformed answers stay English |
-| M21 · Partial responses and resume | Done (unreleased) |
-| M22 · Hidden fields and prefill from the page | Done (unreleased) |
-| M23 · Themes | Done (unreleased). The dark looks are checked by tests, not yet by eye in a browser |
-| M24 · Quiz mode and scoring | Done (unreleased). Not yet: choice scores in the editor's choice list (they can be set in JSON) |
-| M25 · Accessibility audit | Done (unreleased). Not yet: the manual NVDA and VoiceOver pass, and machine-checked colour contrast (see ACCESSIBILITY.md) |
-| M26 · Framework wrappers | Done (unreleased). Angular is left for when someone asks |
-| M27 · Dashboard table view and filters | Done (unreleased) |
-| M28 · Export | Done (unreleased). A generated PDF is left for later; printing gives a PDF through the browser |
-| M29 · Webhooks | Done (unreleased). Includes M34's outbound URL guard, brought forward so webhooks never ship without it |
-| M30 · Hosted embeds | Done (unreleased) |
-| M31 · JSON Schema interop | Done (unreleased). Conditional logic is not expressible in JSON Schema, so those questions are optional |
-| M32 · Survey availability settings | Done (unreleased). `oneResponsePer: "browser"` is best effort (a browser id in localStorage); closed messages translated for en, bg, de only |
-| M33 · Security baseline and disclosure process | Done (unreleased). Secret scanning, push protection and private reporting are repository settings to turn on in GitHub |
-| M34 · Hardened HTTP defaults and document limits | Done (unreleased). Admin routes no longer allow any origin by default: set `adminCors` (or `KVESTO_ADMIN_ORIGINS`); the URL guard shipped with M29 |
-| M35 · Rate limiting and spam protection | Done (unreleased). Rate limits are opt-in in `createApp` (on in `kvesto-server`); `antiSpam` and retention are set in the editor's survey settings |
-| M36 · Upload hardening | Done (unreleased). Partial responses also keep their files; `httpStorage` needed no change, as file URLs are opaque |
-| M37 · Privacy controls (GDPR) | Done (unreleased). Webhooks always mask `pii` answers (no caller to authorize); respondent access uses the response token, not an emailed link |
-| M38 · Encryption of answers | Done (unreleased). At-rest encryption and rotation only; the end-to-end mode is not built |
-| M39 · Users, roles, scoped tokens and SSO | Done (unreleased). Core parts: no user or workspace tables, no SAML adapter. The dashboard's "API tokens" section (with its `api` option) creates and revokes tokens |
-| M40 · Audit log | Done (unreleased). The dashboard's "Audit log" section filters, pages and downloads the CSV |
-| M41 · Security test suite | Done (unreleased). The ZAP scan runs in CI only (not checked locally); fails only on FAIL-level findings |
+| M11 · Expression engine | Done (0.3.0) |
+| M12 · Answer piping | Done (0.3.0) |
+| M13 · Calculated values and expression fields | Done (0.3.0) |
+| M14 · Triggers | Done (0.3.0) |
+| M15 · Question type registry (custom question types) | Done (0.3.0). Not yet: the built-in types still have their own code paths instead of being registered the same way |
+| M16 · Content blocks | Done (0.3.0) |
+| M17 · Input question types | Done (0.3.0). Built in to the schema rather than through the registry, so they get JSON Schema and server checks like the other built-ins |
+| M18 · Signature | Done (0.3.0). Not yet: a keyboard alternative to drawing (planned with the accessibility audit, M25) |
+| M19 · One question at a time | Done (0.3.0) |
+| M20 · Localization | Done (0.3.0). Not yet: Intl number and date formatting of piped values; rarely shown messages for malformed answers stay English |
+| M21 · Partial responses and resume | Done (0.3.0) |
+| M22 · Hidden fields and prefill from the page | Done (0.3.0) |
+| M23 · Themes | Done (0.3.0). The dark looks are checked by tests, not yet by eye in a browser |
+| M24 · Quiz mode and scoring | Done (0.3.0). Not yet: choice scores in the editor's choice list (they can be set in JSON) |
+| M25 · Accessibility audit | Done (0.3.0). Not yet: the manual NVDA and VoiceOver pass, and machine-checked colour contrast (see ACCESSIBILITY.md) |
+| M26 · Framework wrappers | Done (0.3.0). Angular is left for when someone asks |
+| M27 · Dashboard table view and filters | Done (0.3.0) |
+| M28 · Export | Done (0.3.0). A generated PDF is left for later; printing gives a PDF through the browser |
+| M29 · Webhooks | Done (0.3.0). Includes M34's outbound URL guard, brought forward so webhooks never ship without it |
+| M30 · Hosted embeds | Done (0.3.0) |
+| M31 · JSON Schema interop | Done (0.3.0). Conditional logic is not expressible in JSON Schema, so those questions are optional |
+| M32 · Survey availability settings | Done (0.3.0). `oneResponsePer: "browser"` is best effort (a browser id in localStorage); closed messages translated for en, bg, de only |
+| M33 · Security baseline and disclosure process | Done (0.3.0). Secret scanning, push protection and private reporting are repository settings to turn on in GitHub |
+| M34 · Hardened HTTP defaults and document limits | Done (0.3.0). Admin routes no longer allow any origin by default: set `adminCors` (or `KVESTO_ADMIN_ORIGINS`); the URL guard shipped with M29 |
+| M35 · Rate limiting and spam protection | Done (0.3.0). Rate limits are opt-in in `createApp` (on in `kvesto-server`); `antiSpam` and retention are set in the editor's survey settings |
+| M36 · Upload hardening | Done (0.3.0). Partial responses also keep their files; `httpStorage` needed no change, as file URLs are opaque |
+| M37 · Privacy controls (GDPR) | Done (0.3.0). Webhooks always mask `pii` answers (no caller to authorize); respondent access uses the response token, not an emailed link |
+| M38 · Encryption of answers | Done (0.3.0). At-rest encryption and rotation only; the end-to-end mode is not built |
+| M39 · Users, roles, scoped tokens and SSO | Done (0.3.0). Core parts: no user or workspace tables, no SAML adapter. The dashboard's "API tokens" section (with its `api` option) creates and revokes tokens |
+| M40 · Audit log | Done (0.3.0). The dashboard's "Audit log" section filters, pages and downloads the CSV |
+| M41 · Security test suite | Done (0.3.0). The ZAP scan runs in CI only (not checked locally); fails only on FAIL-level findings |
 | M42 – M79 | Planned |
 
 Update this table as milestones land, with the release they shipped in.

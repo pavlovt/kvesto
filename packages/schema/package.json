@@ -1,6 +1,6 @@
 {
   "name": "@kvesto/schema",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Versioned survey JSON format and shared Zod schemas for Kvesto.",
   "license": "MIT",
   "keywords": [

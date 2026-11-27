@@ -1,6 +1,6 @@
 {
   "name": "@kvesto/vue",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Vue bindings for Kvesto: a useSurvey composable and a <Survey> component around the framework-agnostic core.",
   "license": "MIT",
   "keywords": [

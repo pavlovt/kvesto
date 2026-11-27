@@ -1,6 +1,6 @@
 {
   "name": "@kvesto/react",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "React bindings for Kvesto: a useSurvey hook and a <Survey> component around the framework-agnostic core.",
   "license": "MIT",
   "keywords": [

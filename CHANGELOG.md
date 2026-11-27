@@ -2,7 +2,7 @@
 
 All packages (`kvesto`, `@kvesto/schema`, `core`, `server`, `editor`, `dashboard`, `react`, `vue`, `export`) share one version.
 
-## Unreleased
+## 0.3.0
 
 - Expressions (M11): `{ "expr": "{age} >= 18 and {role} = 'dev'" }` conditions, a safe parser and evaluator with
   built-in functions, and custom functions through `createSurvey({ functions })` and `createApp({ functions })`.

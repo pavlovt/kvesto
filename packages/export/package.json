@@ -1,6 +1,6 @@
 {
   "name": "@kvesto/export",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Excel export for Kvesto survey responses, with no dependencies of its own.",
   "license": "MIT",
   "keywords": [
