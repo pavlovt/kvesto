@@ -312,6 +312,7 @@ export function surveyExpressions(survey: Survey): string[] {
   };
   for (const page of survey.pages) add(page.visibleIf);
   for (const v of survey.variables ?? []) out.push(v.expr);
+  for (const t of survey.triggers ?? []) add(t.when);
   walkElements(survey, (el) => {
     add(el.visibleIf);
     if (el.type === "panel") return;

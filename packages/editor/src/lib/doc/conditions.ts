@@ -21,8 +21,8 @@ import {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Loose = Record<string, any>;
 
-/** What a condition is attached to. */
-export type ConditionOwner = { element: string } | { page: string };
+/** What a condition is attached to. A survey-level condition (a trigger) may use every question outside repeats. */
+export type ConditionOwner = { element: string } | { page: string } | { survey: true };
 
 /** A question a condition may refer to. */
 export interface ConditionSource {
@@ -73,7 +73,9 @@ export function conditionSources(
   const all = walk(survey);
   let end: number;
   let repeat: string | undefined;
-  if ("page" in owner) {
+  if ("survey" in owner) {
+    end = all.length;
+  } else if ("page" in owner) {
     const pageIndex = survey.pages.findIndex((p) => p.id === owner.page);
     end = all.findIndex((w) => w.pageIndex >= pageIndex);
     if (end < 0) end = all.length;

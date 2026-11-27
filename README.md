@@ -259,6 +259,24 @@ may only name an earlier question; braces around anything that isn't a question 
   question is first shown), `readOnly` and `enableIf` (shown but not editable; the server refuses an answer that
   differs from the default), and `resetIf` (clear the answer when the condition becomes true).
 
+#### Triggers
+
+`triggers` on the survey run an action when their condition becomes true (not again while it stays true):
+
+```json
+{ "triggers": [
+  { "when": { "question": "member", "op": "eq", "value": "yes" },
+    "action": { "type": "setValue", "question": "discount", "value": "10" } },
+  { "when": { "expr": "{billing} != null" }, "action": { "type": "copyValue", "from": "billing", "to": "shipping" } },
+  { "when": { "question": "eligible", "op": "eq", "value": false }, "action": { "type": "skipToPage", "page": "end" } },
+  { "when": { "question": "consent", "op": "eq", "value": "no" }, "action": { "type": "complete" } }
+] }
+```
+
+They can use and set any question outside repeating panels (computed questions can't be set). Prefilled answers
+don't fire them, and triggers that set each other stop after a few rounds, so they can't loop forever. Triggers run
+in the runner; the server validates whatever answers they produced like any others.
+
 #### Validators
 
 Any question takes a `validators` list. Each rule runs on a non-empty answer, in order, in the runner and on the

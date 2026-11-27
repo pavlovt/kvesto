@@ -203,3 +203,28 @@ describe("calculated values in the editor", () => {
     ui.editor.destroy();
   });
 });
+
+describe("triggers in the editor", () => {
+  it("adds a trigger, changes its action and removes it", () => {
+    const ui = setup(false);
+    const click = (text: string) => {
+      ui.$$<HTMLButtonElement>(".kv-props button").find((b) => b.textContent?.trim() === text)!.click();
+      flushSync();
+    };
+    click("Add a trigger");
+    expect(ui.last().triggers).toEqual([
+      { when: { question: "inner", op: "notEmpty" }, action: { type: "setValue", question: "name", value: "" } },
+    ]);
+    ui.type(ui.$<HTMLInputElement>('.kv-trigger [aria-label="Value"]'), "Ana");
+    expect(ui.last().triggers![0]!.action).toEqual({ type: "setValue", question: "name", value: "Ana" });
+    const action = ui.$<HTMLSelectElement>('.kv-trigger [aria-label="Action"]');
+    action.value = "skipToPage";
+    action.dispatchEvent(new Event("change", { bubbles: true }));
+    flushSync();
+    expect(ui.last().triggers![0]!.action).toEqual({ type: "skipToPage", page: "p1" });
+    ui.$<HTMLButtonElement>('.kv-trigger [aria-label="Remove trigger 1"]').click();
+    flushSync();
+    expect(ui.last().triggers).toBeUndefined();
+    ui.editor.destroy();
+  });
+});

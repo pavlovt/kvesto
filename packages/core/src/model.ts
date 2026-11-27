@@ -104,6 +104,8 @@ export class SurveyModel {
   private readonly defaulted = new Set<string>();
   /** The last value of each `resetIf`, so an answer is cleared only when the condition becomes true. */
   private readonly resetState = new Map<string, boolean>();
+  /** The last value of each trigger's condition, so a trigger runs only when its condition becomes true. */
+  private readonly triggerState: boolean[] = [];
 
   constructor(private readonly options: CreateSurveyOptions) {
     this.survey = migrateSurvey(options.survey);
@@ -141,6 +143,63 @@ export class SurveyModel {
       if (q.resetIf) this.resetState.set(q.id, evaluateCondition(q.resetIf, this.state.logic.answers, undefined, this.logicOptions));
     }
     this.applyRules();
+    // Triggers whose condition already holds at the start (from prefilled answers) don't run.
+    (this.survey.triggers ?? []).forEach((t, i) => {
+      this.triggerState[i] = evaluateCondition(t.when, this.state.logic.answers, undefined, this.logicOptions);
+    });
+  }
+
+  /**
+   * Run the triggers whose condition has just become true. Actions can change
+   * answers, which can make other triggers fire; that is repeated a bounded
+   * number of times, so triggers that set each other can't loop forever.
+   */
+  private runTriggers(): void {
+    const triggers = this.survey.triggers ?? [];
+    let complete = false;
+    for (let round = 0; round < 10 && triggers.length; round++) {
+      const { logic } = this.state;
+      let answers: Answers | null = null;
+      let pageIndex: number | undefined;
+      triggers.forEach((t, i) => {
+        const holds = evaluateCondition(t.when, logic.answers, undefined, this.logicOptions);
+        const before = this.triggerState[i] ?? false;
+        this.triggerState[i] = holds;
+        if (!holds || before) return;
+        const a = t.action;
+        switch (a.type) {
+          case "setValue":
+            answers ??= { ...this.state.answers };
+            answers[a.question] = a.value as AnswerValue;
+            break;
+          case "copyValue": {
+            answers ??= { ...this.state.answers };
+            const v = logic.answers[a.from];
+            if (v === undefined) delete answers[a.to];
+            else answers[a.to] = v;
+            break;
+          }
+          case "skipToPage": {
+            const index = this.survey.pages.findIndex((p) => p.id === a.page);
+            if (index >= 0) pageIndex = index;
+            break;
+          }
+          case "complete":
+            complete = true;
+            break;
+        }
+      });
+      if (answers) {
+        this.state = this.compute({ ...this.state, answers });
+        this.applyRules();
+      }
+      if (pageIndex !== undefined && this.state.logic.visiblePages.has(this.survey.pages[pageIndex]!.id)) {
+        this.state = this.compute({ ...this.state, pageIndex });
+      }
+      if (!answers) break;
+    }
+    // After the listeners have seen the change.
+    if (complete) queueMicrotask(() => void this.complete());
   }
 
   /** A new item of a repeating panel, with the `defaultValue` of its questions. */
@@ -446,7 +505,10 @@ export class SurveyModel {
 
   private update(patch: Partial<BaseState>) {
     this.state = this.compute({ ...this.state, ...patch });
-    if (patch.answers) this.applyRules();
+    if (patch.answers) {
+      this.applyRules();
+      this.runTriggers();
+    }
     for (const l of this.listeners) l(this.state);
   }
 

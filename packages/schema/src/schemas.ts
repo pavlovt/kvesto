@@ -349,6 +349,26 @@ export const ComputedQuestionSchema = z.object({
 export const VariableSchema = z.object({ name: id, expr: ExpressionTextSchema });
 export type Variable = z.infer<typeof VariableSchema>;
 
+/** What a trigger does when its condition becomes true. */
+export const TriggerActionSchema = z.discriminatedUnion("type", [
+  /** Set a question's answer. */
+  z.object({ type: z.literal("setValue"), question: id, value: z.lazy(() => ItemAnswerValueSchema) }),
+  /** Copy one question's answer to another. */
+  z.object({ type: z.literal("copyValue"), from: id, to: id }),
+  /** Go to a page. */
+  z.object({ type: z.literal("skipToPage"), page: id }),
+  /** Submit the survey. */
+  z.object({ type: z.literal("complete") }),
+]);
+
+/**
+ * Runs an action when its condition becomes true (not on every change while
+ * it stays true). Evaluated by the runner on every answer change.
+ */
+export const TriggerSchema = z.object({ when: ConditionSchema, action: TriggerActionSchema });
+export type Trigger = z.infer<typeof TriggerSchema>;
+export type TriggerAction = z.infer<typeof TriggerActionSchema>;
+
 export const QuestionSchema = z.discriminatedUnion("type", [
   TextQuestionSchema,
   CommentQuestionSchema,
@@ -553,6 +573,8 @@ export const SurveySchema = z
     completedText: DisplayTextSchema.optional(),
     /** Named values worked out from answers, usable in expressions and piping as `{name}`. */
     variables: z.array(VariableSchema).optional(),
+    /** Actions run when a condition becomes true: set or copy a value, skip to a page, or submit. */
+    triggers: z.array(TriggerSchema).optional(),
   })
   .superRefine((survey, ctx) => {
     // Questions seen so far, in survey order (conditions may only look back), with the repeating panel they are in.
@@ -784,6 +806,28 @@ export const SurveySchema = z
       if (page.elements.length === 0) {
         checkCondition(page.visibleIf, ["pages", pi, "visibleIf"], new Set(seen.keys()), undefined);
         checkText(page.title, ["pages", pi, "title"], new Set(seen.keys()), undefined);
+      }
+    });
+    // Triggers may use any question outside repeating panels, and act on questions that take typed answers.
+    const all = new Set([...seen].filter(([, v]) => !v.repeat).map(([k]) => k));
+    survey.triggers?.forEach((t, ti) => {
+      const at = ["triggers", ti];
+      checkCondition(t.when, [...at, "when"], all, undefined);
+      const target = (qid: string, key: string) => {
+        const q = seen.get(qid);
+        if (!q || q.repeat) ctx.addIssue({ code: "custom", path: [...at, "action", key], message: `"${qid}" is not a question outside a repeating panel` });
+        else if (key !== "from" && q.question.type === "computed") {
+          ctx.addIssue({ code: "custom", path: [...at, "action", key], message: `"${qid}" is computed, so it can't be set` });
+        }
+      };
+      const a = t.action;
+      if (a.type === "setValue") target(a.question, "question");
+      if (a.type === "copyValue") {
+        target(a.from, "from");
+        target(a.to, "to");
+      }
+      if (a.type === "skipToPage" && !survey.pages.some((p) => p.id === a.page)) {
+        ctx.addIssue({ code: "custom", path: [...at, "action", "page"], message: `No page "${a.page}"` });
       }
     });
     // The survey's title and description come before every question; the completion text after all of them.

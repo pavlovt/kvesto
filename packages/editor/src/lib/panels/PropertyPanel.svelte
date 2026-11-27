@@ -1,10 +1,11 @@
 <script lang="ts">
   import { gridCellQuestion, type Choice, type GridColumn, type Question, type Validator } from "@kvesto/core";
   import type { DocumentState, SurveyDocument } from "../doc/document.js";
-  import type { Condition } from "@kvesto/core";
+  import type { Condition, Trigger } from "@kvesto/core";
   import ChoiceList from "./ChoiceList.svelte";
   import ConditionBuilder from "./ConditionBuilder.svelte";
   import ValidatorList from "./ValidatorList.svelte";
+  import TriggerList from "./TriggerList.svelte";
   import { conditionSources, expressionError } from "../doc/conditions.js";
 
   let { doc, docState: view }: { doc: SurveyDocument; docState: DocumentState } = $props();
@@ -142,6 +143,13 @@
         }
       }
       button type=button onclick={addVariable} 'Add a variable'
+      h3 'Triggers'
+      p.kv-props-hint 'Actions that run when a condition becomes true.'
+      TriggerList(
+        survey={view.survey}
+        triggers={((view.survey as Loose).triggers ?? []) as Trigger[]}
+        onchange={(next, typing) => doc.updateSurvey({ triggers: next } as Loose, typing ? { mergeKey: "survey.triggers" } : {})}
+      )
       p.kv-props-hint 'Select a question or panel in the outline or the preview to edit it.'
     } else {
       h3 '{el.type === "panel" ? (el.repeat ? "Repeating panel" : "Panel") : `Question · ${el.type}`}'
