@@ -19,3 +19,5 @@ jobs:
       - run: pnpm build
       - run: pnpm typecheck
       - run: pnpm test
+      - run: pnpm --filter @kvesto/editor exec playwright install --with-deps chromium
+      - run: pnpm --filter @kvesto/editor test:e2e

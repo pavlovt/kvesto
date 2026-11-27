@@ -25,6 +25,7 @@
   import { PALETTE, newElement, type PaletteKind } from "./doc/factory.js";
   import Outline from "./panels/Outline.svelte";
   import PropertyPanel from "./panels/PropertyPanel.svelte";
+  import { OutlineDrag } from "./panels/drag.svelte.js";
 
   let { survey = starterSurvey, storage, onchange, onsave, preview = true, view = "design" }: SurveyEditorProps = $props();
   // svelte-ignore state_referenced_locally
@@ -34,6 +35,8 @@
   // svelte-ignore state_referenced_locally
   const doc = new SurveyDocument(survey);
   let docState = $state(doc.state);
+  const drag = new OutlineDrag(doc);
+  $effect(() => () => drag.destroy());
   let source = $state(JSON.stringify(doc.survey, null, 2));
   /** JSON syntax error in the source view, while it can't be parsed. */
   let sourceError = $state<string | null>(null);
@@ -78,6 +81,7 @@
   }
 
   function add(kind: PaletteKind) {
+    if (drag.consumeClick()) return;
     if (sourceError) {
       status = "Fix the JSON before adding.";
       return;
@@ -146,7 +150,12 @@
     .kv-editor-palette {
       span.kv-editor-muted 'Add:'
       each PALETTE as item (item.kind) {
-        button type=button onclick={() => add(item.kind)} '{item.label}'
+        button(
+          type=button
+          title={tab === "design" ? "Click to add, or drag into the outline" : "Click to add"}
+          onpointerdown={(e) => tab === "design" && !sourceError && drag.press(e, drag.addSource(item.kind, item.label))}
+          onclick={() => add(item.kind)}
+        ) '{item.label}'
       }
     }
   }
@@ -171,14 +180,14 @@
   }
 
   /* svelte-ignore a11y_no_static_element_interactions */
-  .kv-editor onkeydown={onKeydown} {
+  .kv-editor class:kv-editor-dragging={drag.mode === "pointer"} onkeydown={onKeydown} {
     @render toolbar()
     @render problems()
     if tab === "design" {
       .kv-editor-design class:kv-editor-design--no-preview={!preview} {
         section.kv-editor-pane.kv-editor-outline-pane {
           h2 'Outline'
-          Outline doc={doc} docState={docState}
+          Outline doc={doc} docState={docState} drag={drag}
         }
         if preview {
           section.kv-editor-pane {
@@ -204,6 +213,9 @@
         }
       }
     }
+    if drag.ghost && drag.source {
+      .kv-editor-ghost aria-hidden=true style="left: {drag.ghost.x + 12}px; top: {drag.ghost.y + 8}px" '{drag.source.label}'
+    }
   }
 </template>
 
@@ -227,6 +239,9 @@
   .kv-editor-tabs .kv-editor-tab-on { background: #eff6ff; border-color: #93c5fd; }
   .kv-editor-toolbar .kv-editor-primary { margin-left: auto; background: #2563eb; color: white; border: 0; border-radius: 0.375rem; }
   .kv-editor-json { width: 100%; box-sizing: border-box; min-height: 60vh; font-family: ui-monospace, monospace; font-size: 0.85rem; }
+  .kv-editor-dragging, .kv-editor-dragging * { cursor: grabbing !important; user-select: none; }
+  .kv-editor-palette button { touch-action: none; }
+  .kv-editor-ghost { position: fixed; z-index: 1000; pointer-events: none; background: #1f2937; color: white; font-size: 0.8rem; padding: 0.2rem 0.5rem; border-radius: 0.3rem; box-shadow: 0 2px 6px rgb(0 0 0 / 0.2); }
   .kv-editor-muted { color: #6b7280; font-size: 0.9rem; }
   .kv-editor-error { color: #b91c1c; white-space: pre-wrap; overflow: auto; margin: 0; }
 </style>

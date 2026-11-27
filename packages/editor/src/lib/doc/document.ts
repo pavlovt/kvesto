@@ -68,7 +68,7 @@ interface Found {
   panels: string[];
 }
 
-function findElementIn(survey: SurveyInput, id: string): Found | undefined {
+export function findElementIn(survey: SurveyInput, id: string): Found | undefined {
   const search = (list: ElementInput[], container: Container, panels: string[]): Found | undefined => {
     for (const [index, element] of list.entries()) {
       if (element.id === id) return { element, list, index, container, panels };
@@ -141,7 +141,7 @@ function isInside(survey: SurveyInput, id: string, ancestorId: string): boolean 
   return findElementIn(survey, id)?.panels.includes(ancestorId) ?? false;
 }
 
-function containsRepeat(el: ElementInput): boolean {
+export function containsRepeat(el: ElementInput): boolean {
   if (el.type !== "panel") return false;
   const panel = el as PanelInput;
   return Boolean(panel.repeat) || panel.elements.some(containsRepeat);
@@ -257,32 +257,34 @@ export class SurveyDocument {
 
   /**
    * Add an element. Ids already in use are replaced with fresh ones. Without
-   * a container it goes at the end of the selected element's container, or of
-   * the last page. Returns the new element's id, or null if the container
+   * a container it goes right after the selected question, at the end of the
+   * selected panel, or at the end of the last page. Returns the new element's id, or null if the container
    * doesn't exist.
    */
   addElement(element: ElementInput, at?: Partial<ElementPosition>, options: { select?: boolean } = {}): string | null {
     let id: string | null = null;
     const ok = this.run(element.type === "panel" ? "Add panel" : "Add question", (draft) => {
-      const container = at?.container ?? this.defaultContainer(draft);
+      const fallback = at?.container ? null : this.defaultPosition(draft);
+      const container = at?.container ?? fallback?.container;
       if (!container) return false;
       if ("panel" in container && containsRepeat(element) && this.insideRepeat(draft, container.panel)) return false;
       const list = containerList(draft, container);
       if (!list) return false;
       const fresh = withFreshIds(draft, element);
       id = fresh.id;
-      list.splice(clampIndex(at?.index, list.length), 0, fresh);
+      list.splice(clampIndex(at?.index ?? fallback?.index, list.length), 0, fresh);
     });
     if (!ok) return null;
     if (options.select !== false && id) this.select(id);
     return id;
   }
 
-  private defaultContainer(survey: SurveyInput): Container | null {
+  /** Where an element goes when no position is given: after the selected question, at the end of the selected panel, or at the end of the last page. */
+  private defaultPosition(survey: SurveyInput): { container: Container; index?: number } | null {
     const sel = this.current.selected ? findElementIn(survey, this.current.selected) : undefined;
-    if (sel) return sel.element.type === "panel" ? { panel: sel.element.id } : sel.container;
+    if (sel) return sel.element.type === "panel" ? { container: { panel: sel.element.id } } : { container: sel.container, index: sel.index + 1 };
     const page = survey.pages.at(-1);
-    return page ? { page: page.id } : null;
+    return page ? { container: { page: page.id } } : null;
   }
 
   private insideRepeat(survey: SurveyInput, panelId: string): boolean {

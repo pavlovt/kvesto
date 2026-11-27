@@ -47,7 +47,8 @@
     "build": "node ../../scripts/svelte-package-braceml.mjs && vite build -c vite.standalone.config.ts && node ../../scripts/standalone-types.mjs",
     "prepack": "pnpm run build",
     "typecheck": "node ../../scripts/svelte-check-braceml.mjs",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "node --test test/e2e/drag.e2e.mjs"
   },
   "peerDependencies": {
     "svelte": "^5.20.0"
@@ -64,12 +65,13 @@
     "@braceml/svelte": "^0.4.0",
     "@sveltejs/package": "^2.5.8",
     "@sveltejs/vite-plugin-svelte": "^6.2.4",
+    "happy-dom": "21.0.4",
+    "playwright": "1.63.0",
     "svelte": "^5.59.2",
     "svelte-check": "^4.7.8",
     "typescript": "5.9.3",
     "vite": "^7.3.8",
-    "vitest": "3.2.7",
-    "happy-dom": "21.0.4"
+    "vitest": "3.2.7"
   },
   "engines": {
     "node": ">=20"

@@ -56,7 +56,14 @@ The **Design** tab has three columns: an outline of pages, panels and questions 
 delete), the live preview (click a question or panel to select it), and a property panel for the selection. The
 property panel covers titles, descriptions, required, the type-specific settings, choice, row and column lists, grid
 columns, repeat settings and validation rules. With nothing selected it edits the survey and page titles. The palette
-adds a question after the selection, or inside the selected panel. The **JSON** tab edits the raw survey next to the
+adds a question after the selection, or inside the selected panel.
+
+Drag outline items by their handle (or their name) to reorder them within and across pages and panels, or drag a
+palette button into the outline to add a question at that spot. A line shows where it will land, and Escape cancels.
+From the keyboard, focus an item's handle and press Space to pick it up, the arrow keys (or Home and End) to move it,
+Space to drop and Escape to cancel; each step is announced to screen readers. Every drop is a single undo step.
+
+The **JSON** tab edits the raw survey next to the
 preview.
 
 ## Undo, redo and the document model

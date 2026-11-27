@@ -14,3 +14,4 @@ export {
   type RunOptions,
 } from "./doc/document.js";
 export { PALETTE, QUESTION_TYPES, newElement, type PaletteKind } from "./doc/factory.js";
+export { canDropInto, describeTarget, dropTargets, type DropTarget } from "./doc/positions.js";
