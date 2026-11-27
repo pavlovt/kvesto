@@ -5,7 +5,7 @@
   import ChoiceList from "./ChoiceList.svelte";
   import ConditionBuilder from "./ConditionBuilder.svelte";
   import ValidatorList from "./ValidatorList.svelte";
-  import { conditionSources } from "../doc/conditions.js";
+  import { conditionSources, expressionError } from "../doc/conditions.js";
 
   let { doc, docState: view }: { doc: SurveyDocument; docState: DocumentState } = $props();
 
@@ -39,7 +39,7 @@
     }
     if (!doc.updateElement(el.id, { id: idDraft })) idError = `"${idDraft}" is already used.`;
   }
-  const setCondition = (key: "visibleIf" | "requiredIf", c: Condition | undefined, typing: boolean) =>
+  const setCondition = (key: "visibleIf" | "requiredIf" | "enableIf" | "resetIf", c: Condition | undefined, typing: boolean) =>
     el && doc.updateElement(el.id, { [key]: c }, typing ? { mergeKey: `${el.id}.${key}` } : {});
   const setPageCondition = (id: string, c: Condition | undefined, typing: boolean) =>
     doc.updatePage(id, { visibleIf: c }, typing ? { mergeKey: `page.${id}.visibleIf` } : {});
@@ -83,6 +83,17 @@
     const title = `${el.title ?? ""}${el.title ? " " : ""}{${source.scope ? "$item." : ""}${source.id}}`;
     doc.updateElement(el.id, { title });
   }
+  // Survey variables: named expressions.
+  const variables = $derived(((view.survey as Loose).variables ?? []) as { name: string; expr: string }[]);
+  const setVariables = (next: { name: string; expr: string }[], key = "") =>
+    doc.updateSurvey({ variables: next.length ? next : undefined } as Loose, key ? { mergeKey: key } : {});
+  const editVariable = (i: number, patch: Partial<{ name: string; expr: string }>) =>
+    setVariables(variables.map((v, j) => (j === i ? { ...v, ...patch } : v)), `survey.variables.${i}`);
+  function addVariable() {
+    let n = variables.length + 1;
+    while (variables.some((v) => v.name === `var${n}`)) n++;
+    setVariables([...variables, { name: `var${n}`, expr: "0" }]);
+  }
   const inputTypes = ["text", "email", "number", "date", "url", "tel"];
   const cellTypes = ["text", "number", "dropdown", "boolean"];
 </script>
@@ -118,6 +129,19 @@
           }
         }
       }
+      h3 'Variables'
+      p.kv-props-hint 'Named values worked out from answers. Use them in expressions and text as {"{name}"}.'
+      each variables as v, vi (vi) {
+        .kv-props-variable {
+          input aria-label="Variable name" value={v.name} oninput={(e) => editVariable(vi, { name: e.currentTarget.value })}
+          input.kv-props-expr aria-label="Variable expression" spellcheck=false value={v.expr} oninput={(e) => editVariable(vi, { expr: e.currentTarget.value })}
+          button type=button aria-label="Remove variable {v.name}" onclick={() => setVariables(variables.filter((_, j) => j !== vi))} '×'
+          if expressionError(v.expr) {
+            p.kv-props-error '{expressionError(v.expr)}'
+          }
+        }
+      }
+      button type=button onclick={addVariable} 'Add a variable'
       p.kv-props-hint 'Select a question or panel in the outline or the preview to edit it.'
     } else {
       h3 '{el.type === "panel" ? (el.repeat ? "Repeating panel" : "Panel") : `Question · ${el.type}`}'
@@ -167,6 +191,56 @@
         label.kv-props-check {
           input type=checkbox checked={Boolean(el.required)} onchange={(e) => set("required", e.currentTarget.checked || undefined)}
           span 'Required'
+        }
+      }
+      if el.type !== "panel" && el.type !== "computed" {
+        label.kv-props-check {
+          input type=checkbox checked={Boolean(el.readOnly)} onchange={(e) => set("readOnly", e.currentTarget.checked || undefined)}
+          span 'Read-only'
+        }
+        ConditionBuilder(
+          survey={view.survey}
+          owner={{ element: el.id }}
+          condition={el.enableIf}
+          prefix="Editable when"
+          addLabel="Editable only when…"
+          onchange={(c, typing) => setCondition("enableIf", c, typing)}
+        )
+        ConditionBuilder(
+          survey={view.survey}
+          owner={{ element: el.id }}
+          condition={el.resetIf}
+          prefix="Answer cleared when"
+          addLabel="Clear the answer when…"
+          onchange={(c, typing) => setCondition("resetIf", c, typing)}
+        )
+        label {
+          span 'Default (expression)'
+          input.kv-props-expr spellcheck=false value={el.defaultExpr ?? ""} placeholder={"e.g. {price} * 2"} oninput={(e) => set("defaultExpr", e.currentTarget.value)}
+        }
+        if el.defaultExpr && expressionError(el.defaultExpr) {
+          p.kv-props-error '{expressionError(el.defaultExpr)}'
+        }
+      }
+      if el.type === "computed" {
+        label {
+          span 'Expression'
+          input.kv-props-expr spellcheck=false value={el.expr ?? ""} oninput={(e) => set("expr", e.currentTarget.value)}
+        }
+        if expressionError(el.expr ?? "") {
+          p.kv-props-error '{expressionError(el.expr ?? "")}'
+        }
+        label {
+          span 'Decimals'
+          input type=number min=0 max=10 value={el.decimals ?? ""} oninput={(e) => set("decimals", num(e.currentTarget.value))}
+        }
+        label {
+          span 'Prefix'
+          input value={el.prefix ?? ""} oninput={(e) => set("prefix", e.currentTarget.value)}
+        }
+        label {
+          span 'Suffix'
+          input value={el.suffix ?? ""} oninput={(e) => set("suffix", e.currentTarget.value)}
         }
       }
 
@@ -339,4 +413,7 @@
   .kv-props-logic { padding-left: 6.9rem; }
   .kv-props-hint { color: #6b7280; font-size: 0.85rem; }
   .kv-props-error { color: #b91c1c; font-size: 0.85rem; margin: 0; }
+  .kv-props-expr { font-family: ui-monospace, monospace; }
+  .kv-props-variable { display: grid; grid-template-columns: 6rem 1fr auto; gap: 0.25rem; align-items: center; margin-bottom: 0.3rem; }
+  .kv-props-variable .kv-props-error { grid-column: 1 / -1; }
 </style>

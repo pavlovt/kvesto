@@ -101,7 +101,7 @@ describe("design view", () => {
 
     select(ui, "name");
     const add = ui.$<HTMLSelectElement>(".kv-validator-add select");
-    expect([...add.options].map((o) => o.value)).toEqual(["", "pattern", "length", "email", "url", "custom"]);
+    expect([...add.options].map((o) => o.value)).toEqual(["", "pattern", "length", "email", "url", "expression", "custom"]);
     add.value = "length";
     add.dispatchEvent(new Event("change", { bubbles: true }));
     flushSync();
@@ -165,6 +165,41 @@ describe("design view", () => {
     ui.$$<HTMLButtonElement>(".kv-editor-tabs button")[0]!.click();
     flushSync();
     expect(ui.$(".kv-outline")).not.toBeNull();
+    ui.editor.destroy();
+  });
+});
+
+describe("calculated values in the editor", () => {
+  it("adds a computed question, variables, read-only and default settings, and expression rules", () => {
+    const ui = setup(false);
+    ui.$$<HTMLButtonElement>(".kv-editor-palette button").find((b) => b.textContent?.trim() === "computed")!.click();
+    flushSync();
+    const computed = ui.last().pages[0]!.elements.find((e) => e.type === "computed") as { id: string; expr: string };
+    expect(computed.expr).toBe("0");
+    ui.type(field(ui, "Expression"), "{name} +");
+    expect(ui.$(".kv-props .kv-props-error").textContent).toMatch(/Unexpected end/);
+    ui.type(field(ui, "Expression"), "length({name})");
+    expect((ui.last().pages[0]!.elements.find((e) => e.id === computed.id) as { expr: string }).expr).toBe("length({name})");
+
+    select(ui, "name");
+    field(ui, "Read-only").click();
+    flushSync();
+    ui.type(field(ui, "Default (expression)"), "'Ana'");
+    expect(ui.last().pages[0]!.elements[0]).toMatchObject({ readOnly: true, defaultExpr: "'Ana'" });
+
+    ui.editor.destroy();
+  });
+
+  it("edits survey variables", () => {
+    const ui = setup(false);
+    ui.$$<HTMLButtonElement>(".kv-props button").find((b) => b.textContent?.trim() === "Add a variable")!.click();
+    flushSync();
+    expect(ui.last().variables).toEqual([{ name: "var1", expr: "0" }]);
+    ui.type(ui.$<HTMLInputElement>('.kv-props [aria-label="Variable expression"]'), "{name} * 2");
+    expect(ui.last().variables).toEqual([{ name: "var1", expr: "{name} * 2" }]);
+    ui.$<HTMLButtonElement>('.kv-props [aria-label="Remove variable var1"]').click();
+    flushSync();
+    expect(ui.last().variables).toBeUndefined();
     ui.editor.destroy();
   });
 });

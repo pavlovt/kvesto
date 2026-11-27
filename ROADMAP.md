@@ -4,6 +4,9 @@ This is the plan for growing Kvesto from today's skeleton into a full survey too
 Each milestone is meant to be one focused change on `main`: it builds, type-checks and passes tests on its own, and
 can ship in a patch or minor release without waiting for the next one.
 
+> **Where we are now:** M13 (calculated values and expression fields) is the latest finished milestone. Next up:
+> M14 (triggers). The [Status](#status) table at the bottom lists every milestone.
+
 Milestones marked **★** are ideas that go beyond the original feature list. They come from looking at how other
 form and survey tools solve the same problems (conversational forms, headless form renderers, open source
 experience-management tools, embeddable form builders) and picking the parts that fit Kvesto's goal of being easy
@@ -1169,6 +1172,7 @@ Decided:
 | M10 · Visual logic builder | Done (0.2.0) |
 | M11 · Expression engine | Done (unreleased) |
 | M12 · Answer piping | Done (unreleased) |
-| M13 – M79 | Planned |
+| M13 · Calculated values and expression fields | Done (unreleased) |
+| M14 – M79 | Planned |
 
 Update this table as milestones land, with the release they shipped in.

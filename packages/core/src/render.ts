@@ -15,7 +15,7 @@ import {
 import { createSurvey, type CreateSurveyOptions, type SurveyModel, type SurveyState } from "./model.js";
 import { repeatItems } from "./logic.js";
 import { formatBytes, itemKey } from "./validate.js";
-import { pipeText } from "./piping.js";
+import { formatComputed, pipeText } from "./piping.js";
 
 export interface RenderOptions {
   /** Text overrides for the built-in buttons and messages. */
@@ -72,6 +72,10 @@ interface Binding {
   set(value: AnswerValue | undefined): void;
   visible(state: SurveyState): boolean;
   required(state: SurveyState): boolean;
+  /** False for read-only and computed questions, and while `enableIf` does not hold. */
+  enabled(state: SurveyState): boolean;
+  /** The answer as submitted: for computed questions, the worked-out value. */
+  shown(state: SurveyState): AnswerValue | undefined;
   /** Inside a repeating panel: the item's answers, for `{$item.q}` placeholders. */
   item?: (state: SurveyState) => Answers | undefined;
 }
@@ -111,7 +115,7 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
     if (!raw.includes("{") && !raw.includes("}")) return raw;
     const node = doc.createTextNode("");
     const refresh = (s: SurveyState) => {
-      const next = pipeText(raw, s.survey, s.logic.answers, { ...pipeOptions, item: item?.(s) });
+      const next = pipeText(raw, s.survey, s.logic.answers, { ...pipeOptions, values: s.logic.variables, item: item?.(s) });
       if (node.data !== next) node.data = next;
     };
     refresh(model.snapshot);
@@ -130,7 +134,10 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
   const unsubscribe = model.subscribe((state) => {
     if (state.status === "completed") {
       if (renderedStatus !== "completed") {
-        const done = pipeText(state.survey.completedText ?? labels.completed, state.survey, state.logic.answers, pipeOptions);
+        const done = pipeText(state.survey.completedText ?? labels.completed, state.survey, state.logic.answers, {
+          ...pipeOptions,
+          values: state.logic.variables,
+        });
         root.replaceChildren(h(doc, "p", { class: "kv-completed", role: "status" }, done));
       }
       renderedStatus = state.status;
@@ -184,6 +191,8 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
       set: (v) => model.setValue(q.id, v),
       visible: (s) => s.logic.visibleQuestions.has(q.id),
       required: (s) => s.logic.requiredQuestions.has(q.id),
+      enabled: (s) => !s.logic.disabledQuestions.has(q.id),
+      shown: (s) => s.logic.answers[q.id],
     };
   }
 
@@ -261,6 +270,8 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
               set: (v) => model.setItemValue(panel.id, index, el.id, v),
               visible: (st) => Boolean(logicOf(st)?.visibleQuestions.has(el.id)),
               required: (st) => Boolean(logicOf(st)?.requiredQuestions.has(el.id)),
+              enabled: (st) => !logicOf(st)?.disabledQuestions.has(el.id),
+              shown: (st) => logicOf(st)?.answers[el.id],
               item: itemAnswers,
             });
             itemViews.push(view);
@@ -317,6 +328,7 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
         input.value = typeof value === "string" ? value : "";
         input.addEventListener("input", () => set(input.value));
         wrap.append(input);
+        refresh = syncText(input, b);
         break;
       }
       case "comment": {
@@ -325,6 +337,16 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
         ta.value = typeof value === "string" ? value : "";
         ta.addEventListener("input", () => set(ta.value));
         wrap.append(ta);
+        refresh = syncText(ta, b);
+        break;
+      }
+      case "computed": {
+        const out = h(doc, "output", { id: qid, class: "kv-computed", "aria-labelledby": `${qid}-title`, "aria-live": "polite" });
+        wrap.append(out);
+        refresh = (s) => {
+          const text = formatComputed(q, b.shown(s));
+          if (out.textContent !== text) out.textContent = text;
+        };
         break;
       }
       case "dropdown": {
@@ -333,14 +355,27 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
         select.value = typeof value === "string" ? value : "";
         select.addEventListener("change", () => set(select.value || null));
         wrap.append(select);
+        refresh = (s) => {
+          const v = b.get(s);
+          const want = typeof v === "string" ? v : "";
+          if (select.value !== want) select.value = want;
+        };
         break;
       }
       case "single-choice":
       case "multiple-choice": {
         const multi = q.type === "multiple-choice";
+        const inputs: [HTMLInputElement, string][] = [];
+        refresh = (s) => {
+          const v = b.get(s);
+          for (const [input, choice] of inputs) {
+            input.checked = multi ? Array.isArray(v) && (v as string[]).includes(choice) : v === choice;
+          }
+        };
         for (const c of q.choices) {
           const input = h(doc, "input", { type: multi ? "checkbox" : "radio", name: qid, value: c.value });
           input.checked = multi ? Array.isArray(value) && (value as string[]).includes(c.value) : value === c.value;
+          inputs.push([input, c.value]);
           input.addEventListener("change", () => {
             if (!multi) return set(c.value);
             const v = current();
@@ -372,6 +407,11 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
           const input = h(doc, "input", { type: "radio", name: qid, value: String(v) });
           input.checked = value === v;
           input.addEventListener("change", () => set(v));
+          const prev = refresh;
+          refresh = (s) => {
+            prev(s);
+            input.checked = b.get(s) === v;
+          };
           wrap.append(h(doc, "label", { class: "kv-choice" }, input, ` ${label}`));
         }
         break;
@@ -397,10 +437,21 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
       update(s) {
         wrap.hidden = !b.visible(s);
         star.hidden = !b.required(s);
+        // A disabled fieldset disables every input inside it.
+        wrap.disabled = q.type !== "computed" && !b.enabled(s);
         err.textContent = s.errors[b.key] ?? "";
         err.hidden = !s.errors[b.key];
         refresh(s);
       },
+    };
+  }
+
+  /** Keep a text input showing the answer when the model changes it (a default or a reset), without fighting typing. */
+  function syncText(input: HTMLInputElement | HTMLTextAreaElement, b: Binding) {
+    return (s: SurveyState) => {
+      const v = b.get(s);
+      const want = typeof v === "string" ? v : typeof v === "number" ? String(v) : "";
+      if (input.value !== want && doc.activeElement !== input) input.value = want;
     };
   }
 

@@ -121,6 +121,8 @@ export function operatorsFor(source: ConditionSource): ConditionOperator[] {
       return ["eq", "neq", ...ORDER, "in", "notIn", ...presence];
     case "boolean":
       return ["eq", "neq", ...presence];
+    case "computed":
+      return ["eq", "neq", ...ORDER, ...presence];
     case "matrix":
       return q.multiple ? ["contains", "notContains", ...presence] : ["eq", "neq", "in", "notIn", ...presence];
     default:
@@ -145,6 +147,7 @@ export function valueKind(source: ConditionSource, op: ConditionOperator): Value
     case "boolean":
       return "boolean";
     case "rating":
+    case "computed":
       return many ? "numbers" : "number";
     case "text":
       if (q.inputType === "number") return many ? "numbers" : "number";

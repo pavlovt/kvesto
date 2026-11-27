@@ -1,5 +1,6 @@
 <script lang="ts">
   import { validatorProblem, type Question, type Validator, type ValidatorType } from "@kvesto/core";
+  import { expressionError } from "../doc/conditions.js";
 
   let {
     question,
@@ -19,6 +20,7 @@
     count: { type: "count", min: 1 },
     email: { type: "email" },
     url: { type: "url" },
+    expression: { type: "expression", expr: "length({self}) > 1" },
     custom: { type: "custom", name: "myRule" },
   };
   const available = $derived(
@@ -44,7 +46,10 @@
   const bound = (s: string) => (dates ? s || undefined : num(s));
   function add() {
     if (!adding) return;
-    set([...items, structuredClone(starters[adding])]);
+    const starter = structuredClone(starters[adding]);
+    // An expression rule starts out about the question it belongs to.
+    if (starter.type === "expression") starter.expr = `{${question.id}} != null`;
+    set([...items, starter]);
     adding = "";
   }
 </script>
@@ -83,6 +88,14 @@
               oninput={(e) => edit(i, { max: v.type === "range" ? bound(e.currentTarget.value) : num(e.currentTarget.value) })}
             )
           }
+        } else if v.type === "expression" {
+          label {
+            span 'Expression'
+            input.kv-validator-expr spellcheck=false value={v.expr} oninput={(e) => edit(i, { expr: e.currentTarget.value })}
+          }
+          if expressionError(v.expr) {
+            p.kv-validator-error role=alert '{expressionError(v.expr)}'
+          }
         } else if v.type === "custom" {
           label {
             span 'Function name'
@@ -116,5 +129,7 @@
   .kv-validator label { display: grid; grid-template-columns: 6.5rem 1fr; gap: 0.3rem; align-items: center; font-size: 0.85rem; }
   .kv-validator input { font: inherit; font-size: 0.85rem; padding: 0.2rem 0.35rem; min-width: 0; }
   .kv-validator-add { display: flex; gap: 0.3rem; }
+  .kv-validator-expr { font-family: ui-monospace, monospace !important; }
+  .kv-validator-error { margin: 0; color: #b91c1c; font-size: 0.8rem; }
   .kv-validators button, .kv-validators select { font: inherit; font-size: 0.85rem; cursor: pointer; }
 </style>

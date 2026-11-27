@@ -7,6 +7,8 @@ import { allQuestions, replacePlaceholders, type Answers, type Question, type Su
 export interface PipeOptions {
   /** Answers of the current item of a repeating panel, for `{$item.q}`. */
   item?: Answers;
+  /** Other values placeholders may name, such as the survey's variables (`state.logic.variables`). */
+  values?: Record<string, unknown>;
   /** Words for boolean answers without their own labels. Default "Yes" / "No". */
   yes?: string;
   no?: string;
@@ -44,6 +46,7 @@ export function formatAnswer(question: Question | undefined, value: unknown, pat
     }
     return typeof v === "object" ? "" : String(v);
   }
+  if (question?.type === "computed") return formatComputed(question, value);
   if (question && "choices" in question) {
     const label = (c: unknown) => question.choices.find((x) => x.value === c)?.label ?? String(c);
     return Array.isArray(value) ? value.map(label).join(", ") : label(value);
@@ -56,6 +59,18 @@ export function formatAnswer(question: Question | undefined, value: unknown, pat
   return String(value);
 }
 
+/** A computed question's value for display: rounded to `decimals`, between `prefix` and `suffix`. */
+export function formatComputed(question: { decimals?: number; prefix?: string; suffix?: string }, value: unknown): string {
+  if (value === undefined || value === null || value === "") return "";
+  const text =
+    typeof value === "number" && question.decimals !== undefined
+      ? value.toFixed(question.decimals)
+      : Array.isArray(value)
+        ? value.join(", ")
+        : String(value);
+  return `${question.prefix ?? ""}${text}${question.suffix ?? ""}`;
+}
+
 /**
  * Fill `{questionId}` placeholders in display text with answers, as text.
  * Pass the answers with hidden questions removed (`state.logic.answers`), so a
@@ -66,7 +81,12 @@ export function pipeText(text: string, survey: Survey, answers: Answers, options
   const questions = questionsById(survey);
   return replacePlaceholders(text, (p) => {
     const question = questions.get(p.name);
-    if (!question) return null;
+    if (!question) {
+      if (!p.scope && !p.path.length && options.values && Object.hasOwn(options.values, p.name)) {
+        return formatAnswer(undefined, options.values[p.name], [], options);
+      }
+      return null;
+    }
     const source = p.scope === "item" ? (options.item ?? {}) : answers;
     return formatAnswer(question, source[p.name], p.path, options);
   });

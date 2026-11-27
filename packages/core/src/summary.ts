@@ -51,7 +51,7 @@ export interface QuestionSummary {
   answered: number;
   /** For choice, dropdown, boolean and rating questions: count per option. */
   counts?: { value: string; label: string; count: number }[];
-  /** For rating questions. */
+  /** For rating questions, and computed questions with numbers. */
   average?: number;
   /** For text and comment questions: the most recent answers. */
   samples?: string[];
@@ -125,6 +125,13 @@ export function summarizeResponses(survey: Survey, responses: SurveyResponse[], 
         case "comment":
           summary.samples = values.slice(-sampleSize).reverse().map(String);
           break;
+        case "computed": {
+          // Numbers get an average; anything else is shown like text.
+          const nums = values.filter((v): v is number => typeof v === "number");
+          if (nums.length) summary.average = nums.reduce((a, b) => a + b, 0) / nums.length;
+          summary.samples = values.slice(-sampleSize).reverse().map((v) => (Array.isArray(v) ? v.join(", ") : String(v)));
+          break;
+        }
         case "matrix":
           summary.matrix = question.rows.map((row) => {
             const cells = values

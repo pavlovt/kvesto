@@ -9,6 +9,9 @@ All six packages (`kvesto`, `@kvesto/schema`, `core`, `server`, `editor`, `dashb
   The editor's logic builder can write expressions.
 - Answer piping (M12): `{questionId}` placeholders in titles, descriptions, choice labels and the new
   `completedText`, rendered as text; `{{` escapes a brace. The editor can insert an earlier answer into a title.
+- Calculated values (M13): survey `variables`, a read-only `computed` question the server recalculates,
+  `expression` validators, and value rules on every question: `defaultValue`, `defaultExpr`, `readOnly`,
+  `enableIf` and `resetIf`. Numeric text now compares as numbers in expressions.
 
 ## 0.2.0
 

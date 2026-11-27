@@ -13,6 +13,7 @@ import {
 } from "@kvesto/schema";
 import { isEmptyAnswer, repeatItems, resolveLogic, type LogicOptions, type SurveyLogic } from "./logic.js";
 import { runValidators, type CustomValidators } from "./validators.js";
+import { compileExpression, evaluateNode, isEmptyValue, surveyVariables, toAnswerValue, type EvaluateOptions } from "./expression.js";
 
 export interface ValidateOptions {
   /** Override `question.required`, e.g. when a `requiredIf` condition holds. */
@@ -21,6 +22,8 @@ export interface ValidateOptions {
   validators?: CustomValidators;
   /** All answers, passed to custom validators that compare questions. */
   answers?: Answers;
+  /** Functions, variables and the repeat item for `expression` rules. */
+  expression?: EvaluateOptions;
 }
 
 const cellTypeHint = {
@@ -86,12 +89,33 @@ export function validateAnswer(question: Question, value: AnswerValue | undefine
   const shapeError = checkShape(question, value!, required, options);
   if (shapeError) return shapeError;
   return question.validators?.length
-    ? runValidators(question, value!, question.validators, { custom: options.validators, answers: options.answers ?? {} })
+    ? runValidators(question, value!, question.validators, {
+        custom: options.validators,
+        answers: options.answers ?? {},
+        expression: options.expression,
+      })
     : null;
 }
 
+/** A question's default answer: `defaultValue`, or `defaultExpr` worked out against the answers. */
+export function defaultAnswer(question: Question, answers: Answers, expression: EvaluateOptions = {}): AnswerValue | undefined {
+  if (question.defaultValue !== undefined) return question.defaultValue as AnswerValue;
+  if (!question.defaultExpr) return undefined;
+  try {
+    const v = toAnswerValue(evaluateNode(compileExpression(question.defaultExpr), answers, expression));
+    return isEmptyValue(v) ? undefined : (v as AnswerValue);
+  } catch {
+    return undefined;
+  }
+}
+
+const sameAnswer = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+
 function checkShape(question: Question, value: AnswerValue, required: boolean, options: ValidateOptions): string | null {
   switch (question.type) {
+    case "computed":
+      // Worked out by resolveLogic, never typed in.
+      return null;
     case "text":
     case "comment":
       if (typeof value !== "string") return "Expected text.";
@@ -222,7 +246,7 @@ export function validateRepeat(
   panel: Panel,
   value: AnswerValue | undefined,
   logic: SurveyLogic,
-  options: Pick<ValidateOptions, "validators"> & { strict?: boolean } = {},
+  options: Pick<ValidateOptions, "validators" | "expression"> & { strict?: boolean } = {},
 ): AnswerIssue[] {
   const issues: AnswerIssue[] = [];
   const add = (questionId: string, message: string, path: (string | number)[]) => issues.push({ questionId, message, path });
@@ -246,10 +270,11 @@ export function validateRepeat(
     if (!il) return;
     for (const q of questions) {
       if (!il.visibleQuestions.has(q.id)) continue;
-      const message = validateAnswer(q, item[q.id], {
+      const message = validateAnswer(q, il.answers[q.id], {
         required: il.requiredQuestions.has(q.id),
         validators: options.validators,
         answers: { ...logic.answers, ...il.answers },
+        expression: { ...options.expression, item: il.answers },
       });
       if (message) add(itemKey(panel.id, i, q.id), message, [panel.id, i, q.id]);
     }
@@ -283,6 +308,7 @@ export function validateAnswers(
   options: Pick<ValidateOptions, "validators"> & LogicOptions = {},
 ): { issues: AnswerIssue[]; answers: Answers } {
   const logic = resolveLogic(survey, answers, { functions: options.functions, now: options.now });
+  const expression: EvaluateOptions = { functions: options.functions, now: options.now, variables: surveyVariables(survey) };
   const { questions, repeats } = validationTargets(survey.pages.flatMap((p) => p.elements));
   const known = new Set([...questions, ...repeats].map((q) => q.id));
   const issues: AnswerIssue[] = Object.keys(answers)
@@ -290,16 +316,24 @@ export function validateAnswers(
     .map((questionId) => ({ questionId, message: "Unknown question", path: [questionId] }));
   for (const q of questions) {
     if (!logic.visibleQuestions.has(q.id)) continue;
-    const message = validateAnswer(q, answers[q.id], {
+    // Read-only and disabled answers must be left as they started.
+    if (q.type !== "computed" && logic.disabledQuestions.has(q.id) && !isEmptyValue(answers[q.id])) {
+      if (!sameAnswer(answers[q.id], defaultAnswer(q, logic.answers, expression))) {
+        issues.push({ questionId: q.id, message: "This answer can't be changed.", path: [q.id] });
+        continue;
+      }
+    }
+    const message = validateAnswer(q, logic.answers[q.id], {
       required: logic.requiredQuestions.has(q.id),
       validators: options.validators,
       answers: logic.answers,
+      expression,
     });
     if (message) issues.push({ questionId: q.id, message, path: [q.id] });
   }
   for (const panel of repeats) {
     if (!logic.visiblePanels.has(panel.id)) continue;
-    issues.push(...validateRepeat(panel, answers[panel.id], logic, { validators: options.validators, strict: true }));
+    issues.push(...validateRepeat(panel, answers[panel.id], logic, { validators: options.validators, expression, strict: true }));
   }
   return { issues, answers: logic.answers };
 }

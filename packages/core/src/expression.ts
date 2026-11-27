@@ -30,6 +30,8 @@ export interface EvaluateOptions {
   functions?: ExpressionFunctions;
   /** The clock for `today()` and `age()`. Default: the system clock. */
   now?: () => Date;
+  /** Survey variables by name (`{ total: "{a} + {b}" }`), worked out when an expression refers to them. */
+  variables?: Record<string, string>;
 }
 
 /** Raised for problems found while evaluating, such as an unknown function. */
@@ -95,7 +97,8 @@ function equals(a: unknown, b: unknown): boolean {
 
 function compare(a: unknown, b: unknown): number | null {
   if (isEmptyValue(a) || isEmptyValue(b)) return null;
-  if (typeof a === "number" || typeof b === "number") {
+  // Number questions answer with text ("2", "10"): two numeric values compare as numbers, not alphabetically.
+  if (typeof a === "number" || typeof b === "number" || (toNumber(a) !== null && toNumber(b) !== null)) {
     const na = toNumber(a);
     const nb = toNumber(b);
     return na === null || nb === null ? null : na - nb;
@@ -207,14 +210,22 @@ function lookup(node: Extract<ExpressionNode, { type: "ref" }>, answers: Answers
   return v === undefined ? null : v;
 }
 
+/** How deep variables may refer to other variables while evaluating (the schema already refuses cycles). */
+const MAX_VARIABLE_DEPTH = 32;
+
 /** Evaluate a parsed expression against answers. */
-export function evaluateNode(node: ExpressionNode, answers: Answers, options: EvaluateOptions = {}): unknown {
+export function evaluateNode(node: ExpressionNode, answers: Answers, options: EvaluateOptions = {}, depth = 0): unknown {
   const now = options.now ?? (() => new Date());
   const run = (n: ExpressionNode): unknown => {
     switch (n.type) {
       case "literal":
         return n.value;
       case "ref":
+        if (!n.scope && options.variables && Object.hasOwn(options.variables, n.name)) {
+          if (depth >= MAX_VARIABLE_DEPTH) throw new ExpressionEvaluationError(`Variable "${n.name}" is nested too deeply`);
+          const v = evaluateNode(compileExpression(options.variables[n.name]!), answers, { ...options, item: undefined }, depth + 1);
+          return v === undefined ? null : v;
+        }
         return lookup(n, answers, options.item);
       case "unary": {
         const v = run(n.arg);
@@ -293,18 +304,40 @@ export function evaluateExpressionCondition(text: string, answers: Answers, opti
   }
 }
 
-/** Every expression text in a survey's conditions. */
+/** Every expression text in a survey: conditions, variables, computed questions, defaults and expression rules. */
 export function surveyExpressions(survey: Survey): string[] {
   const out: string[] = [];
   const add = (c: Condition | undefined) => {
     if (c) out.push(...conditionExpressions(c));
   };
   for (const page of survey.pages) add(page.visibleIf);
+  for (const v of survey.variables ?? []) out.push(v.expr);
   walkElements(survey, (el) => {
     add(el.visibleIf);
-    if (el.type !== "panel") add(el.requiredIf);
+    if (el.type === "panel") return;
+    add(el.requiredIf);
+    add(el.enableIf);
+    add(el.resetIf);
+    if (el.defaultExpr) out.push(el.defaultExpr);
+    if (el.type === "computed") out.push(el.expr);
+    for (const v of el.validators ?? []) if (v.type === "expression") out.push(v.expr);
   });
   return out;
+}
+
+/** A survey's variables as a name → expression map, for `EvaluateOptions.variables`. */
+export function surveyVariables(survey: Survey): Record<string, string> | undefined {
+  if (!survey.variables?.length) return undefined;
+  return Object.fromEntries(survey.variables.map((v) => [v.name, v.expr]));
+}
+
+/** An expression result as an answer: scalars and lists of text stay, anything else becomes text or null. */
+export function toAnswerValue(v: unknown): string | number | boolean | string[] | null {
+  if (v === undefined || v === null) return null;
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  if (typeof v === "string" || typeof v === "boolean") return v;
+  if (Array.isArray(v)) return v.map((x) => String(x));
+  return null;
 }
 
 /** Functions a survey's expressions call that are neither built in nor in `functions`. */

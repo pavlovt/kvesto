@@ -1,4 +1,12 @@
-import { evaluateExpressionCondition, type ExpressionFunctions } from "./expression.js";
+import {
+  compileExpression,
+  evaluateExpressionCondition,
+  evaluateNode,
+  isEmptyValue,
+  surveyVariables,
+  toAnswerValue,
+  type ExpressionFunctions,
+} from "./expression.js";
 import { pageQuestions, type AnswerValue, type Element, type RepeatItem, type Answers, type Comparison, type Condition, type ConditionValue, type Page, type Question, type Survey } from "@kvesto/schema";
 
 export function isEmptyAnswer(value: AnswerValue | undefined): boolean {
@@ -79,6 +87,8 @@ export interface LogicOptions {
   functions?: ExpressionFunctions;
   /** The clock for `today()` and `age()`. */
   now?: () => Date;
+  /** Survey variables (name → expression). `resolveLogic` fills this in from the survey. */
+  variables?: Record<string, string>;
 }
 
 /**
@@ -104,8 +114,12 @@ export interface SurveyLogic {
   visiblePanels: Set<string>;
   /** Ids of the questions that are currently required (`required`, or `requiredIf` holds). */
   requiredQuestions: Set<string>;
-  /** Answers with hidden questions removed: what gets submitted. */
+  /** Ids of the visible questions that can't be edited: `readOnly`, `enableIf` false, or computed. */
+  disabledQuestions: Set<string>;
+  /** Answers with hidden questions removed and computed questions filled in: what gets submitted. */
   answers: Answers;
+  /** The survey's variables, worked out from the submitted answers. */
+  variables: Record<string, unknown>;
   /** Per visible repeating panel: the logic of each of its items, in order. */
   items: Record<string, ItemLogic[]>;
 }
@@ -115,6 +129,7 @@ export interface ItemLogic {
   visibleQuestions: Set<string>;
   visiblePanels: Set<string>;
   requiredQuestions: Set<string>;
+  disabledQuestions: Set<string>;
   /** The item's answers with hidden questions removed (a `RepeatItem`; typed wider so the survey level fits too). */
   answers: Answers;
 }
@@ -132,10 +147,18 @@ export function repeatItems(value: AnswerValue | undefined): RepeatItem[] {
  * counts as empty for every condition after it.
  */
 export function resolveLogic(survey: Survey, answers: Answers, options: LogicOptions = {}): SurveyLogic {
-  const holds = (c: Condition, item?: Answers) => evaluateCondition(c, effective, item, options);
+  const opts: LogicOptions = { ...options, variables: options.variables ?? surveyVariables(survey) };
+  const holds = (c: Condition, item?: Answers) => evaluateCondition(c, effective, item, opts);
   const visiblePages = new Set<string>();
   const effective: Answers = {};
-  const top: ItemLogic = { visibleQuestions: new Set(), visiblePanels: new Set(), requiredQuestions: new Set(), answers: effective };
+  const fresh = (into: Answers): ItemLogic => ({
+    visibleQuestions: new Set(),
+    visiblePanels: new Set(),
+    requiredQuestions: new Set(),
+    disabledQuestions: new Set(),
+    answers: into,
+  });
+  const top = fresh(effective);
   const items: Record<string, ItemLogic[]> = {};
 
   /**
@@ -151,7 +174,7 @@ export function resolveLogic(survey: Survey, answers: Answers, options: LogicOpt
         if (el.repeat && !item) {
           if (!visible) continue;
           const list = repeatItems(answers[el.id]).map((raw) => {
-            const logic: ItemLogic = { visibleQuestions: new Set(), visiblePanels: new Set(), requiredQuestions: new Set(), answers: {} };
+            const logic = fresh({});
             visit(el.elements, true, logic, raw);
             return logic;
           });
@@ -168,6 +191,20 @@ export function resolveLogic(survey: Survey, answers: Answers, options: LogicOpt
       if (el.required || (el.requiredIf && holds(el.requiredIf, into.answers))) {
         into.requiredQuestions.add(el.id);
       }
+      if (el.type === "computed" || el.readOnly || (el.enableIf && !holds(el.enableIf, into.answers))) {
+        into.disabledQuestions.add(el.id);
+      }
+      if (el.type === "computed") {
+        // Always worked out here, whatever the client sent.
+        let v: unknown = null;
+        try {
+          v = toAnswerValue(evaluateNode(compileExpression(el.expr), effective, { ...opts, ...(item ? { item: into.answers } : {}) }));
+        } catch {
+          v = null;
+        }
+        if (!isEmptyValue(v)) into.answers[el.id] = v as AnswerValue;
+        continue;
+      }
       const v = (item ?? answers)[el.id];
       if (v !== undefined) into.answers[el.id] = v;
     }
@@ -178,12 +215,22 @@ export function resolveLogic(survey: Survey, answers: Answers, options: LogicOpt
     if (pageVisible) visiblePages.add(page.id);
     visit(page.elements, pageVisible, top, undefined);
   }
+  const variables: Record<string, unknown> = {};
+  for (const [name, expr] of Object.entries(opts.variables ?? {})) {
+    try {
+      variables[name] = toAnswerValue(evaluateNode(compileExpression(expr), effective, opts));
+    } catch {
+      variables[name] = null;
+    }
+  }
   return {
     visiblePages,
     visibleQuestions: top.visibleQuestions,
     visiblePanels: top.visiblePanels,
     requiredQuestions: top.requiredQuestions,
+    disabledQuestions: top.disabledQuestions,
     answers: effective,
+    variables,
     items,
   };
 }

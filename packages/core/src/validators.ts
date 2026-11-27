@@ -1,5 +1,6 @@
 import type { AnswerValue, Answers, CustomValidator, Question, RangeValidator, Validator } from "@kvesto/schema";
 import { isEmptyAnswer } from "./logic.js";
+import { evaluateExpressionCondition, type EvaluateOptions } from "./expression.js";
 
 export interface CustomValidatorContext {
   question: Question;
@@ -111,6 +112,7 @@ function runValidator(
   v: Validator,
   custom: CustomValidators | undefined,
   answers: Answers,
+  expression?: EvaluateOptions,
 ): string | null {
   const fail = (fallback: string) => v.message ?? fallback;
   switch (v.type) {
@@ -136,6 +138,8 @@ function runValidator(
       const verb = question.type === "file" ? "Attach" : question.type === "matrix" ? "Answer" : "Choose";
       return fail(`${verb} ${bounds(v.min, v.max, countUnit(question, v.max ?? v.min))}.`);
     }
+    case "expression":
+      return evaluateExpressionCondition(v.expr, answers, expression ?? {}) ? null : fail("This answer is not valid.");
     case "custom":
       return runCustom(question, value, v, custom, answers);
   }
@@ -146,10 +150,15 @@ export function runValidators(
   question: Question,
   value: AnswerValue,
   validators: readonly Validator[],
-  context: { custom: CustomValidators | undefined; answers: Answers },
+  context: {
+    custom: CustomValidators | undefined;
+    answers: Answers;
+    /** Functions, variables and the repeat item for `expression` rules. */
+    expression?: EvaluateOptions;
+  },
 ): string | null {
   for (const v of validators) {
-    const err = runValidator(question, value, v, context.custom, context.answers);
+    const err = runValidator(question, value, v, context.custom, context.answers, context.expression);
     if (err) return err;
   }
   return null;

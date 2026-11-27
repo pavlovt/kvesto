@@ -16,10 +16,10 @@ import {
 } from "@kvesto/schema";
 import type { SurveyStorage } from "./storage.js";
 import { fileToDataUrl } from "./files.js";
-import { repeatItems, resolveLogic, visibleElements, type SurveyLogic } from "./logic.js";
-import { unknownFunctions, type ExpressionFunctions } from "./expression.js";
+import { evaluateCondition, isEmptyAnswer, repeatItems, resolveLogic, visibleElements, type LogicOptions, type SurveyLogic } from "./logic.js";
+import { surveyVariables, unknownFunctions, type EvaluateOptions, type ExpressionFunctions } from "./expression.js";
 import { pipeText } from "./piping.js";
-import { itemKey, validateAnswer, validateFile, validateRepeat, validationTargets } from "./validate.js";
+import { defaultAnswer, itemKey, validateAnswer, validateFile, validateRepeat, validationTargets } from "./validate.js";
 import type { CustomValidators } from "./validators.js";
 
 export interface CreateSurveyOptions {
@@ -96,6 +96,14 @@ export class SurveyModel {
   /** Repeating panels by id, and which repeating panel each inner question belongs to. */
   private readonly repeats = new Map<string, Panel>();
   private readonly repeatOf = new Map<string, string>();
+  /** Questions outside repeating panels, in survey order. */
+  private readonly topQuestions: Question[] = [];
+  private readonly logicOptions: LogicOptions;
+  private readonly expression: EvaluateOptions;
+  /** Questions whose `defaultExpr` has been applied (it runs once, when the question is first shown). */
+  private readonly defaulted = new Set<string>();
+  /** The last value of each `resetIf`, so an answer is cleared only when the condition becomes true. */
+  private readonly resetState = new Map<string, boolean>();
 
   constructor(private readonly options: CreateSurveyOptions) {
     this.survey = migrateSurvey(options.survey);
@@ -106,12 +114,19 @@ export class SurveyModel {
     walkElements(this.survey, (el, at) => {
       if (at.repeat) this.repeatOf.set(el.id, at.repeat);
       else if (el.type === "panel" && el.repeat) this.repeats.set(el.id, el);
+      else if (el.type !== "panel") this.topQuestions.push(el);
     });
+    const variables = surveyVariables(this.survey);
+    this.logicOptions = { functions: options.functions, now: options.now, ...(variables ? { variables } : {}) };
+    this.expression = { ...this.logicOptions };
     const answers: Answers = { ...(options.initialAnswers ?? {}) };
-    // Repeating panels start with their minimum number of (empty) items.
+    for (const q of this.topQuestions) {
+      if (answers[q.id] === undefined && q.defaultValue !== undefined) answers[q.id] = q.defaultValue as AnswerValue;
+    }
+    // Repeating panels start with their minimum number of items.
     for (const [id, panel] of this.repeats) {
       const min = panel.repeat?.min ?? 0;
-      if (answers[id] === undefined && min > 0) answers[id] = Array.from({ length: min }, () => ({}));
+      if (answers[id] === undefined && min > 0) answers[id] = Array.from({ length: min }, () => this.newItem(panel));
     }
     this.state = this.compute({
       answers,
@@ -121,6 +136,54 @@ export class SurveyModel {
       submitError: null,
       uploading: [],
     });
+    // Conditions that already hold at the start don't clear prefilled answers.
+    for (const q of this.topQuestions) {
+      if (q.resetIf) this.resetState.set(q.id, evaluateCondition(q.resetIf, this.state.logic.answers, undefined, this.logicOptions));
+    }
+    this.applyRules();
+  }
+
+  /** A new item of a repeating panel, with the `defaultValue` of its questions. */
+  private newItem(panel: Panel): RepeatItem {
+    const item: RepeatItem = {};
+    walkElements({ pages: [{ elements: panel.elements }] }, (el) => {
+      if (el.type !== "panel" && el.defaultValue !== undefined) item[el.id] = el.defaultValue as RepeatItem[string];
+    });
+    return item;
+  }
+
+  /**
+   * Apply `defaultExpr` (once, when a question is first shown) and `resetIf`
+   * (clear the answer when the condition becomes true), until nothing changes.
+   */
+  private applyRules(): void {
+    for (let round = 0; round < 10; round++) {
+      const { logic } = this.state;
+      let next: Answers | null = null;
+      for (const q of this.topQuestions) {
+        if (q.resetIf) {
+          const holds = evaluateCondition(q.resetIf, logic.answers, undefined, this.logicOptions);
+          const before = this.resetState.get(q.id) ?? false;
+          this.resetState.set(q.id, holds);
+          if (holds && !before && !isEmptyAnswer((next ?? this.state.answers)[q.id])) {
+            next ??= { ...this.state.answers };
+            delete next[q.id];
+          }
+        }
+        if (q.defaultExpr && !this.defaulted.has(q.id) && logic.visibleQuestions.has(q.id)) {
+          this.defaulted.add(q.id);
+          if (isEmptyAnswer((next ?? this.state.answers)[q.id])) {
+            const d = defaultAnswer(q, logic.answers, this.expression);
+            if (d !== undefined) {
+              next ??= { ...this.state.answers };
+              next[q.id] = d;
+            }
+          }
+        }
+      }
+      if (!next) return;
+      this.state = this.compute({ ...this.state, answers: next });
+    }
   }
 
   get snapshot(): SurveyState {
@@ -150,6 +213,11 @@ export class SurveyModel {
     return this.state.logic.requiredQuestions.has(questionId);
   }
 
+  /** False for computed and read-only questions, and while `enableIf` does not hold. */
+  isEnabled(questionId: string): boolean {
+    return !this.state.logic.disabledQuestions.has(questionId);
+  }
+
   /**
    * Display text with `{questionId}` placeholders filled from the current
    * answers (hidden questions pipe as empty). For custom renderers; the
@@ -159,7 +227,7 @@ export class SurveyModel {
   text(raw: string, item?: { panel: string; index: number }): string {
     const { logic } = this.state;
     const itemAnswers = item ? logic.items[item.panel]?.[item.index]?.answers : undefined;
-    return pipeText(raw, this.survey, logic.answers, itemAnswers ? { item: itemAnswers } : {});
+    return pipeText(raw, this.survey, logic.answers, { values: logic.variables, ...(itemAnswers ? { item: itemAnswers } : {}) });
   }
 
   private question(questionId: string): Question {
@@ -180,16 +248,18 @@ export class SurveyModel {
    */
   setValue(questionId: string, value: AnswerValue | undefined): void {
     if (this.repeats.has(questionId)) return this.setItems(questionId, repeatItems(value), value === undefined);
-    this.question(questionId);
+    const q = this.question(questionId);
     const inside = this.repeatOf.get(questionId);
     if (inside) throw new Error(`"${questionId}" is inside repeating panel "${inside}": use setItemValue`);
+    if (q.type === "computed") throw new Error(`"${questionId}" is computed from other answers`);
+    if (q.readOnly) throw new Error(`"${questionId}" is read-only`);
     const answers = { ...this.state.answers };
     if (value === undefined) delete answers[questionId];
     else answers[questionId] = value;
     const errors = { ...this.state.errors };
     delete errors[questionId];
     this.update({ answers, errors });
-    this.options.onChange?.(answers, questionId);
+    this.options.onChange?.(this.state.answers, questionId);
   }
 
   /** The items of a repeating panel. */
@@ -203,7 +273,7 @@ export class SurveyModel {
     const { repeat } = this.repeat(panelId);
     const items = this.getItems(panelId);
     if (repeat?.max !== undefined && items.length >= repeat.max) return false;
-    this.setItems(panelId, [...items, {}]);
+    this.setItems(panelId, [...items, this.newItem(this.repeat(panelId))]);
     return true;
   }
 
@@ -241,7 +311,7 @@ export class SurveyModel {
       Object.entries(this.state.errors).filter(([k]) => k !== panelId && !k.startsWith(`${panelId}.`)),
     );
     this.update({ answers, errors });
-    this.options.onChange?.(answers, panelId);
+    this.options.onChange?.(this.state.answers, panelId);
   }
 
   /**
@@ -304,10 +374,11 @@ export class SurveyModel {
     let ok = true;
     for (const q of questions) {
       const err = logic.visibleQuestions.has(q.id)
-        ? validateAnswer(q, this.state.answers[q.id], {
+        ? validateAnswer(q, logic.answers[q.id], {
             required: logic.requiredQuestions.has(q.id),
             validators: this.options.validators,
             answers: logic.answers,
+            expression: this.expression,
           })
         : null;
       if (err) {
@@ -318,7 +389,7 @@ export class SurveyModel {
     for (const panel of repeats) {
       for (const k of Object.keys(errors)) if (k === panel.id || k.startsWith(`${panel.id}.`)) delete errors[k];
       if (!logic.visiblePanels.has(panel.id)) continue;
-      for (const issue of validateRepeat(panel, this.state.answers[panel.id], logic, { validators: this.options.validators })) {
+      for (const issue of validateRepeat(panel, this.state.answers[panel.id], logic, { validators: this.options.validators, expression: this.expression })) {
         errors[issue.questionId] = issue.message;
         ok = false;
       }
@@ -375,12 +446,13 @@ export class SurveyModel {
 
   private update(patch: Partial<BaseState>) {
     this.state = this.compute({ ...this.state, ...patch });
+    if (patch.answers) this.applyRules();
     for (const l of this.listeners) l(this.state);
   }
 
   private compute(s: BaseState): SurveyState {
     const logic =
-      this.state && s.answers === this.state.answers ? this.state.logic : resolveLogic(this.survey, s.answers, { functions: this.options.functions, now: this.options.now });
+      this.state && s.answers === this.state.answers ? this.state.logic : resolveLogic(this.survey, s.answers, this.logicOptions);
     const visible = this.visiblePageIndexes(logic);
     const page = this.survey.pages[s.pageIndex]!;
     return {

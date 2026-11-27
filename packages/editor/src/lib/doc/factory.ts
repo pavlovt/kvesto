@@ -16,6 +16,7 @@ export const QUESTION_TYPES: readonly QuestionType[] = [
   "grid",
   "ranking",
   "file",
+  "computed",
 ];
 
 export const PALETTE: readonly { kind: PaletteKind; label: string }[] = [
@@ -85,6 +86,8 @@ export function newElement(kind: PaletteKind, survey: SurveyInput): ElementInput
       };
     case "file":
       return { ...base, type: kind, maxFiles: 1, maxSize: 5 * 1024 * 1024 };
+    case "computed":
+      return { ...base, title: `Result ${n}`, type: kind, expr: "0" };
     default:
       return { ...base, type: kind };
   }

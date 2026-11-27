@@ -237,6 +237,28 @@ A question hidden by logic pipes as empty. Piped answers are always inserted as 
 may only name an earlier question; braces around anything that isn't a question id stay as written, and `{{` and
 `}}` give literal braces. For a custom UI, `model.text(raw)` does the same.
 
+#### Calculated values
+
+```json
+{ "variables": [{ "name": "total", "expr": "{price} * {qty}" }],
+  "pages": [{ "id": "p1", "elements": [
+    { "id": "price", "type": "text", "inputType": "number", "title": "Price", "readOnly": true, "defaultValue": "12" },
+    { "id": "qty", "type": "text", "inputType": "number", "title": "Quantity",
+      "validators": [{ "type": "expression", "expr": "{qty} >= 1 and {qty} <= 10", "message": "Order 1 to 10" }] },
+    { "id": "sum", "type": "computed", "title": "Total", "expr": "{total}", "decimals": 2, "prefix": "€" }
+  ] }] }
+```
+
+- **Variables** (`variables` on the survey) are named expressions, usable in other expressions and in piped text
+  as `{name}`. They may use each other in any order but not in a cycle, and an element may only use a variable whose
+  questions come before it.
+- **Computed questions** (`type: "computed"`) show a value worked out from `expr` and store it with the response.
+  The server recalculates it and ignores what the client sent.
+- **Expression rules** (`{ "type": "expression", "expr": "{end} > {start}" }`) may use the question they check.
+- **Value rules** on any question: `defaultValue` (the starting answer), `defaultExpr` (worked out once, when the
+  question is first shown), `readOnly` and `enableIf` (shown but not editable; the server refuses an answer that
+  differs from the default), and `resetIf` (clear the answer when the condition becomes true).
+
 #### Validators
 
 Any question takes a `validators` list. Each rule runs on a non-empty answer, in order, in the runner and on the

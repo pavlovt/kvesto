@@ -155,6 +155,12 @@ export const EmailValidatorSchema = z.object({ type: z.literal("email"), ...vali
 export const UrlValidatorSchema = z.object({ type: z.literal("url"), ...validatorMessage });
 
 /**
+ * An expression that must hold for the answer, e.g. `{end} > {start}` on the
+ * `end` question. May use the question itself and earlier questions.
+ */
+export const ExpressionValidatorSchema = z.object({ type: z.literal("expression"), expr: ExpressionTextSchema, ...validatorMessage });
+
+/**
  * A rule implemented by the host application: a function registered under
  * `name` with `createSurvey({ validators })` and the server's `createApp({ validators })`.
  */
@@ -174,6 +180,7 @@ export const ValidatorSchema = z
     CountValidatorSchema,
     EmailValidatorSchema,
     UrlValidatorSchema,
+    ExpressionValidatorSchema,
     CustomValidatorSchema,
   ])
   .meta({ id: "Validator", description: "A rule an answer must follow, checked by the runner and the server." });
@@ -183,6 +190,7 @@ export type ValidatorType = Validator["type"];
 export type PatternValidator = z.infer<typeof PatternValidatorSchema>;
 export type RangeValidator = z.infer<typeof RangeValidatorSchema>;
 export type CustomValidator = z.infer<typeof CustomValidatorSchema>;
+export type ExpressionValidator = z.infer<typeof ExpressionValidatorSchema>;
 
 const questionBase = {
   id,
@@ -195,6 +203,17 @@ const questionBase = {
   requiredIf: ConditionSchema.optional(),
   /** Extra rules for a non-empty answer. Empty answers are only checked by `required`. */
   validators: z.array(ValidatorSchema).optional(),
+  /** The starting answer. */
+  // Lazy: the answer schemas are defined further down.
+  defaultValue: z.lazy(() => ItemAnswerValueSchema).optional(),
+  /** A starting answer worked out when the question is first shown, e.g. `"{price} * {quantity}"`. */
+  defaultExpr: ExpressionTextSchema.optional(),
+  /** Shown but not editable. The server refuses an answer that differs from the default. */
+  readOnly: z.boolean().optional(),
+  /** Editable only while this condition holds; otherwise shown read-only. */
+  enableIf: ConditionSchema.optional(),
+  /** Clear the answer whenever this condition becomes true (for example when an earlier choice changes). */
+  resetIf: ConditionSchema.optional(),
 };
 
 export const ChoiceSchema = z.object({
@@ -310,6 +329,26 @@ export const FileQuestionSchema = z.object({
   maxFiles: z.number().int().positive().default(1),
 });
 
+/**
+ * A read-only value worked out from an expression, such as a total. It is
+ * shown to the respondent and stored with the response under its id; the
+ * server recalculates it rather than trusting the client.
+ */
+export const ComputedQuestionSchema = z.object({
+  ...questionBase,
+  type: z.literal("computed"),
+  expr: ExpressionTextSchema,
+  /** Round numbers to this many decimals for display. */
+  decimals: z.number().int().min(0).max(10).optional(),
+  /** Text before and after the value, such as a currency sign or a unit. */
+  prefix: DisplayTextSchema.optional(),
+  suffix: DisplayTextSchema.optional(),
+});
+
+/** A named value worked out from answers, usable in expressions and piping as `{name}`. */
+export const VariableSchema = z.object({ name: id, expr: ExpressionTextSchema });
+export type Variable = z.infer<typeof VariableSchema>;
+
 export const QuestionSchema = z.discriminatedUnion("type", [
   TextQuestionSchema,
   CommentQuestionSchema,
@@ -322,6 +361,7 @@ export const QuestionSchema = z.discriminatedUnion("type", [
   RankingQuestionSchema,
   FileQuestionSchema,
   GridQuestionSchema,
+  ComputedQuestionSchema,
 ]);
 
 /**
@@ -465,6 +505,7 @@ export function validatorProblem(question: Question, validator: Validator): stri
       }
       return null;
     }
+    case "expression":
     case "custom":
       return null;
   }
@@ -510,6 +551,8 @@ export const SurveySchema = z
     pages: z.array(PageSchema).min(1),
     /** Shown after the respondent submits. Takes answer placeholders such as `{name}`. */
     completedText: DisplayTextSchema.optional(),
+    /** Named values worked out from answers, usable in expressions and piping as `{name}`. */
+    variables: z.array(VariableSchema).optional(),
   })
   .superRefine((survey, ctx) => {
     // Questions seen so far, in survey order (conditions may only look back), with the repeating panel they are in.
@@ -555,7 +598,12 @@ export const SurveySchema = z
       for (const r of refs) {
         const target = seen.get(r.name);
         const shown = `{${r.scope ? "$item." : ""}${[r.name, ...r.path].join(".")}}`;
-        if (!target || !earlierOnly.has(r.name)) out.push(`${shown} does not refer to an earlier question`);
+        const variable = variableDeps.get(r.name);
+        if (variable && !r.scope) {
+          const later = [...variable].filter((q) => !earlierOnly.has(q));
+          if (r.path.length) out.push(`${shown}: a variable has no parts`);
+          else if (later.length) out.push(`${shown} uses ${later.map((q) => `"${q}"`).join(", ")}, which does not come earlier`);
+        } else if (!target || !earlierOnly.has(r.name)) out.push(`${shown} does not refer to an earlier question`);
         else if (r.scope === "item" && !repeat) out.push(`${shown}: $item can only be used inside a repeating panel`);
         else if (r.scope === "item" && target.repeat !== repeat) out.push(`${shown}: "${r.name}" is not in the same repeating panel`);
         else if (r.scope !== "item" && target.repeat) {
@@ -577,7 +625,56 @@ export const SurveySchema = z
 
     // Every question id, so placeholders can tell a question from other text in braces.
     const questionIds = new Set<string>();
-    walkElements(survey, (el) => void (el.type !== "panel" && questionIds.add(el.id)));
+    const inRepeat = new Set<string>();
+    const allIds = new Set<string>();
+    walkElements(survey, (el, at) => {
+      allIds.add(el.id);
+      if (el.type !== "panel") questionIds.add(el.id);
+      if (at.repeat) inRepeat.add(el.id);
+    });
+
+    // Variables: unique names, references to questions outside repeats or to other variables, and no cycles.
+    // `variableDeps` holds the questions each variable depends on, directly or through other variables.
+    const variableDeps = new Map<string, Set<string>>();
+    const variables = survey.variables ?? [];
+    const varIndex = new Map(variables.map((v, i) => [v.name, i]));
+    variables.forEach((v, i) => {
+      if (varIndex.get(v.name) !== i) {
+        ctx.addIssue({ code: "custom", path: ["variables", i, "name"], message: `Duplicate variable "${v.name}"` });
+      } else if (allIds.has(v.name)) {
+        ctx.addIssue({ code: "custom", path: ["variables", i, "name"], message: `"${v.name}" is already an element id` });
+      }
+    });
+    const resolving = new Set<string>();
+    const depsOf = (name: string, path: (string | number)[]): Set<string> => {
+      const known = variableDeps.get(name);
+      if (known) return known;
+      const deps = new Set<string>();
+      if (resolving.has(name)) {
+        ctx.addIssue({ code: "custom", path, message: `Variable "${name}" depends on itself` });
+        return deps;
+      }
+      resolving.add(name);
+      const i = varIndex.get(name)!;
+      for (const r of safeExpressionRefs(variables[i]!.expr)) {
+        const at = ["variables", i, "expr"];
+        if (r.scope) ctx.addIssue({ code: "custom", path: at, message: "Variables cannot use $item" });
+        else if (varIndex.has(r.name)) for (const d of depsOf(r.name, at)) deps.add(d);
+        else if (!questionIds.has(r.name)) ctx.addIssue({ code: "custom", path: at, message: `{${r.name}} is not a question or variable` });
+        else if (inRepeat.has(r.name)) {
+          ctx.addIssue({ code: "custom", path: at, message: `"${r.name}" is inside a repeating panel, so it has no single answer here` });
+        } else deps.add(r.name);
+      }
+      resolving.delete(name);
+      variableDeps.set(name, deps);
+      return deps;
+    };
+    variables.forEach((v, i) => depsOf(v.name, ["variables", i, "expr"]));
+    /** Expressions in elements: they may only refer to earlier questions (and variables built from them). */
+    const checkExpression = (text: string | undefined, path: (string | number)[], earlierOnly: Set<string>, repeat: string | undefined) => {
+      if (!text) return;
+      for (const message of refProblems(safeExpressionRefs(text), earlierOnly, repeat)) ctx.addIssue({ code: "custom", path, message });
+    };
     /** Answer placeholders in display text may only refer to earlier questions. Braces around anything else are plain text. */
     const checkText = (
       text: string | undefined,
@@ -587,7 +684,9 @@ export const SurveySchema = z
       { itemRefs = true } = {},
     ) => {
       if (!text || !text.includes("{")) return;
-      const refs = textPlaceholders(text).filter((r) => questionIds.has(r.name) && (itemRefs || r.scope !== "item"));
+      const refs = textPlaceholders(text).filter(
+        (r) => (questionIds.has(r.name) || (variableDeps.has(r.name) && !r.scope)) && (itemRefs || r.scope !== "item"),
+      );
       for (const message of refProblems(refs, earlierOnly, repeat)) ctx.addIssue({ code: "custom", path, message });
     };
 
@@ -628,6 +727,10 @@ export const SurveySchema = z
       }
       const q = el;
       checkCondition(q.requiredIf, [...path, "requiredIf"], earlier, repeat);
+      checkCondition(q.enableIf, [...path, "enableIf"], earlier, repeat);
+      checkCondition(q.resetIf, [...path, "resetIf"], earlier, repeat);
+      checkExpression(q.defaultExpr, [...path, "defaultExpr"], earlier, repeat);
+      if (q.type === "computed") checkExpression(q.expr, [...path, "expr"], earlier, repeat);
       if (repeat && q.type === "file") {
         ctx.addIssue({ code: "custom", path: [...path, "type"], message: "File questions are not supported in repeating panels yet" });
       }
@@ -663,15 +766,18 @@ export const SurveySchema = z
       if (q.type === "rating" && q.min > q.max) {
         ctx.addIssue({ code: "custom", path: [...path, "max"], message: "max must be at least min" });
       }
+      // Known from here on: the question's own expression rules may use its answer.
+      seen.set(q.id, { question: q, repeat });
       q.validators?.forEach((v, vi) => {
         const vpath = [...path, "validators", vi];
         const problem = validatorProblem(q, v);
         if (problem) ctx.addIssue({ code: "custom", path: vpath, message: problem });
+        // An expression rule may also use the answer it checks.
+        if (v.type === "expression") checkExpression(v.expr, [...vpath, "expr"], new Set([...earlier, q.id]), repeat);
         if ("min" in v && v.min !== undefined && v.max !== undefined && v.min > v.max) {
           ctx.addIssue({ code: "custom", path: [...vpath, "max"], message: "max must be at least min" });
         }
       });
-      seen.set(q.id, { question: q, repeat });
     });
     // Pages without elements still get their condition checked.
     survey.pages.forEach((page, pi) => {

@@ -502,3 +502,41 @@ describe("expressions", () => {
     expect(ok.status).toBe(201);
   });
 });
+
+describe("calculated values", () => {
+  const calc = {
+    schemaVersion: 1,
+    id: "calc",
+    title: "Calc",
+    variables: [{ name: "total", expr: "{price} * {qty}" }],
+    pages: [
+      {
+        id: "p1",
+        elements: [
+          { id: "price", type: "text", inputType: "number", title: "Price", readOnly: true, defaultValue: "5" },
+          { id: "qty", type: "text", inputType: "number", title: "Qty" },
+          { id: "sum", type: "computed", title: "Sum", expr: "{total}" },
+        ],
+      },
+    ],
+  };
+
+  it("stores the recalculated value, not the one the client sent", async () => {
+    expect((await send("POST", "/surveys", calc)).status).toBe(201);
+    const res = await send("POST", "/surveys/calc/responses", { answers: { price: "5", qty: "3", sum: 1 } });
+    expect(res.status).toBe(201);
+    expect((await res.json()).answers).toEqual({ price: "5", qty: "3", sum: 15 });
+  });
+
+  it("refuses a changed read-only answer", async () => {
+    await send("POST", "/surveys", calc);
+    const res = await send("POST", "/surveys/calc/responses", { answers: { price: "1", qty: "3" } });
+    expect(res.status).toBe(400);
+    expect(JSON.stringify(await res.json())).toContain("can't be changed");
+  });
+
+  it("refuses a variable cycle", async () => {
+    const bad = { ...calc, id: "cyc", variables: [{ name: "a1", expr: "{b1}" }, { name: "b1", expr: "{a1}" }] };
+    expect((await send("POST", "/surveys", bad)).status).toBe(400);
+  });
+});
