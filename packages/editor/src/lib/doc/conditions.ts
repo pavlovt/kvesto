@@ -88,7 +88,7 @@ export function conditionSources(
   const out: ConditionSource[] = [];
   for (const w of all.slice(0, end)) {
     const el = w.element as Loose;
-    if (el.type === "panel" || (el.type === "grid" && !includeGrids)) continue;
+    if (el.type === "panel" || el.type === "content" || el.type === "image" || (el.type === "grid" && !includeGrids)) continue;
     if (w.repeat && w.repeat !== repeat) continue;
     out.push({
       id: el.id,

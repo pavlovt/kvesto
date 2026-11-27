@@ -5,7 +5,7 @@
  * when the format changes in a breaking way and add a migration in `migrate.ts`.
  */
 import { z } from "zod";
-import { walkElements } from "./elements.js";
+import { isQuestion, walkElements } from "./elements.js";
 import { textPlaceholders } from "./placeholders.js";
 import { ExpressionError, MAX_EXPRESSION_LENGTH, expressionRefs, parseExpression, type ExpressionRef } from "./expression.js";
 
@@ -448,6 +448,48 @@ export const RepeatSchema: z.ZodType<Repeat> = z.object({
   itemTitle: DisplayTextSchema.optional(),
 });
 
+/** Longest content block text accepted. */
+export const MAX_CONTENT_LENGTH = 20_000;
+
+/**
+ * A block of formatted text: a small, safe Markdown subset (paragraphs,
+ * `**bold**`, `*italic*`, `[links](https://…)`, and `-` or `1.` lists), with
+ * answer placeholders. Raw HTML in `html` is shown only when the host passes
+ * a `sanitizeHtml` function to the renderer; otherwise it is ignored.
+ */
+export const ContentElementSchema = z.object({
+  type: z.literal("content"),
+  id,
+  visibleIf: ConditionSchema.optional(),
+  markdown: DisplayTextSchema.max(MAX_CONTENT_LENGTH).optional(),
+  html: z.string().max(MAX_CONTENT_LENGTH).optional(),
+});
+
+/** An image source: an http(s) URL, a relative path, or a `data:image/…` URL. Never `javascript:` and the like. */
+const ImageSourceSchema = z
+  .string()
+  .min(1)
+  .max(2_000_000)
+  .refine((src) => /^(https?:\/\/|data:image\/[a-z+.-]+[;,]|\/|\.{1,2}\/|[A-Za-z0-9_-][^:]*$)/i.test(src), {
+    message: "Use an http(s) URL, a relative path or a data:image URL",
+  });
+
+/** An image. `alt` describes it for screen readers; use `""` only for a purely decorative image. */
+export const ImageElementSchema = z.object({
+  type: z.literal("image"),
+  id,
+  visibleIf: ConditionSchema.optional(),
+  src: ImageSourceSchema,
+  alt: DisplayTextSchema,
+  /** Width in CSS pixels. Default: the image's own width, never wider than the survey. */
+  width: z.number().int().positive().max(4000).optional(),
+});
+
+export type ContentElement = z.infer<typeof ContentElementSchema>;
+export type ImageElement = z.infer<typeof ImageElementSchema>;
+/** Something shown on a page that takes no answer. */
+export type DisplayElement = ContentElement | ImageElement;
+
 /** Survey JSON for a panel as authored, before defaults are applied. */
 export interface PanelInput {
   type: "panel";
@@ -459,9 +501,13 @@ export interface PanelInput {
   elements: ElementInput[];
 }
 
-/** Something a page or panel can hold: a question or a panel. */
-export type Element = Question | Panel;
-export type ElementInput = z.input<typeof QuestionSchema> | PanelInput;
+/** Something a page or panel can hold: a question, a panel, or a display element (content, image). */
+export type Element = Question | Panel | DisplayElement;
+export type ElementInput =
+  | z.input<typeof QuestionSchema>
+  | PanelInput
+  | z.input<typeof ContentElementSchema>
+  | z.input<typeof ImageElementSchema>;
 export type ElementType = Element["type"];
 
 export const PanelSchema: z.ZodType<Panel, PanelInput> = z
@@ -479,8 +525,8 @@ export const PanelSchema: z.ZodType<Panel, PanelInput> = z
   .meta({ id: "Panel", description: "A titled group of questions and panels." }) as unknown as z.ZodType<Panel, PanelInput>;
 
 export const ElementSchema: z.ZodType<Element, ElementInput> = z
-  .lazy(() => z.union([QuestionSchema, PanelSchema]))
-  .meta({ id: "Element", description: "A question or a panel." });
+  .lazy(() => z.union([QuestionSchema, PanelSchema, ContentElementSchema, ImageElementSchema]))
+  .meta({ id: "Element", description: "A question, a panel, or a content block or image." });
 
 export const PageSchema = z.object({
   id,
@@ -671,7 +717,7 @@ export const SurveySchema = z
     const allIds = new Set<string>();
     walkElements(survey, (el, at) => {
       allIds.add(el.id);
-      if (el.type !== "panel") questionIds.add(el.id);
+      if (isQuestion(el)) questionIds.add(el.id);
       if (at.repeat) inRepeat.add(el.id);
     });
 
@@ -746,12 +792,16 @@ export const SurveySchema = z
       const earlier = new Set(seen.keys());
       const repeat = repeatOf(at.panels);
       checkCondition(el.visibleIf, [...path, "visibleIf"], earlier, repeat);
-      checkText(el.title, [...path, "title"], earlier, repeat);
-      checkText(el.description, [...path, "description"], earlier, repeat);
       if (elementIds.has(el.id)) {
         ctx.addIssue({ code: "custom", path: [...path, "id"], message: `Duplicate element id "${el.id}"` });
       }
       elementIds.add(el.id);
+      if (el.type === "content" || el.type === "image") {
+        checkText(el.type === "content" ? el.markdown : el.alt, [...path, el.type === "content" ? "markdown" : "alt"], earlier, repeat);
+        return;
+      }
+      checkText(el.title, [...path, "title"], earlier, repeat);
+      checkText(el.description, [...path, "description"], earlier, repeat);
       if (el.type === "panel") {
         if (el.repeat) {
           if (repeat) {

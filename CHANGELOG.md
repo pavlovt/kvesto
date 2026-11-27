@@ -16,6 +16,8 @@ All six packages (`kvesto`, `@kvesto/schema`, `core`, `server`, `editor`, `dashb
   true, with an editor for them in the survey settings.
 - Custom question types (M15): `registerQuestionType` with a schema, validation, a renderer, a dashboard summary
   and editor defaults; `x-*` types in surveys, `createApp({ questionTypes })` on the server.
+- Content blocks and images (M16): `content` elements with a safe Markdown subset and answer placeholders (raw
+  `html` only through a host `sanitizeHtml`), and `image` elements, both with `visibleIf` and in the editor palette.
 
 ## 0.2.0
 

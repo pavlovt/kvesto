@@ -36,6 +36,7 @@ export {
 } from "./expression.js";
 export { fileToDataUrl } from "./files.js";
 export { pipeText, formatAnswer, formatComputed, type PipeOptions } from "./piping.js";
+export { parseMarkdown, parseInline, isSafeHref, type MarkdownBlock, type MarkdownInline } from "./markdown.js";
 export {
   registerQuestionType,
   unregisterQuestionType,

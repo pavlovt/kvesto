@@ -4,6 +4,7 @@
  * compiled or run as code.
  */
 import {
+  isQuestion,
   conditionExpressions,
   expressionFunctions,
   parseExpression,
@@ -315,7 +316,7 @@ export function surveyExpressions(survey: Survey): string[] {
   for (const t of survey.triggers ?? []) add(t.when);
   walkElements(survey, (el) => {
     add(el.visibleIf);
-    if (el.type === "panel") return;
+    if (!isQuestion(el)) return;
     add(el.requiredIf);
     add(el.enableIf);
     add(el.resetIf);

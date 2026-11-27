@@ -1,5 +1,6 @@
 import {
   gridCellQuestion,
+  isQuestion,
   panelQuestions,
   walkElements,
   type AnswerValue,
@@ -294,8 +295,8 @@ export function validationTargets(elements: readonly Element[]): { questions: Qu
   const questions: Question[] = [];
   const repeats: Panel[] = [];
   walkElements({ pages: [{ elements }] }, (el) => {
-    if (el.type !== "panel") questions.push(el);
-    else if (el.repeat) {
+    if (isQuestion(el)) questions.push(el);
+    else if (el.type === "panel" && el.repeat) {
       repeats.push(el);
       return "skip";
     }

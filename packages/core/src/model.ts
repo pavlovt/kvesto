@@ -1,5 +1,6 @@
 import {
   allQuestions,
+  isQuestion,
   migrateSurvey,
   walkElements,
   type Panel,
@@ -119,7 +120,7 @@ export class SurveyModel {
     walkElements(this.survey, (el, at) => {
       if (at.repeat) this.repeatOf.set(el.id, at.repeat);
       else if (el.type === "panel" && el.repeat) this.repeats.set(el.id, el);
-      else if (el.type !== "panel") this.topQuestions.push(el);
+      else if (isQuestion(el)) this.topQuestions.push(el);
     });
     const variables = surveyVariables(this.survey);
     this.logicOptions = { functions: options.functions, now: options.now, ...(variables ? { variables } : {}) };
@@ -209,7 +210,7 @@ export class SurveyModel {
   private newItem(panel: Panel): RepeatItem {
     const item: RepeatItem = {};
     walkElements({ pages: [{ elements: panel.elements }] }, (el) => {
-      if (el.type !== "panel" && el.defaultValue !== undefined) item[el.id] = el.defaultValue as RepeatItem[string];
+      if (isQuestion(el) && el.defaultValue !== undefined) item[el.id] = el.defaultValue as RepeatItem[string];
     });
     return item;
   }

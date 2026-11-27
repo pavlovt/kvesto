@@ -152,7 +152,7 @@
       )
       p.kv-props-hint 'Select a question or panel in the outline or the preview to edit it.'
     } else {
-      h3 '{el.type === "panel" ? (el.repeat ? "Repeating panel" : "Panel") : `Question · ${el.type}`}'
+      h3 '{el.type === "panel" ? (el.repeat ? "Repeating panel" : "Panel") : el.type === "content" ? "Content" : el.type === "image" ? "Image" : `Question · ${el.type}`}'
       label {
         span 'Id'
         input.kv-props-id value={idDraft} oninput={(e) => (idDraft = e.currentTarget.value)} onchange={rename}
@@ -160,6 +160,37 @@
       if idError {
         p.kv-props-error '{idError}'
       }
+      if el.type === "content" || el.type === "image" {
+        if el.type === "content" {
+          label {
+            span 'Text'
+            textarea.kv-props-markdown rows=6 value={el.markdown ?? ""} oninput={(e) => set("markdown", e.currentTarget.value)}
+          }
+          p.kv-props-hint 'Markdown: **bold**, *italic*, [link](https://…), - lists, 1. lists. Answers: {"{questionId}"}.'
+        } else {
+          label {
+            span 'Image URL'
+            input value={el.src ?? ""} oninput={(e) => set("src", e.currentTarget.value)}
+          }
+          label {
+            span 'Alt text'
+            input value={el.alt ?? ""} placeholder="Describe the image" oninput={(e) => doc.updateElement(el.id, { alt: e.currentTarget.value }, { mergeKey: `${el.id}.alt` })}
+          }
+          label {
+            span 'Width'
+            input type=number min=1 value={el.width ?? ""} oninput={(e) => set("width", num(e.currentTarget.value))}
+          }
+        }
+        h4 'Logic'
+        ConditionBuilder(
+          survey={view.survey}
+          owner={{ element: el.id }}
+          condition={el.visibleIf}
+          prefix="Shown when"
+          addLabel="Show only when…"
+          onchange={(c, typing) => setCondition("visibleIf", c, typing)}
+        )
+      } else {
       label {
         span 'Title'
         input value={el.title ?? ""} oninput={(e) => (el.type === "panel" ? set("title", e.currentTarget.value) : setTitle(e.currentTarget.value))}
@@ -404,6 +435,7 @@
         h4 'Rules'
         ValidatorList question={el as Question} items={(el.validators ?? []) as Validator[]} onchange={(items) => set("validators", items)}
       }
+      }
     }
   }
 </template>
@@ -421,7 +453,7 @@
   .kv-props-logic { padding-left: 6.9rem; }
   .kv-props-hint { color: #6b7280; font-size: 0.85rem; }
   .kv-props-error { color: #b91c1c; font-size: 0.85rem; margin: 0; }
-  .kv-props-expr { font-family: ui-monospace, monospace; }
+  .kv-props-expr, .kv-props-markdown { font-family: ui-monospace, monospace; }
   .kv-props-variable { display: grid; grid-template-columns: 6rem 1fr auto; gap: 0.25rem; align-items: center; margin-bottom: 0.3rem; }
   .kv-props-variable .kv-props-error { grid-column: 1 / -1; }
 </style>

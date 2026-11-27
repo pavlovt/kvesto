@@ -1,8 +1,8 @@
 import { isCustomQuestion, questionType, registeredQuestionTypes, type ElementInput, type QuestionType, type SurveyInput } from "@kvesto/core";
 import { usedIds } from "./document.js";
 
-/** What the palette can add: every question type, plus panels and repeating panels. */
-export type PaletteKind = QuestionType | "panel" | "repeat";
+/** What the palette can add: every question type, panels and repeating panels, and content blocks and images. */
+export type PaletteKind = QuestionType | "panel" | "repeat" | "content" | "image";
 
 export const QUESTION_TYPES: readonly QuestionType[] = [
   "text",
@@ -23,6 +23,8 @@ export const PALETTE: readonly { kind: PaletteKind; label: string }[] = [
   ...QUESTION_TYPES.map((kind) => ({ kind, label: kind })),
   { kind: "panel", label: "panel" },
   { kind: "repeat", label: "repeating panel" },
+  { kind: "content", label: "text block" },
+  { kind: "image", label: "image" },
 ];
 
 /** The built-in palette plus every custom question type registered so far. */
@@ -51,6 +53,12 @@ export function newElement(kind: PaletteKind, survey: SurveyInput): ElementInput
     return kind === "panel"
       ? { id, type: "panel", title: `Group ${n}`, elements: [] }
       : { id, type: "panel", title: `Group ${n}`, repeat: { min: 1 }, elements: [{ id: `${id}-q1`, type: "text", title: "Name" }] };
+  }
+  if (kind === "content" || kind === "image") {
+    const n = firstFree(survey, kind, 1);
+    return kind === "content"
+      ? { id: `content${n}`, type: "content", markdown: "Some **text** for respondents." }
+      : { id: `image${n}`, type: "image", src: "https://example.com/image.png", alt: "Describe the image" };
   }
   const count = usedIds(survey).size - survey.pages.length;
   const n = firstFree(survey, "q", count + 1);

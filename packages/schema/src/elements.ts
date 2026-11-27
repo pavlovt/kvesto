@@ -26,8 +26,13 @@ export interface PageLike<E> {
 
 /** The panels among `E`. */
 export type PanelOf<E> = Extract<E, { type: "panel" }>;
-/** The questions among `E` (everything that is not a panel). */
-export type QuestionOf<E> = Exclude<E, { type: "panel" }>;
+/** Element types that show something but take no answer. */
+export const DISPLAY_TYPES = ["content", "image"] as const;
+export type DisplayType = (typeof DISPLAY_TYPES)[number];
+/** The display elements among `E` (content and images). */
+export type DisplayOf<E> = Extract<E, { type: DisplayType }>;
+/** The questions among `E` (everything that is not a panel or a display element). */
+export type QuestionOf<E> = Exclude<E, { type: "panel" | DisplayType }>;
 
 /** Where an element sits in the survey. */
 export interface ElementLocation {
@@ -45,6 +50,16 @@ export interface ElementLocation {
 
 export function isPanel<E extends ElementLike>(element: E): element is PanelOf<E> & E {
   return element.type === "panel";
+}
+
+/** A content block or image: shown, but never answered. */
+export function isDisplayElement<E extends ElementLike>(element: E): element is DisplayOf<E> & E {
+  return (DISPLAY_TYPES as readonly string[]).includes(element.type);
+}
+
+/** A question: anything that is neither a panel nor a display element. */
+export function isQuestion<E extends ElementLike>(element: E): element is QuestionOf<E> & E {
+  return !isPanel(element) && !isDisplayElement(element);
 }
 
 /** A panel with `repeat` settings: its contents are answered once per item. */
@@ -90,7 +105,7 @@ export function walkElements<E extends ElementLike>(
 function collectQuestions<E extends ElementLike>(elements: readonly E[], out: QuestionOf<E>[]): QuestionOf<E>[] {
   for (const element of elements) {
     if (isPanel(element)) collectQuestions(childrenOf(element), out);
-    else out.push(element as QuestionOf<E>);
+    else if (isQuestion(element)) out.push(element as QuestionOf<E>);
   }
   return out;
 }
@@ -127,8 +142,8 @@ export function findElement<E extends ElementLike>(
   return found;
 }
 
-/** Find a question by id. Panels are not questions, so a panel id gives undefined. */
+/** Find a question by id. Panels and display elements are not questions, so their ids give undefined. */
 export function findQuestion<E extends ElementLike>(survey: SurveyLike<E>, id: string): QuestionOf<E> | undefined {
   const found = findElement(survey, id)?.element;
-  return found && !isPanel(found) ? (found as QuestionOf<E>) : undefined;
+  return found && isQuestion(found) ? (found as QuestionOf<E>) : undefined;
 }

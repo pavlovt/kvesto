@@ -240,3 +240,21 @@ describe("custom question types in the editor", () => {
     unregisterQuestionType("x-stars");
   });
 });
+
+describe("content blocks in the editor", () => {
+  it("adds a text block and an image and edits them", () => {
+    const ui = setup(false);
+    const add = (label: string) => {
+      ui.$$<HTMLButtonElement>(".kv-editor-palette button").find((b) => b.textContent?.trim() === label)!.click();
+      flushSync();
+    };
+    add("text block");
+    expect(ui.$(".kv-props h3").textContent).toBe("Content");
+    ui.type(ui.$<HTMLTextAreaElement>(".kv-props .kv-props-markdown"), "Hello **{name}**");
+    expect(ui.last().pages[0]!.elements.at(-1)).toEqual({ id: "content1", type: "content", markdown: "Hello **{name}**" });
+    add("image");
+    ui.type(field(ui, "Alt text"), "A cat");
+    expect(ui.last().pages[0]!.elements.at(-1)).toMatchObject({ id: "image1", type: "image", alt: "A cat" });
+    ui.editor.destroy();
+  });
+});

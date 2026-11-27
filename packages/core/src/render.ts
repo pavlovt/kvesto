@@ -1,4 +1,5 @@
 import {
+  type DisplayElement,
   type Answers,
   type AnswerValue,
   type Element,
@@ -17,10 +18,16 @@ import { repeatItems } from "./logic.js";
 import { formatBytes, itemKey } from "./validate.js";
 import { formatComputed, pipeText } from "./piping.js";
 import { questionType } from "./question-types.js";
+import { parseMarkdown, type MarkdownInline } from "./markdown.js";
 
 export interface RenderOptions {
   /** Text overrides for the built-in buttons and messages. */
   labels?: Partial<typeof defaultLabels>;
+  /**
+   * Turns a content block's raw `html` into safe HTML (use a sanitizer such as
+   * DOMPurify). Without it `html` is never shown: only the block's Markdown is.
+   */
+  sanitizeHtml?: (html: string) => string;
 }
 
 const defaultLabels = {
@@ -197,7 +204,45 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
     };
   }
 
+  /** A content block or an image. `item` gives the repeat item's answers for `{$item.q}`. */
+  function renderBlock(el: DisplayElement, item?: (s: SurveyState) => Answers | undefined): El {
+    const wrap = h(doc, "div", { class: `kv-block kv-${el.type}`, "data-block": el.id });
+    if (el.type === "image") {
+      const img = h(doc, "img", { src: el.src, alt: "", loading: "lazy" });
+      if (el.width) img.width = el.width;
+      const alt = txt(el.alt, item);
+      // Keep the alt text up to date when it pipes answers.
+      if (typeof alt === "string") img.alt = alt;
+      else {
+        img.alt = alt.textContent ?? "";
+        texts.push(() => void (img.alt = alt.textContent ?? ""));
+      }
+      wrap.append(img);
+    } else if (el.html && options.sanitizeHtml) {
+      wrap.innerHTML = options.sanitizeHtml(el.html);
+    } else {
+      const inline = (nodes: MarkdownInline[]): (Node | string)[] =>
+        nodes.map((n) => {
+          if (n.type === "text") return txt(n.text, item);
+          if (n.type === "link") {
+            return h(doc, "a", { href: n.href, target: "_blank", rel: "noopener noreferrer" }, ...inline(n.children));
+          }
+          return h(doc, n.type === "strong" ? "strong" : "em", {}, ...inline(n.children));
+        });
+      for (const block of parseMarkdown(el.markdown ?? "")) {
+        if (block.type === "paragraph") wrap.append(h(doc, "p", {}, ...inline(block.children)));
+        else wrap.append(h(doc, block.ordered ? "ol" : "ul", {}, ...block.items.map((i) => h(doc, "li", {}, ...inline(i)))));
+      }
+    }
+    return wrap;
+  }
+
   function renderElement(el: Element, state: SurveyState): El {
+    if (el.type === "content" || el.type === "image") {
+      const block = renderBlock(el);
+      views.push({ el: block, update: (s) => void (block.hidden = !s.logic.visibleBlocks.has(el.id)) });
+      return block;
+    }
     if (el.type !== "panel") {
       const view = renderQuestion(el, state, topBinding(el));
       views.push(view);
@@ -255,6 +300,11 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
           item.append(h(doc, "div", { class: "kv-repeat-item-head" }, h(doc, "span", { class: "kv-repeat-item-title" }, txt(rawTitle, itemAnswers)), remove));
           const logicOf = (st: SurveyState) => st.logic.items[panel.id]?.[index];
           const renderChild = (el: Element): El => {
+            if (el.type === "content" || el.type === "image") {
+              const block = renderBlock(el, itemAnswers);
+              itemViews.push({ el: block, update: (st) => void (block.hidden = !logicOf(st)?.visibleBlocks.has(el.id)) });
+              return block;
+            }
             if (el.type === "panel") {
               const box = h(doc, "fieldset", { class: "kv-panel", "data-panel": el.id });
               if (el.title) box.append(h(doc, "legend", { class: "kv-panel-title" }, txt(el.title, itemAnswers)));

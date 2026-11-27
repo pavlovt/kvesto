@@ -112,6 +112,8 @@ export interface SurveyLogic {
   visibleQuestions: Set<string>;
   /** Ids of the panels that are currently shown. */
   visiblePanels: Set<string>;
+  /** Ids of the content blocks and images that are currently shown. */
+  visibleBlocks: Set<string>;
   /** Ids of the questions that are currently required (`required`, or `requiredIf` holds). */
   requiredQuestions: Set<string>;
   /** Ids of the visible questions that can't be edited: `readOnly`, `enableIf` false, or computed. */
@@ -128,6 +130,7 @@ export interface SurveyLogic {
 export interface ItemLogic {
   visibleQuestions: Set<string>;
   visiblePanels: Set<string>;
+  visibleBlocks: Set<string>;
   requiredQuestions: Set<string>;
   disabledQuestions: Set<string>;
   /** The item's answers with hidden questions removed (a `RepeatItem`; typed wider so the survey level fits too). */
@@ -154,6 +157,7 @@ export function resolveLogic(survey: Survey, answers: Answers, options: LogicOpt
   const fresh = (into: Answers): ItemLogic => ({
     visibleQuestions: new Set(),
     visiblePanels: new Set(),
+    visibleBlocks: new Set(),
     requiredQuestions: new Set(),
     disabledQuestions: new Set(),
     answers: into,
@@ -184,6 +188,10 @@ export function resolveLogic(survey: Survey, answers: Answers, options: LogicOpt
         }
         // Still walk a hidden panel: nothing inside is visible, but the walk keeps document order.
         visit(el.elements, visible, into, item);
+        continue;
+      }
+      if (el.type === "content" || el.type === "image") {
+        if (visible) into.visibleBlocks.add(el.id);
         continue;
       }
       if (!visible) continue;
@@ -227,6 +235,7 @@ export function resolveLogic(survey: Survey, answers: Answers, options: LogicOpt
     visiblePages,
     visibleQuestions: top.visibleQuestions,
     visiblePanels: top.visiblePanels,
+    visibleBlocks: top.visibleBlocks,
     requiredQuestions: top.requiredQuestions,
     disabledQuestions: top.disabledQuestions,
     answers: effective,

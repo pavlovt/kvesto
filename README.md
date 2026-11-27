@@ -307,6 +307,21 @@ createApp({ repository, authorize, validators });          // on the server
 
 A `custom` validator whose function isn't registered never passes, so a missing registration can't let bad data in.
 
+#### Content blocks and images
+
+Pages and panels can also hold elements that show something but take no answer:
+
+```json
+{ "id": "intro", "type": "content", "markdown": "Thanks for joining, **{name}**.\n\n- It takes 2 minutes\n- [Privacy](https://example.com/privacy)" },
+{ "id": "logo", "type": "image", "src": "https://example.com/logo.png", "alt": "Example Ltd logo", "width": 160 }
+```
+
+`markdown` takes a small, safe subset: paragraphs, `**bold**`, `*italic*`, `[links](https://…)` (http, https,
+mailto and relative only) and `-` or `1.` lists, plus answer placeholders. It is turned into DOM nodes, never HTML.
+A block may also carry raw `html`, which is shown only if you pass a sanitizer, such as DOMPurify, to the renderer:
+`mountSurvey(el, { survey, sanitizeHtml: (html) => DOMPurify.sanitize(html) })`. Otherwise the Markdown is shown.
+Image `src` must be an http(s) URL, a relative path or a `data:image` URL. Both take `visibleIf`.
+
 #### Custom question types
 
 Register a type once, then use it in surveys as `"type": "x-…"`:
