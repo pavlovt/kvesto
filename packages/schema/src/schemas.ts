@@ -8,6 +8,16 @@ import { z } from "zod";
 
 export const SURVEY_SCHEMA_VERSION = 1 as const;
 
+/**
+ * Human-readable text shown to respondents (titles, descriptions, labels,
+ * placeholders). A plain string today; localization will widen this one
+ * schema to also accept per-locale strings, so every text field gets it at once.
+ */
+export const DisplayTextSchema = z.string();
+/** Display text that must not be empty. */
+export const RequiredDisplayTextSchema = DisplayTextSchema.min(1);
+export type DisplayText = z.infer<typeof DisplayTextSchema>;
+
 const id = z
   .string()
   .min(1)
@@ -66,8 +76,8 @@ export const ConditionSchema: z.ZodType<Condition> = z.lazy(() =>
 
 const questionBase = {
   id,
-  title: z.string().min(1),
-  description: z.string().optional(),
+  title: RequiredDisplayTextSchema,
+  description: DisplayTextSchema.optional(),
   required: z.boolean().optional(),
   /** Show the question only while this condition holds. Hidden questions are not validated or submitted. */
   visibleIf: ConditionSchema.optional(),
@@ -77,20 +87,20 @@ const questionBase = {
 
 export const ChoiceSchema = z.object({
   value: z.string().min(1),
-  label: z.string().min(1),
+  label: RequiredDisplayTextSchema,
 });
 
 export const TextQuestionSchema = z.object({
   ...questionBase,
   type: z.literal("text"),
-  placeholder: z.string().optional(),
+  placeholder: DisplayTextSchema.optional(),
   inputType: z.enum(["text", "email", "number", "date", "url", "tel"]).optional(),
 });
 
 export const CommentQuestionSchema = z.object({
   ...questionBase,
   type: z.literal("comment"),
-  placeholder: z.string().optional(),
+  placeholder: DisplayTextSchema.optional(),
   rows: z.number().int().positive().optional(),
 });
 
@@ -122,8 +132,8 @@ export const RatingQuestionSchema = z.object({
 export const BooleanQuestionSchema = z.object({
   ...questionBase,
   type: z.literal("boolean"),
-  labelTrue: z.string().optional(),
-  labelFalse: z.string().optional(),
+  labelTrue: DisplayTextSchema.optional(),
+  labelFalse: DisplayTextSchema.optional(),
 });
 
 /**
@@ -177,7 +187,7 @@ export const QuestionSchema = z.discriminatedUnion("type", [
 
 export const PageSchema = z.object({
   id,
-  title: z.string().optional(),
+  title: DisplayTextSchema.optional(),
   /** Show the page only while this condition holds. Hidden pages are skipped. */
   visibleIf: ConditionSchema.optional(),
   elements: z.array(QuestionSchema),
@@ -195,10 +205,12 @@ const uniqueValues = (items: { value: string }[]) => new Set(items.map((i) => i.
 
 export const SurveySchema = z
   .object({
+    /** Optional link to the published JSON Schema, so editors can autocomplete and check the file. Ignored by Kvesto. */
+    $schema: z.string().optional(),
     schemaVersion: z.literal(SURVEY_SCHEMA_VERSION),
     id,
-    title: z.string().min(1),
-    description: z.string().optional(),
+    title: RequiredDisplayTextSchema,
+    description: DisplayTextSchema.optional(),
     pages: z.array(PageSchema).min(1),
   })
   .superRefine((survey, ctx) => {

@@ -1,4 +1,4 @@
-import type { FileAnswer, Question, Survey, SurveyResponse } from "@kvesto/schema";
+import { allQuestions, type FileAnswer, type Question, type Survey, type SurveyResponse } from "@kvesto/schema";
 
 export interface MatrixRowSummary {
   value: string;
@@ -36,8 +36,7 @@ export interface QuestionSummary {
 
 /** Aggregate responses per question. Used by the dashboard; handy for custom reports too. */
 export function summarizeResponses(survey: Survey, responses: SurveyResponse[], sampleSize = 5): QuestionSummary[] {
-  return survey.pages
-    .flatMap((p) => p.elements)
+  return allQuestions(survey)
     .map((question) => {
       const values = responses.map((r) => r.answers[question.id]).filter((v) => v !== undefined && v !== null && v !== "");
       const summary: QuestionSummary = { question, answered: values.length };

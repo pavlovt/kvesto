@@ -27,6 +27,7 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./survey.schema.json": "./dist/survey.schema.json",
     "./package.json": "./package.json"
   },
   "files": [
@@ -37,7 +38,7 @@
   ],
   "sideEffects": false,
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node scripts/write-json-schema.mjs",
     "prepack": "pnpm run build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
@@ -46,6 +47,7 @@
     "zod": "^4.1.0"
   },
   "devDependencies": {
+    "ajv": "^8.20.0",
     "typescript": "5.9.3",
     "vitest": "3.2.7"
   },

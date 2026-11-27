@@ -1,4 +1,4 @@
-import type { AnswerValue, Answers, FileAnswer, FileQuestion, Question, Survey } from "@kvesto/schema";
+import { allQuestions, type AnswerValue, type Answers, type FileAnswer, type FileQuestion, type Question, type Survey } from "@kvesto/schema";
 import { isEmptyAnswer, resolveLogic } from "./logic.js";
 
 export interface ValidateOptions {
@@ -133,7 +133,7 @@ export interface AnswerIssue {
  */
 export function validateAnswers(survey: Survey, answers: Answers): { issues: AnswerIssue[]; answers: Answers } {
   const logic = resolveLogic(survey, answers);
-  const questions = survey.pages.flatMap((p) => p.elements);
+  const questions = allQuestions(survey);
   const known = new Set(questions.map((q) => q.id));
   const issues: AnswerIssue[] = Object.keys(answers)
     .filter((k) => !known.has(k))

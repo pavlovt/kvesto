@@ -1,5 +1,7 @@
 import {
+  allQuestions,
   migrateSurvey,
+  pageQuestions,
   type AnswerValue,
   type Answers,
   type FileAnswer,
@@ -100,7 +102,7 @@ export class SurveyModel {
   }
 
   get questions(): Question[] {
-    return this.survey.pages.flatMap((p) => p.elements);
+    return allQuestions(this.survey);
   }
 
   getValue(questionId: string): AnswerValue | undefined {
@@ -189,7 +191,8 @@ export class SurveyModel {
     if (!page) return true;
     const { logic } = this.state;
     const errors = { ...this.state.errors };
-    for (const q of page.elements) {
+    const questions = pageQuestions(page);
+    for (const q of questions) {
       const err = logic.visibleQuestions.has(q.id)
         ? validateAnswer(q, this.state.answers[q.id], { required: logic.requiredQuestions.has(q.id) })
         : null;
@@ -197,7 +200,7 @@ export class SurveyModel {
       else delete errors[q.id];
     }
     this.update({ errors });
-    return page.elements.every((q) => !errors[q.id]);
+    return questions.every((q) => !errors[q.id]);
   }
 
   private visiblePageIndexes(logic = this.state.logic): number[] {

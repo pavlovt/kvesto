@@ -16,7 +16,7 @@
 </script>
 
 <script lang="ts">
-  import { SurveySchema, type QuestionType } from "@kvesto/core";
+  import { allQuestions, SurveySchema, type QuestionType } from "@kvesto/core";
   import SurveyPreview from "./SurveyPreview.svelte";
   import { starterSurvey } from "./starter.js";
 
@@ -65,7 +65,7 @@
     }
     const page = doc.pages.at(-1);
     if (!page) return;
-    const n = doc.pages.reduce((sum, p) => sum + p.elements.length, 0) + 1;
+    const n = allQuestions(doc).length + 1;
     const base = { id: `q${n}`, title: `Question ${n}` };
     const choices = [
       { value: "a", label: "Option A" },

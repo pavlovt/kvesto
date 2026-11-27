@@ -2,7 +2,7 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { Scalar } from "@scalar/hono-api-reference";
 import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
-import { formatBytes, validateAnswers, validateFile } from "@kvesto/core";
+import { findElement, formatBytes, validateAnswers, validateFile } from "@kvesto/core";
 import type { SurveyRepository } from "./repository.js";
 import * as routes from "./routes.js";
 
@@ -113,7 +113,7 @@ export function createApp(options: CreateAppOptions) {
     const { questionId, file } = c.req.valid("form");
     const survey = await repo.loadSurvey(id);
     if (!survey) return c.json({ error: "Survey not found" }, 404);
-    const question = survey.pages.flatMap((p) => p.elements).find((q) => q.id === questionId);
+    const question = findElement(survey, questionId)?.element;
     if (!question || question.type !== "file") {
       return c.json({ error: "Not a file question", issues: [{ path: ["questionId"], message: `No file question "${questionId}"` }] }, 400);
     }

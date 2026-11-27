@@ -1,4 +1,4 @@
-import type { AnswerValue, Answers, Comparison, Condition, ConditionValue, Page, Question, Survey } from "@kvesto/schema";
+import { pageQuestions, type AnswerValue, type Answers, type Comparison, type Condition, type ConditionValue, type Page, type Question, type Survey } from "@kvesto/schema";
 
 export function isEmptyAnswer(value: AnswerValue | undefined): boolean {
   if (value === undefined || value === null || value === "") return true;
@@ -110,7 +110,7 @@ export function resolveLogic(survey: Survey, answers: Answers): SurveyLogic {
   for (const page of survey.pages) {
     const pageVisible = !page.visibleIf || evaluateCondition(page.visibleIf, effective);
     if (pageVisible) visiblePages.add(page.id);
-    for (const q of page.elements) {
+    for (const q of pageQuestions(page)) {
       const visible = pageVisible && (!q.visibleIf || evaluateCondition(q.visibleIf, effective));
       if (!visible) continue;
       visibleQuestions.add(q.id);
@@ -123,5 +123,5 @@ export function resolveLogic(survey: Survey, answers: Answers): SurveyLogic {
 }
 
 export function visibleElements(page: Page, logic: SurveyLogic): Question[] {
-  return page.elements.filter((q) => logic.visibleQuestions.has(q.id));
+  return pageQuestions(page).filter((q) => logic.visibleQuestions.has(q.id));
 }

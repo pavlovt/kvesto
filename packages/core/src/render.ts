@@ -1,11 +1,12 @@
-import type {
-  AnswerValue,
-  FileAnswer,
-  FileQuestion,
-  MatrixAnswer,
-  MatrixQuestion,
-  Question,
-  RankingQuestion,
+import {
+  pageQuestions,
+  type AnswerValue,
+  type FileAnswer,
+  type FileQuestion,
+  type MatrixAnswer,
+  type MatrixQuestion,
+  type Question,
+  type RankingQuestion,
 } from "@kvesto/schema";
 import { createSurvey, type CreateSurveyOptions, type SurveyModel, type SurveyState } from "./model.js";
 import { formatBytes } from "./validate.js";
@@ -117,7 +118,7 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
       if (state.survey.description) parts.push(h(doc, "p", { class: "kv-description" }, state.survey.description));
     }
     if (state.page.title) parts.push(h(doc, "h3", { class: "kv-page-title" }, state.page.title));
-    views = state.page.elements.map((q) => renderQuestion(q, state));
+    views = pageQuestions(state.page).map((q) => renderQuestion(q, state));
     parts.push(...views.map((v) => v.el));
 
     const nav = h(doc, "div", { class: "kv-nav" });
