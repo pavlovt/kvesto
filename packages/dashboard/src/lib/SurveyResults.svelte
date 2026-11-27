@@ -24,7 +24,8 @@
 
 <script lang="ts">
   import ResponseTable from "./ResponseTable.svelte";
-  import { completionStats, filterResponses, localizeSurvey, summarizeResponses, type Condition, type GridCellSummary, type QuestionSummary } from "@kvesto/core";
+  import { responsesToXlsx } from "@kvesto/export";
+  import { completionStats, filterResponses, localizeSurvey, responsesToCsv, summarizeResponses, type Condition, type GridCellSummary, type QuestionSummary } from "@kvesto/core";
 
   let props: SurveyResultsProps = $props();
 
@@ -98,6 +99,21 @@
   );
   const summary = $derived<QuestionSummary[]>(survey ? summarizeResponses(survey, responses) : []);
   const shownSummary = $derived(view === "summary" ? summary : []);
+  /** Download the filtered responses (labels in the shown locale). */
+  function download(kind: "csv" | "xlsx") {
+    if (!source) return;
+    const data =
+      kind === "csv"
+        ? new Blob([responsesToCsv(source, responses, { locale: props.locale })], { type: "text/csv;charset=utf-8" })
+        : new Blob([responsesToXlsx(source, responses, { locale: props.locale }) as BlobPart], {
+            type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(data);
+    a.download = `${source.id}-responses.${kind}`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
   const completion = $derived(survey && partials ? completionStats(survey, all) : null);
   // Quiz scores, as the server worked them out.
   const scores = $derived.by(() => {
@@ -145,6 +161,11 @@
         .kv-dash-views role=group aria-label="View" {
           button type=button aria-pressed={view === "summary"} onclick={() => (view = "summary")} 'Summary'
           button type=button aria-pressed={view === "table"} onclick={() => (view = "table")} 'Table'
+        }
+        .kv-dash-exports {
+          button type=button onclick={() => download("csv")} 'CSV'
+          button type=button onclick={() => download("xlsx")} 'Excel'
+          button type=button onclick={() => window.print()} 'Print'
         }
         label {
           span 'From'
@@ -329,7 +350,13 @@
   .kv-dash-filters { display: flex; flex-wrap: wrap; gap: 0.75rem; margin: 0 0 1rem; font-size: 0.9rem; }
   .kv-dash-filters label { display: flex; gap: 0.35rem; align-items: center; }
   .kv-dash-filters input, .kv-dash-filters select, .kv-dash-views button { font: inherit; font-size: 0.85rem; }
-  .kv-dash-views { display: flex; }
+  .kv-dash-views, .kv-dash-exports { display: flex; gap: 0.25rem; }
+  .kv-dash-exports button { font: inherit; font-size: 0.85rem; cursor: pointer; }
+  /* Printing: the results only, without the controls. */
+  @media print {
+    .kv-dash-filters { display: none; }
+    .kv-dash-card { break-inside: avoid; border-color: #999; }
+  }
   .kv-dash-views button { cursor: pointer; border: 1px solid var(--kv-ui-border-strong, #d1d5db); background: var(--kv-ui-surface, white); color: inherit; padding: 0.2rem 0.6rem; }
   .kv-dash-views button[aria-pressed="true"] { background: var(--kv-ui-accent-soft, #eff6ff); border-color: var(--kv-ui-accent-line, #93c5fd); }
   .kv-dash-completion h3 { font-size: 0.95rem; margin: 0.75rem 0 0.25rem; }

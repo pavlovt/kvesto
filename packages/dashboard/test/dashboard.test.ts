@@ -261,10 +261,10 @@ describe("table view and filters", () => {
     [...target.querySelectorAll<HTMLButtonElement>(".kv-dash-views button")].find((b) => b.textContent === "Table")!.click();
     flushSync();
     const headers = [...target.querySelectorAll(".kv-dash-table thead th")].map((th) => th.textContent);
-    expect(headers).toEqual(["Submitted", "Role", "Rate: Speed"]);
-    const firstCol = () => [...target.querySelectorAll(".kv-dash-table tbody tr td:nth-child(2)")].map((td) => td.textContent);
+    expect(headers).toEqual(["Open", "Submitted", "Role", "Rate: Speed"]);
+    const firstCol = () => [...target.querySelectorAll(".kv-dash-table tbody tr td:nth-child(3)")].map((td) => td.textContent);
     expect(firstCol()).toEqual(["Developer", "Manager", "Developer"]);
-    target.querySelectorAll<HTMLButtonElement>(".kv-dash-table thead th button")[1]!.click();
+    target.querySelectorAll<HTMLButtonElement>(".kv-dash-table thead th button")[1]!.click(); // Role
     flushSync();
     expect(firstCol()).toEqual(["Developer", "Developer", "Manager"]);
 
@@ -273,6 +273,18 @@ describe("table view and filters", () => {
     expect(target.textContent).toContain("2 responses");
     pick(target.querySelectorAll<HTMLInputElement>('.kv-dash-filters input[type="date"]')[0]!, "2026-02-01");
     expect(target.textContent).toContain("1 responses");
+    // One response on its own.
+    target.querySelector<HTMLButtonElement>(".kv-dash-open")!.click();
+    flushSync();
+    expect(target.querySelector(".kv-dash-detail dl")!.textContent).toContain("Role Developer");
+    // Downloads build a file from the filtered responses.
+    const created: Blob[] = [];
+    URL.createObjectURL = ((b: Blob) => (created.push(b), "blob:x")) as typeof URL.createObjectURL;
+    URL.revokeObjectURL = () => {};
+    [...target.querySelectorAll<HTMLButtonElement>(".kv-dash-exports button")].find((b) => b.textContent === "CSV")!.click();
+    expect(await created[0]!.text()).toContain("Developer");
+    [...target.querySelectorAll<HTMLButtonElement>(".kv-dash-exports button")].find((b) => b.textContent === "Excel")!.click();
+    expect(created[1]!.type).toBe("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     const { unmount } = await import("svelte");
     unmount(view);
   });

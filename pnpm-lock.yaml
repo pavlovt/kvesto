@@ -116,6 +116,9 @@ importers:
       '@kvesto/core':
         specifier: workspace:^
         version: link:../core
+      '@kvesto/export':
+        specifier: workspace:^
+        version: link:../export
     devDependencies:
       '@braceml/svelte':
         specifier: ^0.4.0
@@ -181,6 +184,19 @@ importers:
       vite:
         specifier: ^7.3.8
         version: 7.3.8(@types/node@26.6.11)(tsx@4.23.15)(yaml@2.9.1)
+      vitest:
+        specifier: 3.2.7
+        version: 3.2.7(@types/node@26.6.11)(happy-dom@21.0.4)(tsx@4.23.15)(yaml@2.9.1)
+
+  packages/export:
+    dependencies:
+      '@kvesto/core':
+        specifier: workspace:^
+        version: link:../core
+    devDependencies:
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
       vitest:
         specifier: 3.2.7
         version: 3.2.7(@types/node@26.6.11)(happy-dom@21.0.4)(tsx@4.23.15)(yaml@2.9.1)

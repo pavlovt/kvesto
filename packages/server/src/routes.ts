@@ -4,6 +4,7 @@ import {
   FileAnswer,
   FileParams,
   FileUpload,
+  ExportQuery,
   Pagination,
   ResponseInput,
   ResponseList,
@@ -174,6 +175,23 @@ export const listResponses = createRoute({
     ...refused,
     200: json(ResponseList, "Responses, newest first"),
     400: error("Invalid cursor"),
+    404: error("Survey not found"),
+  },
+});
+
+export const exportResponses = createRoute({
+  method: "get",
+  path: "/surveys/{id}/responses.csv",
+  ...admin,
+  tags: ["Responses"],
+  summary: "Export responses as CSV",
+  description:
+    "Every matching response (same filters as the list), one column per answer part, then hidden fields. " +
+    "Labels by default; `values=true` for choice values. Cells that would run as spreadsheet formulas are defused.",
+  request: { params: SurveyIdParam, query: ExportQuery },
+  responses: {
+    ...refused,
+    200: { content: { "text/csv": { schema: z.string() } }, description: "CSV (UTF-8 with a byte order mark)" },
     404: error("Survey not found"),
   },
 });

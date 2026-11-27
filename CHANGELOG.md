@@ -1,6 +1,6 @@
 # Changelog
 
-All packages (`kvesto`, `@kvesto/schema`, `core`, `server`, `editor`, `dashboard`, `react`, `vue`) share one version.
+All packages (`kvesto`, `@kvesto/schema`, `core`, `server`, `editor`, `dashboard`, `react`, `vue`, `export`) share one version.
 
 ## Unreleased
 
@@ -47,6 +47,9 @@ All packages (`kvesto`, `@kvesto/schema`, `core`, `server`, `editor`, `dashboard
 - Dashboard table view and filters (M27): a sortable, paged table of responses with flattened columns, filters by
   date, answer, hidden field and status that also apply to the summaries, `filterResponses` / `responseColumns` /
   `responseRow` in core, and cursor paging with date and answer filters on the server.
+- Export (M28): `responsesToCsv` in core, `GET /surveys/{id}/responses.csv`, a new `@kvesto/export` package with a
+  dependency-free Excel writer, CSV, Excel and Print buttons and a printable single response in the dashboard, and
+  print styles for surveys. Cells that would run as spreadsheet formulas are defused.
 
 ## 0.2.0
 

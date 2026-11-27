@@ -6,6 +6,7 @@ import { cors } from "hono/cors";
 import {
   checkQuestionTypes,
   collectHidden,
+  responsesToCsv,
   resolveLogic,
   scoreSurvey,
   fileRules,
@@ -197,6 +198,7 @@ export function createApp(options: CreateAppOptions) {
   guard("POST", "/surveys/:id/responses/:responseId/resume", "response:create");
   guard("POST", "/surveys/:id/responses/:responseId/release", "survey:write");
   guard("GET", "/surveys/:id/responses", "response:read");
+  guard("GET", "/surveys/:id/responses.csv", "response:read");
   guard("POST", "/surveys/:id/files", "file:upload");
   guard("GET", "/surveys/:id/files/:fileId", "file:read");
 
@@ -394,23 +396,50 @@ export function createApp(options: CreateAppOptions) {
     });
   });
 
+  /** The list and export filters from a request's query. */
+  const filterOf = (c: { req: { queries: (k: string) => string[] | undefined } }, q: { status: "complete" | "partial" | "all"; from?: string; to?: string }) => {
+    const hidden = pairs(c.req.queries("hidden"));
+    const answers = pairs(c.req.queries("answer"));
+    // A bare date for `to` means the whole of that day.
+    const until = q.to && /^\d{4}-\d{2}-\d{2}$/.test(q.to) ? `${q.to}T23:59:59.999Z` : q.to;
+    return {
+      status: q.status,
+      ...(Object.keys(hidden).length ? { hidden } : {}),
+      ...(Object.keys(answers).length ? { answers } : {}),
+      ...(q.from ? { from: q.from } : {}),
+      ...(until ? { to: until } : {}),
+    };
+  };
+
+  app.openapi(routes.exportResponses, async (c) => {
+    const { id } = c.req.valid("param");
+    const query = c.req.valid("query");
+    const survey = await repo.loadSurvey(id);
+    if (!survey) return c.json({ error: "Survey not found" }, 404);
+    const filter = filterOf(c, query);
+    const all = [];
+    // A page at a time, so a large survey is never one huge query.
+    for (let after: { createdAt: string; id: string } | undefined; ; ) {
+      const page = await repo.listResponsesPage(id, { limit: 500, offset: 0, ...filter, ...(after ? { after } : {}) });
+      all.push(...page);
+      if (page.length < 500) break;
+      after = page.at(-1)!;
+    }
+    const csv = responsesToCsv(survey, all, { values: query.values === "true", locale: preferredLocale(c.req.header("accept-language"), survey) });
+    return c.body(csv, 200, {
+      "content-type": "text/csv; charset=utf-8",
+      "content-disposition": `attachment; filename="${survey.id}-responses.csv"`,
+      "x-content-type-options": "nosniff",
+    });
+  });
+
   app.openapi(routes.listResponses, async (c) => {
     const { id } = c.req.valid("param");
     const { limit, offset, status } = c.req.valid("query");
     if (!(await repo.surveyExists(id))) return c.json({ error: "Survey not found" }, 404);
-    // `?hidden=source:newsletter` (repeatable) keeps responses whose hidden field has that value.
-    const hidden = pairs(c.req.queries("hidden"));
-    const answers = pairs(c.req.queries("answer"));
-    const { from, to, cursor } = c.req.valid("query");
-    // A bare date for `to` means the whole of that day.
-    const until = to && /^\d{4}-\d{2}-\d{2}$/.test(to) ? `${to}T23:59:59.999Z` : to;
-    const filter = {
-      status,
-      ...(Object.keys(hidden).length ? { hidden } : {}),
-      ...(Object.keys(answers).length ? { answers } : {}),
-      ...(from ? { from } : {}),
-      ...(until ? { to: until } : {}),
-    };
+    const { cursor } = c.req.valid("query");
+    // `?hidden=name:value` and `?answer=question:value` (repeatable), dates and status.
+    const filter = filterOf(c, c.req.valid("query"));
     const after = cursor ? decodeCursor(cursor) : undefined;
     if (cursor && !after) return c.json({ error: "Invalid cursor", issues: [{ path: ["cursor"], message: "Not a cursor from this API" }] }, 400);
     const [items, total] = await Promise.all([repo.listResponsesPage(id, { limit, offset, ...filter, ...(after ? { after } : {}) }), repo.countResponses(id, filter)]);

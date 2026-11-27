@@ -39,6 +39,14 @@
     }
     page = 0;
   }
+  // One response on its own, for reading or printing.
+  let open = $state<string | null>(null);
+  const opened = $derived(rows.find((r) => r.response.id === open) ?? null);
+  function printOne() {
+    document.documentElement.classList.add("kv-dash-printing-one");
+    window.print();
+    document.documentElement.classList.remove("kv-dash-printing-one");
+  }
   const ariaSort = (key: string) => (sortKey === key ? (descending ? "descending" : "ascending") : "none");
   const when = (iso: string) => iso.replace("T", " ").slice(0, 16);
 </script>
@@ -51,6 +59,7 @@
       .kv-dash-table-scroll {
         table.kv-dash-table {
           thead > tr {
+            th scope=col > span.kv-dash-sr 'Open'
             th scope=col aria-sort={ariaSort("createdAt")} > button type=button onclick={() => sortBy("createdAt")} 'Submitted'
             each columns as col (col.key) {
               th scope=col aria-sort={ariaSort(col.key)} > button type=button onclick={() => sortBy(col.key)} '{col.label}'
@@ -59,10 +68,28 @@
           tbody {
             each shown as row (row.response.id) {
               tr class:kv-dash-partial={row.response.status === "partial"} {
+                td > button.kv-dash-open type=button aria-label="Open response {row.response.id}" onclick={() => (open = row.response.id)} 'View'
                 td.kv-dash-when '{when(row.response.createdAt)}{row.response.status === "partial" ? " (partial)" : ""}'
                 each columns as col (col.key) {
                   td '{row.cells[col.key]}'
                 }
+              }
+            }
+          }
+        }
+      }
+      if opened {
+        section.kv-dash-detail aria-label="Response {opened.response.id}" {
+          .kv-dash-detail-head {
+            h2 'Response {when(opened.response.createdAt)}'
+            button type=button onclick={printOne} 'Print'
+            button type=button onclick={() => (open = null)} 'Close'
+          }
+          dl {
+            each columns as col (col.key) {
+              if opened.cells[col.key] {
+                dt '{col.label}'
+                dd '{opened.cells[col.key]}'
               }
             }
           }
@@ -90,4 +117,19 @@
   .kv-dash-when { font-variant-numeric: tabular-nums; }
   .kv-dash-pager { display: flex; gap: 0.75rem; align-items: center; margin-top: 0.5rem; font-size: 0.9rem; }
   .kv-dash-pager button { font: inherit; cursor: pointer; }
+  .kv-dash-open { font: inherit; font-size: 0.8rem; cursor: pointer; }
+  .kv-dash-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .kv-dash-detail { margin-top: 1rem; border: 1px solid var(--kv-ui-border, #e5e7eb); border-radius: 0.5rem; padding: 0.75rem 1rem; max-width: 48rem; background: var(--kv-ui-surface, white); }
+  .kv-dash-detail-head { display: flex; gap: 0.5rem; align-items: center; }
+  .kv-dash-detail-head h2 { font-size: 1rem; margin: 0 auto 0 0; }
+  .kv-dash-detail-head button { font: inherit; font-size: 0.85rem; cursor: pointer; }
+  .kv-dash-detail dt { font-weight: 600; margin-top: 0.5rem; }
+  .kv-dash-detail dd { margin: 0.1rem 0 0; white-space: pre-wrap; }
+  /* "Print" on one response prints only that response. */
+  @media print {
+    :global(html.kv-dash-printing-one body *) { visibility: hidden; }
+    :global(html.kv-dash-printing-one) .kv-dash-detail, :global(html.kv-dash-printing-one) .kv-dash-detail * { visibility: visible; }
+    :global(html.kv-dash-printing-one) .kv-dash-detail { position: absolute; inset: 0 auto auto 0; border: 0; }
+    .kv-dash-detail-head button { display: none; }
+  }
 </style>

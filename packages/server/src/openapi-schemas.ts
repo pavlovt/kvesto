@@ -97,6 +97,14 @@ export const Pagination = z.object({
   cursor: z.string().max(200).optional().openapi({ param: { name: "cursor", in: "query" } }),
 });
 
+/** The list filters, plus how to write choices. */
+export const ExportQuery = Pagination.omit({ limit: true, offset: true, cursor: true }).extend({
+  values: z
+    .enum(["true", "false"])
+    .default("false")
+    .openapi({ param: { name: "values", in: "query", description: "true for choice values instead of labels" } }),
+});
+
 export const ResponseParams = z.object({
   id: z.string().openapi({ param: { name: "id", in: "path" }, example: "customer-feedback" }),
   responseId: z.string().openapi({ param: { name: "responseId", in: "path" } }),

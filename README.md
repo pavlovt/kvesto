@@ -35,6 +35,7 @@ apps/editor and apps/dashboard are SvelteKit demos around them.
 | [`packages/server`](packages/server) | REST API built with Hono, `@hono/zod-openapi` and Drizzle ORM on SQLite. Interactive docs at `/docs`. |
 | [`packages/editor`](packages/editor) | `@kvesto/editor`: the embeddable survey editor (JSON editor, question palette, live preview) as a Svelte 5 component and a standalone bundle. |
 | [`packages/dashboard`](packages/dashboard) | `@kvesto/dashboard`: the embeddable results dashboard as Svelte 5 components and a standalone bundle. |
+| [`packages/export`](packages/export) | `@kvesto/export`: Excel export of responses, with no dependencies. |
 | [`packages/react`](packages/react) | `@kvesto/react`: a `useSurvey` hook and a `<Survey>` component. |
 | [`packages/vue`](packages/vue) | `@kvesto/vue`: a `useSurvey` composable and a `<Survey>` component. |
 | [`apps/editor`](apps/editor) | SvelteKit demo app around `@kvesto/editor`. |
@@ -519,6 +520,12 @@ matrix rows, grid cells, multi-text fields and each repeat item). Both follow it
 hidden fields and partial responses. The same pieces are in the core for your own reports: `summarizeResponses`,
 `responseColumns` and `responseRow`, and `filterResponses(responses, { from, to, status, hidden, where })`, where
 `where` is a condition in the survey's own format.
+
+**Exports.** `responsesToCsv(survey, responses, { values? })` in the core, `GET /surveys/{id}/responses.csv` on the
+server (the list filters apply; `values=true` for choice values), and `responsesToXlsx` in the optional
+`@kvesto/export` package, which writes Excel files with no dependencies. All three use the same columns, and cells
+that a spreadsheet would run as formulas are defused. The dashboard has CSV, Excel and Print buttons, and a view of
+one response that prints on its own; the core stylesheet prints a survey without its buttons.
 
 ## Accessibility
 

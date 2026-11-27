@@ -164,3 +164,11 @@
 .kv-survey button { min-height: 1.5rem; min-width: 1.5rem; }
 .kv-survey :focus-visible { outline: 2px solid var(--kv-color-primary); outline-offset: 2px; }
 .kv-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+/* Printing a survey: the questions and answers, without buttons, timers or progress. */
+@media print {
+  .kv-survey .kv-nav, .kv-survey .kv-progress, .kv-survey .kv-timer, .kv-survey .kv-error-summary,
+  .kv-survey .kv-repeat-add, .kv-survey .kv-repeat-remove, .kv-survey .kv-ranking-item button,
+  .kv-survey .kv-signature-actions, .kv-survey .kv-signature-typed, .kv-survey .kv-ranking-keep { display: none !important; }
+  .kv-survey .kv-question, .kv-survey .kv-panel { break-inside: avoid; }
+  .kv-survey { max-width: none; background: none; color: #000; }
+}

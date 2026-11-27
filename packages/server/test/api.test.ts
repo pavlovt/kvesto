@@ -441,6 +441,7 @@ describe("documentation", () => {
         "/surveys",
         "/surveys/{id}",
         "/surveys/{id}/responses",
+        "/surveys/{id}/responses.csv",
         "/surveys/{id}/responses/{responseId}",
         "/surveys/{id}/responses/{responseId}/resume",
         "/surveys/{id}/responses/{responseId}/release",
@@ -782,3 +783,28 @@ describe("response listing", () => {
     expect((await page("?to=2000-01-01")).total).toBe(0);
   });
 });
+
+describe("CSV export", () => {
+  it("exports every matching response with labels or values, behind the read action", async () => {
+    await send("POST", "/surveys", uploads);
+    await send("POST", "/surveys/uploads/responses", { answers: { kind: "idea", note: "=SUM(A1)" } });
+    await send("POST", "/surveys/uploads/responses", { answers: { kind: "idea", note: "plain" } });
+    const res = await send("GET", "/surveys/uploads/responses.csv");
+    expect(res.headers.get("content-type")).toBe("text/csv; charset=utf-8");
+    expect(res.headers.get("content-disposition")).toBe('attachment; filename="uploads-responses.csv"');
+    // A byte order mark first, so Excel reads UTF-8 (text() drops it when decoding).
+    expect([...new Uint8Array(await res.clone().arrayBuffer()).slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+    const lines = (await res.text()).split("\r\n");
+    expect(lines[0]).toBe("id,submitted,status,Kind,Screenshot,Note");
+    expect(lines.filter(Boolean)).toHaveLength(3);
+    expect(lines.some((l) => l.endsWith(",Idea,,'=SUM(A1)"))).toBe(true);
+    const values = await (await send("GET", "/surveys/uploads/responses.csv?values=true&answer=note:plain")).text();
+    expect(values.split("\r\n")[0]).toBe("id,submitted,status,kind,shot,note");
+    expect(values.split("\r\n").filter(Boolean)).toHaveLength(2);
+    expect(values).toContain(",idea,,plain");
+
+    const locked = createApp({ repository: drizzleRepository(createSqliteDb(":memory:")), authorize: apiKeyAuth({ keys: ["k"] }) });
+    expect((await locked.request("/surveys/uploads/responses.csv")).status).toBe(401);
+  });
+});
+

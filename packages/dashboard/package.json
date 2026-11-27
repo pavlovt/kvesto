@@ -58,18 +58,19 @@
     }
   },
   "dependencies": {
-    "@kvesto/core": "workspace:^"
+    "@kvesto/core": "workspace:^",
+    "@kvesto/export": "workspace:^"
   },
   "devDependencies": {
     "@braceml/svelte": "^0.4.0",
     "@sveltejs/package": "^2.5.8",
     "@sveltejs/vite-plugin-svelte": "^6.2.4",
+    "happy-dom": "21.0.4",
     "svelte": "^5.59.2",
     "svelte-check": "^4.7.8",
     "typescript": "5.9.3",
     "vite": "^7.3.8",
-    "vitest": "3.2.7",
-    "happy-dom": "21.0.4"
+    "vitest": "3.2.7"
   },
   "engines": {
     "node": ">=20"
