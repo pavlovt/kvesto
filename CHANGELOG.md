@@ -56,6 +56,7 @@ All packages (`kvesto`, `@kvesto/schema`, `core`, `server`, `editor`, `dashboard
 - Hosted embeds (M30): a survey page at `/s/{id}` under a strict CSP, an embed script with inline (self-sizing),
   popup and slide-in modes, link and embed snippets in the editor, and a Playwright test that embeds and completes a
   survey from another origin.
+- JSON Schema interop: `answersJsonSchema(survey)` for checking answers outside Kvesto, and `surveyFromJsonSchema(schema)` to start a survey from an existing schema (M31).
 
 ## 0.2.0
 

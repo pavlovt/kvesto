@@ -530,6 +530,20 @@ Files are stored by the storage adapter's optional `uploadFile` as soon as the r
 sends them to the server; `memoryStorage`, `localStorageStorage` and runs without storage embed them in the answer
 as base64 `data:` URLs (set `maxSize`: browsers cap localStorage at a few MB).
 
+#### JSON Schema interop
+
+`answersJsonSchema(survey)` returns a JSON Schema (draft 2020-12) for the answers of a response, so a system that
+doesn't run Kvesto can check submissions: types, choice values, ranges, lengths, patterns, matrix rows, repeat items
+and file objects. `surveyFromJsonSchema(schema)` goes the other way and returns `{ survey, issues }`: a draft survey
+with one question per property (enums become choices, small integer ranges become ratings, nested objects become
+panels with prefixed ids) and a list of what couldn't be carried over.
+
+Limits: JSON Schema can't express conditional logic, so a question with `visibleIf` or `requiredIf`, or on a
+conditional page or panel, is optional in the answers schema; expressions, custom validators and custom question
+types aren't checked; partial (in-progress) responses fail its `required`. In the other direction `oneOf`, `anyOf`,
+`allOf`, `if`, `dependent*` and lists of objects are reported in `issues` and left out. Use `validateAnswers` for the
+full check.
+
 ## Results
 
 The dashboard shows a summary per question and a sortable, paged table of responses (one column per answer part:

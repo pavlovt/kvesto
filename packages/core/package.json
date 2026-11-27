@@ -51,6 +51,8 @@
     "@kvesto/schema": "workspace:^"
   },
   "devDependencies": {
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
     "axe-core": "4.10.2",
     "happy-dom": "21.0.4",
     "typescript": "5.9.3",
