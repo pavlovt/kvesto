@@ -58,6 +58,7 @@ All packages (`kvesto`, `@kvesto/schema`, `core`, `server`, `editor`, `dashboard
   survey from another origin.
 - JSON Schema interop: `answersJsonSchema(survey)` for checking answers outside Kvesto, and `surveyFromJsonSchema(schema)` to start a survey from an existing schema (M31).
 - Survey availability: `settings.opensAt`, `closesAt`, `maxResponses`, `oneResponsePer`, `requireRespondent`, `anonymous` and `closedMessage`, shown by the runner and enforced by the server, with `identifyRespondent` and hashed respondent keys (M32).
+- Security baseline: `SECURITY.md`, a threat model, CodeQL, OpenSSF Scorecard, Dependabot, `pnpm audit --prod` in CI, and GitHub Actions pinned to commit SHAs with least-privilege permissions (M33).
 
 ## 0.2.0
 

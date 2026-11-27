@@ -2,6 +2,8 @@
 
 # Kvesto
 
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/pavlovt/kvesto/badge)](https://scorecard.dev/viewer/?uri=github.com/pavlovt/kvesto)
+
 Kvesto is a fully open source survey library. Define surveys as JSON and render them anywhere with a
 lightweight JavaScript core. Build surveys visually in the editor and explore responses in the dashboard.
 
@@ -642,6 +644,11 @@ app) to point them at the server.
 
 Svelte markup is written in [BraceML](https://github.com/pavlovt/braceml) (`<template lang="braceml">`), compiled by
 the `@braceml/svelte` preprocessor. `pnpm typecheck` compiles the templates first so svelte-check sees real markup.
+
+## Security
+
+Report vulnerabilities privately, as described in [SECURITY.md](SECURITY.md). What Kvesto treats as untrusted and
+how it defends against it is in the [threat model](docs/threat-model.md).
 
 ## License
 
