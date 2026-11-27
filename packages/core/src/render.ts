@@ -18,7 +18,7 @@ import {
 import { createSurvey, type CreateSurveyOptions, type SurveyModel, type SurveyState } from "./model.js";
 import { repeatItems } from "./logic.js";
 import { formatBytes, itemKey } from "./validate.js";
-import { formatComputed, pipeText } from "./piping.js";
+import { formatAnswer, formatComputed, pipeText } from "./piping.js";
 import { labelsFor, type Labels } from "./i18n.js";
 import { applyTheme, type Theme } from "./theme.js";
 import { questionType } from "./question-types.js";
@@ -194,6 +194,18 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
   };
   root.addEventListener("change", onChange);
 
+  // A countdown while a time limit runs.
+  const clock = h(doc, "p", { class: "kv-timer", role: "timer", "aria-live": "off", hidden: "" });
+  const tickClock = () => {
+    const at = model.deadline;
+    clock.hidden = at === null || model.snapshot.status !== "running";
+    if (at === null) return;
+    const left = Math.max(0, Math.ceil((at - (Date.now())) / 1000));
+    const time = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
+    clock.textContent = labels.timeLeft.replace("{time}", time);
+  };
+  const clockTimer = model.deadline !== null || model.survey.pages.some((p) => p.timeLimit) ? setInterval(tickClock, 1000) : undefined;
+
   const unsubscribe = model.subscribe((state) => {
     if (state.status === "completed") {
       if (renderedStatus !== "completed") {
@@ -201,7 +213,7 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
           ...pipeOptions,
           values: { ...model.hidden, ...state.logic.variables },
         });
-        root.replaceChildren(h(doc, "p", { class: "kv-completed", role: "status" }, done));
+        root.replaceChildren(h(doc, "p", { class: "kv-completed", role: "status" }, done), ...quizResult(state));
       }
       renderedStatus = state.status;
       return;
@@ -212,6 +224,7 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
     }
     for (const v of views) v.update(state);
     for (const t of texts) t(state);
+    if (clockTimer !== undefined) tickClock();
     if (byQuestion) {
       const step = currentStep(state);
       for (const [id, node] of topNodes) if (id !== step?.id) node.hidden = true;
@@ -248,6 +261,37 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
     renderedStatus = state.status;
   });
 
+  /** After a quiz: the score, pass or fail, and (when shown) each answer with the right one and its feedback. */
+  function quizResult(state: SurveyState): Node[] {
+    const quiz = state.survey.settings?.quiz;
+    if (!quiz) return [];
+    if (quiz.releaseScores === "manual") return [h(doc, "p", { class: "kv-quiz-later" }, labels.scoreLater)];
+    const out: Node[] = [];
+    const s = model.score();
+    const fill = (t: string, v: Record<string, string | number>) => t.replace(/\{(\w+)\}/g, (w, k: string) => (k in v ? String(v[k]) : w));
+    if (quiz.showScore !== false) {
+      out.push(h(doc, "p", { class: "kv-quiz-score" }, fill(labels.score, { score: s.score, max: s.max })));
+      if (s.passed !== undefined) out.push(h(doc, "p", { class: s.passed ? "kv-quiz-passed" : "kv-quiz-failed" }, s.passed ? labels.passed : labels.failed));
+    }
+    if (quiz.showCorrect) {
+      const list = h(doc, "ol", { class: "kv-quiz-answers" });
+      for (const qs of s.questions) {
+        const q = model.questions.find((x) => x.id === qs.questionId)!;
+        const answer = formatAnswer(q, state.logic.answers[q.id], [], pipeOptions);
+        const right = (q as { correctAnswer?: unknown }).correctAnswer;
+        const fb = (q as { feedback?: { correct?: string; wrong?: string } }).feedback;
+        const item = h(doc, "li", { class: qs.correct === false ? "kv-quiz-wrong" : "kv-quiz-right" }, h(doc, "strong", {}, q.title));
+        item.append(h(doc, "p", {}, fill(labels.yourAnswer, { answer: answer || "–" })));
+        if (right !== undefined && qs.correct === false) item.append(h(doc, "p", {}, fill(labels.correctAnswer, { answer: formatAnswer(q, right, [], pipeOptions) })));
+        const text = qs.correct === false ? fb?.wrong : fb?.correct;
+        if (text) item.append(h(doc, "p", { class: "kv-quiz-feedback" }, text));
+        list.append(item);
+      }
+      out.push(list);
+    }
+    return out;
+  }
+
   function renderPage(state: SurveyState) {
     const parts: Node[] = [];
     views = [];
@@ -280,6 +324,7 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
     back.addEventListener("click", () => (byQuestion ? model.prevStep() : model.prev()));
     nav.append(back, h(doc, "button", { type: "submit", class: "kv-next" }, labels.next));
     parts.push(h(doc, "p", { class: "kv-submit-error", role: "alert", hidden: "" }), nav);
+    if (clockTimer !== undefined) parts.unshift(clock);
     root.replaceChildren(...parts);
   }
 
@@ -1083,6 +1128,7 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
       unsubscribe();
       root.removeEventListener("submit", onSubmit);
       root.removeEventListener("keydown", onKeydown);
+      clearInterval(clockTimer);
       root.removeEventListener("change", onChange);
       root.remove();
     },

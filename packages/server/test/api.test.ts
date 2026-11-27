@@ -443,6 +443,7 @@ describe("documentation", () => {
         "/surveys/{id}/responses",
         "/surveys/{id}/responses/{responseId}",
         "/surveys/{id}/responses/{responseId}/resume",
+        "/surveys/{id}/responses/{responseId}/release",
         "/surveys/{id}/files",
         "/surveys/{id}/files/{fileId}",
       ].sort(),
@@ -717,5 +718,42 @@ describe("hidden fields", () => {
     expect(await list("?hidden=source:promo")).toBe(1);
     expect(await list("?hidden=source:ads")).toBe(1);
     expect(await list("?hidden=source:none")).toBe(0);
+  });
+});
+
+describe("quizzes", () => {
+  const quiz = {
+    schemaVersion: 1,
+    id: "quiz",
+    title: "Quiz",
+    settings: { quiz: { passMark: 0.5, releaseScores: "manual" } },
+    pages: [
+      {
+        id: "p1",
+        elements: [
+          { id: "q1", type: "single-choice", title: "Q1", required: true, choices: [{ value: "a", label: "A" }, { value: "b", label: "B" }], correctAnswer: "b" },
+          { id: "q2", type: "text", title: "Q2", correctAnswer: "yes" },
+        ],
+      },
+    ],
+  };
+
+  it("recalculates the score instead of trusting the client, and releases it by hand", async () => {
+    await send("POST", "/surveys", quiz);
+    const res = await send("POST", "/surveys/quiz/responses", { answers: { q1: "a", q2: "yes" }, meta: { quiz: { score: 99, max: 2, passed: true } } });
+    const body = await res.json();
+    expect(body.meta.quiz).toEqual({ score: 1, max: 2, passed: true, released: false });
+    const released = await send("POST", `/surveys/quiz/responses/${body.id}/release`);
+    expect((await released.json()).meta.quiz.released).toBe(true);
+  });
+
+  it("accepts a timed-out submission without required answers only when the survey has a time limit", async () => {
+    await send("POST", "/surveys", quiz);
+    const late = { answers: { q2: "yes" }, meta: { quiz: { timedOut: true } } };
+    expect((await send("POST", "/surveys/quiz/responses", late)).status).toBe(400);
+    await send("PUT", "/surveys/quiz", { ...quiz, settings: { quiz: { timeLimit: 60 } } });
+    const ok = await send("POST", "/surveys/quiz/responses", late);
+    expect(ok.status).toBe(201);
+    expect((await ok.json()).meta.quiz).toMatchObject({ score: 1, timedOut: true, released: true });
   });
 });

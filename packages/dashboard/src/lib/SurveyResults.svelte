@@ -73,6 +73,24 @@
   );
   const summary = $derived<QuestionSummary[]>(survey ? summarizeResponses(survey, responses) : []);
   const completion = $derived(survey && partials ? completionStats(survey, all) : null);
+  // Quiz scores, as the server worked them out.
+  const scores = $derived.by(() => {
+    if (!survey?.settings?.quiz) return null;
+    const list = responses
+      .map((r) => r.meta?.quiz as { score?: number; max?: number; passed?: boolean } | undefined)
+      .filter((q): q is { score: number; max: number; passed?: boolean } => typeof q?.score === "number" && typeof q?.max === "number");
+    if (!list.length) return null;
+    const avg = list.reduce((a, q) => a + (q.max ? q.score / q.max : 0), 0) / list.length;
+    const withPass = list.filter((q) => q.passed !== undefined);
+    const counts = new Map<number, number>();
+    for (const q of list) counts.set(q.score, (counts.get(q.score) ?? 0) + 1);
+    return {
+      n: list.length,
+      average: Math.round(avg * 100),
+      passRate: withPass.length ? Math.round((withPass.filter((q) => q.passed).length / withPass.length) * 100) : null,
+      distribution: [...counts.entries()].sort((a, b) => a[0] - b[0]).map(([score, count]) => ({ score, count })),
+    };
+  });
   // Panels around a question, as "Outer / Inner"; untitled panels are left out.
   const groupLabel = (item: QuestionSummary | undefined) =>
     item ? item.panels.flatMap((p) => (p.title ? [p.title] : [])).join(" / ") : "";
@@ -108,6 +126,19 @@
                   option value={v} '{v}'
                 }
               }
+            }
+          }
+        }
+      }
+      if scores {
+        section.kv-dash-card.kv-dash-scores {
+          h2 'Scores'
+          p 'Average {scores.average}% over {scores.n} scored {scores.n === 1 ? "response" : "responses"}{scores.passRate !== null ? `, ${scores.passRate}% passed` : ""}.'
+          each scores.distribution as d (d.score) {
+            .kv-dash-bar-row {
+              span.kv-dash-bar-label '{d.score} {d.score === 1 ? "point" : "points"}'
+              .kv-dash-bar > .kv-dash-bar-fill style="width: {pct(d.count, scores.n)}%"
+              span.kv-dash-num '{d.count}'
             }
           }
         }

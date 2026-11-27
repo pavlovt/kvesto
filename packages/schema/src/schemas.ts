@@ -226,11 +226,23 @@ const questionBase = {
   enableIf: ConditionSchema.optional(),
   /** Clear the answer whenever this condition becomes true (for example when an earlier choice changes). */
   resetIf: ConditionSchema.optional(),
+  /** Quizzes: the right answer (a list for several choices, an object of row → column for a matrix). */
+  correctAnswer: z.lazy(() => ItemAnswerValueSchema).optional(),
+  /** What a right answer is worth. Default 1. */
+  points: z.number().nonnegative().optional(),
+  /** Lists and matrices: points for each right part instead of all or nothing. */
+  partialCredit: z.boolean().optional(),
+  /** With partial credit: points taken off for each wrong choice (never below zero). */
+  penalty: z.number().nonnegative().optional(),
+  /** Shown after submitting, when the quiz shows correct answers. */
+  feedback: z.object({ correct: DisplayTextSchema.optional(), wrong: DisplayTextSchema.optional() }).optional(),
 };
 
 export const ChoiceSchema = z.object({
   value: z.string().min(1),
   label: RequiredDisplayTextSchema,
+  /** Assessments: what picking this choice scores. */
+  score: z.number().optional(),
 });
 
 /** An image source: an http(s) URL, a relative path, or a `data:image/…` URL. Never `javascript:` and the like. */
@@ -599,6 +611,10 @@ export const SurveySettingsSchema = z.looseObject({
   progressBar: z.boolean().optional(),
   /** In the question layout, go on by itself after a single-choice, yes/no or rating answer. Default true. */
   autoAdvance: z.boolean().optional(),
+  /** Make the survey a quiz: scores, a pass mark, time limits. */
+  get quiz() {
+    return QuizSettingsSchema.optional();
+  },
   /**
    * The look: a preset ("light", "dark", "auto", "compact", "contrast"), or theme variables without their
    * `--kv-` prefix, optionally with a `preset` to start from. The renderer's `theme` option overrides it.
@@ -614,6 +630,20 @@ export const SurveySettingsSchema = z.looseObject({
     .optional(),
 });
 export type SurveySettings = z.infer<typeof SurveySettingsSchema>;
+
+/** Quiz settings: scoring is on when this is set. */
+export const QuizSettingsSchema = z.object({
+  /** Show the score after submitting. Default true. */
+  showScore: z.boolean().optional(),
+  /** Show each question's correct answer and feedback after submitting. Default false. */
+  showCorrect: z.boolean().optional(),
+  /** The share of the maximum score needed to pass, from 0 to 1. */
+  passMark: z.number().min(0).max(1).optional(),
+  /** Seconds for the whole survey; then it submits what was answered. */
+  timeLimit: z.number().int().positive().max(86_400).optional(),
+  /** "immediately" (default), or "manual": scores are kept back until someone releases them. */
+  releaseScores: z.enum(["immediately", "manual"]).optional(),
+});
 
 /** Survey JSON for a panel as authored, before defaults are applied. */
 export interface PanelInput {
@@ -658,6 +688,8 @@ export const PageSchema = z.object({
   title: DisplayTextSchema.optional(),
   /** Show the page only while this condition holds. Hidden pages are skipped. */
   visibleIf: ConditionSchema.optional(),
+  /** Seconds the respondent has for this page; then the survey moves on (or submits on the last page). */
+  timeLimit: z.number().int().positive().max(86_400).optional(),
   /** Questions and panels, in order. */
   elements: z.array(ElementSchema),
 });

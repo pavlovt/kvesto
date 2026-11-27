@@ -7,6 +7,7 @@ import {
   toAnswerValue,
   type ExpressionFunctions,
 } from "./expression.js";
+import { scoreSurvey } from "./scoring.js";
 import { pageQuestions, type AnswerValue, type Element, type RepeatItem, type Answers, type Comparison, type Condition, type ConditionValue, type Page, type Question, type Survey } from "@kvesto/schema";
 
 export function isEmptyAnswer(value: AnswerValue | undefined): boolean {
@@ -91,6 +92,8 @@ export interface LogicOptions {
   variables?: Record<string, string>;
   /** Hidden field values, by name. */
   hidden?: Record<string, string>;
+  /** Scores so far, for `score()` in expressions. `resolveLogic` fills this in. */
+  scores?: () => { score: number; max: number; questions: { questionId: string; score: number }[] };
 }
 
 /**
@@ -158,7 +161,12 @@ export function repeatItems(value: AnswerValue | undefined): RepeatItem[] {
  * counts as empty for every condition after it.
  */
 export function resolveLogic(survey: Survey, answers: Answers, options: LogicOptions = {}): SurveyLogic {
-  const opts: LogicOptions = { ...options, variables: options.variables ?? surveyVariables(survey) };
+  const opts: LogicOptions = {
+    ...options,
+    variables: options.variables ?? surveyVariables(survey),
+    // Scores of the questions seen so far: conditions only look back, and so do scores.
+    scores: () => scoreSurvey(survey, effective, top.visibleQuestions),
+  };
   const holds = (c: Condition, item?: Answers) => evaluateCondition(c, effective, item, opts);
   const visiblePages = new Set<string>();
   const effective: Answers = {};

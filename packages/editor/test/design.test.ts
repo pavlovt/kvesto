@@ -406,3 +406,23 @@ describe("themes in the editor", () => {
     ui.editor.destroy();
   });
 });
+
+describe("quiz settings in the editor", () => {
+  it("turns on scoring and sets a question's correct answer, points and feedback", () => {
+    const ui = setup(false);
+    field(ui, "Score answers").click();
+    flushSync();
+    expect(ui.last().settings).toEqual({ quiz: {} });
+    ui.type(field(ui, "Pass mark"), "60");
+    expect(ui.last().settings).toEqual({ quiz: { passMark: 0.6 } });
+    select(ui, "role");
+    const correct = ui.$<HTMLInputElement>(".kv-props .kv-props-correct");
+    correct.value = "dev";
+    correct.dispatchEvent(new Event("change", { bubbles: true }));
+    flushSync();
+    ui.type(field(ui, "Points"), "3");
+    ui.type(field(ui, "If wrong"), "Try again");
+    expect(ui.last().pages[0]!.elements[1]).toMatchObject({ correctAnswer: "dev", points: 3, feedback: { wrong: "Try again" } });
+    ui.editor.destroy();
+  });
+});

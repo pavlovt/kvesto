@@ -32,6 +32,13 @@ export const ENGLISH_LABELS = {
   /** Progress text; `{n}` is the current step or page, `{total}` how many there are. */
   progress: "{n} of {total}",
   progressLabel: "Progress",
+  score: "Your score: {score} of {max}.",
+  passed: "You passed.",
+  failed: "You did not pass this time.",
+  correctAnswer: "Correct answer: {answer}",
+  yourAnswer: "Your answer: {answer}",
+  timeLeft: "Time left: {time}",
+  scoreLater: "Your score will be shared with you later.",
 };
 export type Labels = typeof ENGLISH_LABELS;
 
@@ -113,6 +120,7 @@ const packs: Record<string, LocalePack> = {
       moveUp: "Нагоре", moveDown: "Надолу", keepOrder: "Запази този ред", rankingHint: "Подредете елементите с плъзгане или със стрелките.",
       removeFile: "Премахни", addItem: "Добави", removeItem: "Премахни", itemTitle: "Елемент {n}", uploading: "Качване…", notSet: "Не е избрано",
       selected: "Избрани", clearSignature: "Изчисти", signed: "Подписано.", progress: "{n} от {total}", progressLabel: "Напредък",
+      score: "Вашият резултат: {score} от {max}.", passed: "Издържахте.", failed: "Този път не издържахте.", correctAnswer: "Верен отговор: {answer}", yourAnswer: "Вашият отговор: {answer}", timeLeft: "Оставащо време: {time}", scoreLater: "Резултатът ще ви бъде съобщен по-късно.",
     },
     messages: {
       required: "Този въпрос е задължителен.", chooseOne: "Изберете една от възможностите.", chooseMany: "Изберете от възможностите.",
@@ -140,6 +148,7 @@ const packs: Record<string, LocalePack> = {
       moveUp: "Nach oben", moveDown: "Nach unten", keepOrder: "Diese Reihenfolge behalten", rankingHint: "Ziehen Sie die Einträge oder nutzen Sie die Pfeile, um sie zu ordnen.",
       removeFile: "Entfernen", addItem: "Hinzufügen", removeItem: "Entfernen", itemTitle: "Eintrag {n}", uploading: "Wird hochgeladen…", notSet: "Nicht gesetzt",
       selected: "Ausgewählt", clearSignature: "Löschen", signed: "Unterschrieben.", progress: "{n} von {total}", progressLabel: "Fortschritt",
+      score: "Ihre Punktzahl: {score} von {max}.", passed: "Bestanden.", failed: "Diesmal leider nicht bestanden.", correctAnswer: "Richtige Antwort: {answer}", yourAnswer: "Ihre Antwort: {answer}", timeLeft: "Verbleibende Zeit: {time}", scoreLater: "Ihr Ergebnis wird Ihnen später mitgeteilt.",
     },
     messages: {
       required: "Diese Frage ist erforderlich.", chooseOne: "Wählen Sie eine der Optionen.", chooseMany: "Wählen Sie aus den Optionen.",
@@ -167,6 +176,7 @@ const packs: Record<string, LocalePack> = {
       moveUp: "Monter", moveDown: "Descendre", keepOrder: "Garder cet ordre", rankingHint: "Faites glisser les éléments, ou utilisez les flèches, pour les classer.",
       removeFile: "Retirer", addItem: "Ajouter", removeItem: "Retirer", itemTitle: "Élément {n}", uploading: "Envoi en cours…", notSet: "Non défini",
       selected: "Sélection", clearSignature: "Effacer", signed: "Signé.", progress: "{n} sur {total}", progressLabel: "Progression",
+      score: "Votre score : {score} sur {max}.", passed: "Réussi.", failed: "Pas réussi cette fois-ci.", correctAnswer: "Bonne réponse : {answer}", yourAnswer: "Votre réponse : {answer}", timeLeft: "Temps restant : {time}", scoreLater: "Votre score vous sera communiqué plus tard.",
     },
     messages: {
       required: "Cette question est obligatoire.", chooseOne: "Choisissez l’une des options.", chooseMany: "Choisissez parmi les options.",
@@ -194,6 +204,7 @@ const packs: Record<string, LocalePack> = {
       moveUp: "Subir", moveDown: "Bajar", keepOrder: "Mantener este orden", rankingHint: "Arrastra los elementos, o usa las flechas, para ordenarlos.",
       removeFile: "Quitar", addItem: "Añadir", removeItem: "Quitar", itemTitle: "Elemento {n}", uploading: "Subiendo…", notSet: "Sin elegir",
       selected: "Seleccionados", clearSignature: "Borrar", signed: "Firmado.", progress: "{n} de {total}", progressLabel: "Progreso",
+      score: "Tu puntuación: {score} de {max}.", passed: "Has aprobado.", failed: "Esta vez no has aprobado.", correctAnswer: "Respuesta correcta: {answer}", yourAnswer: "Tu respuesta: {answer}", timeLeft: "Tiempo restante: {time}", scoreLater: "Te comunicaremos tu puntuación más adelante.",
     },
     messages: {
       required: "Esta pregunta es obligatoria.", chooseOne: "Elige una de las opciones.", chooseMany: "Elige entre las opciones.",
@@ -221,6 +232,7 @@ const packs: Record<string, LocalePack> = {
       moveUp: "Sposta su", moveDown: "Sposta giù", keepOrder: "Mantieni questo ordine", rankingHint: "Trascina gli elementi, o usa le frecce, per ordinarli.",
       removeFile: "Rimuovi", addItem: "Aggiungi", removeItem: "Rimuovi", itemTitle: "Elemento {n}", uploading: "Caricamento…", notSet: "Non impostato",
       selected: "Selezionati", clearSignature: "Cancella", signed: "Firmato.", progress: "{n} di {total}", progressLabel: "Avanzamento",
+      score: "Il tuo punteggio: {score} su {max}.", passed: "Superato.", failed: "Questa volta non hai superato il test.", correctAnswer: "Risposta corretta: {answer}", yourAnswer: "La tua risposta: {answer}", timeLeft: "Tempo rimasto: {time}", scoreLater: "Il punteggio ti sarà comunicato più tardi.",
     },
     messages: {
       required: "Questa domanda è obbligatoria.", chooseOne: "Scegli una delle opzioni.", chooseMany: "Scegli tra le opzioni.",
@@ -248,6 +260,7 @@ const packs: Record<string, LocalePack> = {
       moveUp: "Mover para cima", moveDown: "Mover para baixo", keepOrder: "Manter esta ordem", rankingHint: "Arraste os itens, ou use as setas, para os ordenar.",
       removeFile: "Remover", addItem: "Adicionar", removeItem: "Remover", itemTitle: "Item {n}", uploading: "A enviar…", notSet: "Não definido",
       selected: "Selecionados", clearSignature: "Limpar", signed: "Assinado.", progress: "{n} de {total}", progressLabel: "Progresso",
+      score: "A sua pontuação: {score} de {max}.", passed: "Passou.", failed: "Desta vez não passou.", correctAnswer: "Resposta correta: {answer}", yourAnswer: "A sua resposta: {answer}", timeLeft: "Tempo restante: {time}", scoreLater: "A sua pontuação será partilhada mais tarde.",
     },
     messages: {
       required: "Esta pergunta é obrigatória.", chooseOne: "Escolha uma das opções.", chooseMany: "Escolha entre as opções.",
@@ -275,6 +288,7 @@ const packs: Record<string, LocalePack> = {
       moveUp: "Omhoog", moveDown: "Omlaag", keepOrder: "Deze volgorde houden", rankingHint: "Sleep de items, of gebruik de pijlen, om ze te ordenen.",
       removeFile: "Verwijderen", addItem: "Toevoegen", removeItem: "Verwijderen", itemTitle: "Item {n}", uploading: "Bezig met uploaden…", notSet: "Niet ingesteld",
       selected: "Gekozen", clearSignature: "Wissen", signed: "Ondertekend.", progress: "{n} van {total}", progressLabel: "Voortgang",
+      score: "Je score: {score} van {max}.", passed: "Geslaagd.", failed: "Deze keer niet geslaagd.", correctAnswer: "Juiste antwoord: {answer}", yourAnswer: "Jouw antwoord: {answer}", timeLeft: "Resterende tijd: {time}", scoreLater: "Je score wordt later met je gedeeld.",
     },
     messages: {
       required: "Deze vraag is verplicht.", chooseOne: "Kies een van de opties.", chooseMany: "Kies uit de opties.",
@@ -302,6 +316,7 @@ const packs: Record<string, LocalePack> = {
       moveUp: "W górę", moveDown: "W dół", keepOrder: "Zachowaj tę kolejność", rankingHint: "Przeciągnij elementy lub użyj strzałek, aby je uporządkować.",
       removeFile: "Usuń", addItem: "Dodaj", removeItem: "Usuń", itemTitle: "Element {n}", uploading: "Wysyłanie…", notSet: "Nie ustawiono",
       selected: "Wybrane", clearSignature: "Wyczyść", signed: "Podpisano.", progress: "{n} z {total}", progressLabel: "Postęp",
+      score: "Twój wynik: {score} z {max}.", passed: "Zaliczono.", failed: "Tym razem bez zaliczenia.", correctAnswer: "Poprawna odpowiedź: {answer}", yourAnswer: "Twoja odpowiedź: {answer}", timeLeft: "Pozostały czas: {time}", scoreLater: "Wynik zostanie przekazany później.",
     },
     messages: {
       required: "To pytanie jest wymagane.", chooseOne: "Wybierz jedną z opcji.", chooseMany: "Wybierz spośród opcji.",
@@ -329,6 +344,7 @@ const packs: Record<string, LocalePack> = {
       moveUp: "Вверх", moveDown: "Вниз", keepOrder: "Оставить этот порядок", rankingHint: "Перетащите элементы или используйте стрелки, чтобы упорядочить их.",
       removeFile: "Удалить", addItem: "Добавить", removeItem: "Удалить", itemTitle: "Элемент {n}", uploading: "Загрузка…", notSet: "Не выбрано",
       selected: "Выбрано", clearSignature: "Очистить", signed: "Подписано.", progress: "{n} из {total}", progressLabel: "Прогресс",
+      score: "Ваш результат: {score} из {max}.", passed: "Вы сдали.", failed: "В этот раз не сдано.", correctAnswer: "Правильный ответ: {answer}", yourAnswer: "Ваш ответ: {answer}", timeLeft: "Осталось времени: {time}", scoreLater: "Результат сообщим позже.",
     },
     messages: {
       required: "Это обязательный вопрос.", chooseOne: "Выберите один из вариантов.", chooseMany: "Выберите из вариантов.",
@@ -356,6 +372,7 @@ const packs: Record<string, LocalePack> = {
       moveUp: "上移", moveDown: "下移", keepOrder: "保持此顺序", rankingHint: "拖动项目或使用箭头按钮进行排序。",
       removeFile: "删除", addItem: "添加", removeItem: "删除", itemTitle: "第 {n} 项", uploading: "正在上传…", notSet: "未设置",
       selected: "已选", clearSignature: "清除", signed: "已签名。", progress: "{n} / {total}", progressLabel: "进度",
+      score: "您的得分：{score} / {max}。", passed: "您已通过。", failed: "这次未通过。", correctAnswer: "正确答案：{answer}", yourAnswer: "您的答案：{answer}", timeLeft: "剩余时间：{time}", scoreLater: "您的成绩稍后公布。",
     },
     messages: {
       required: "此题为必答题。", chooseOne: "请选择一个选项。", chooseMany: "请从选项中选择。",
@@ -383,6 +400,7 @@ const packs: Record<string, LocalePack> = {
       moveUp: "上へ", moveDown: "下へ", keepOrder: "この順番のままにする", rankingHint: "項目をドラッグするか、矢印ボタンで並べ替えてください。",
       removeFile: "削除", addItem: "追加", removeItem: "削除", itemTitle: "項目 {n}", uploading: "アップロード中…", notSet: "未設定",
       selected: "選択済み", clearSignature: "消去", signed: "署名しました。", progress: "{n} / {total}", progressLabel: "進捗",
+      score: "あなたのスコア：{score} / {max}", passed: "合格です。", failed: "今回は不合格です。", correctAnswer: "正解：{answer}", yourAnswer: "あなたの回答：{answer}", timeLeft: "残り時間：{time}", scoreLater: "スコアは後でお知らせします。",
     },
     messages: {
       required: "この質問は必須です。", chooseOne: "選択肢から 1 つ選んでください。", chooseMany: "選択肢から選んでください。",

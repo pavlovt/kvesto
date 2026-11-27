@@ -36,6 +36,9 @@ All six packages (`kvesto`, `@kvesto/schema`, `core`, `server`, `editor`, `dashb
 - Themes (M23): the runner's stylesheet on CSS variables with light, dark, auto, compact and contrast presets, a
   `theme` option and `settings.theme`, an editor Theme tab with CSS and JSON export, and light, dark and auto looks
   for the editor and the dashboard themselves.
+- Quiz mode and scoring (M24): `correctAnswer`, `points`, partial credit and penalties, choice scores, `score()` in
+  expressions, `settings.quiz` (pass mark, correct answers and feedback, manual release, time limits per survey or
+  page), a server that recalculates scores, a release route, and score statistics in the dashboard.
 
 ## 0.2.0
 

@@ -133,6 +133,21 @@ export const updateResponse = createRoute({
   },
 });
 
+export const releaseScore = createRoute({
+  method: "post",
+  path: "/surveys/{id}/responses/{responseId}/release",
+  ...admin,
+  tags: ["Responses"],
+  summary: "Release a quiz score kept back for review",
+  request: { params: ResponseParams },
+  responses: {
+    ...refused,
+    200: json(SurveyResponse, "The response, with its score released"),
+    404: error("Response not found"),
+    409: error("Not a quiz response"),
+  },
+});
+
 export const resumeResponse = createRoute({
   method: "post",
   path: "/surveys/{id}/responses/{responseId}/resume",

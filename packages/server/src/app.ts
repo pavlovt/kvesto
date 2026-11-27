@@ -6,6 +6,8 @@ import { cors } from "hono/cors";
 import {
   checkQuestionTypes,
   collectHidden,
+  resolveLogic,
+  scoreSurvey,
   fileRules,
   findElement,
   registerQuestionType,
@@ -62,6 +64,40 @@ function withHidden<T extends { meta?: Record<string, unknown> }>(input: T, hidd
   const { hidden: _given, ...meta } = input.meta;
   const next = { ...meta, ...(Object.keys(hidden).length ? { hidden } : {}) };
   return { ...input, ...(Object.keys(next).length ? { meta: next } : { meta: undefined }) };
+}
+
+/** A submission after a time limit ran out: accepted unchecked only when the survey has a time limit. */
+function timedOut(survey: Survey, meta: Record<string, unknown> | undefined): boolean {
+  const claimed = Boolean((meta?.quiz as { timedOut?: unknown } | undefined)?.timedOut ?? meta?.timedOut);
+  return claimed && Boolean(survey.settings?.quiz?.timeLimit || survey.pages.some((p) => p.timeLimit));
+}
+
+/** The response with its quiz score worked out here, never taken from the client. */
+function withQuiz<T extends { meta?: Record<string, unknown> }>(
+  survey: Survey,
+  input: T,
+  answers: Answers,
+  hidden: Record<string, string>,
+  partial: boolean,
+): T {
+  const quiz = survey.settings?.quiz;
+  const { quiz: _given, ...meta } = input.meta ?? {};
+  if (!quiz || partial) return input.meta?.quiz ? { ...input, meta } : input;
+  const logic = resolveLogic(survey, answers, Object.keys(hidden).length ? { hidden } : {});
+  const s = scoreSurvey(survey, logic.answers, logic.visibleQuestions);
+  return {
+    ...input,
+    meta: {
+      ...meta,
+      quiz: {
+        score: s.score,
+        max: s.max,
+        ...(s.passed !== undefined ? { passed: s.passed } : {}),
+        ...(timedOut(survey, input.meta) ? { timedOut: true } : {}),
+        released: quiz.releaseScores !== "manual",
+      },
+    },
+  };
 }
 
 /** The stored form of a resume token's secret. */
@@ -143,6 +179,7 @@ export function createApp(options: CreateAppOptions) {
     await next();
   });
   guard("POST", "/surveys/:id/responses/:responseId/resume", "response:create");
+  guard("POST", "/surveys/:id/responses/:responseId/release", "survey:write");
   guard("GET", "/surveys/:id/responses", "response:read");
   guard("POST", "/surveys/:id/files", "file:upload");
   guard("GET", "/surveys/:id/files/:fileId", "file:read");
@@ -226,11 +263,11 @@ export function createApp(options: CreateAppOptions) {
     if (!survey) return c.json({ error: "Survey not found" }, 404);
     const partial = input.status === "partial";
     const hidden = hiddenOf(survey, input.meta);
-    const checked = check(survey, input.answers, partial, c.req.header("accept-language"), hidden);
+    const checked = check(survey, input.answers, partial || timedOut(survey, input.meta), c.req.header("accept-language"), hidden);
     if ("bad" in checked) return c.json(checked.bad, 400);
     // Answers to questions hidden by conditional logic are dropped, as the core runtime does.
     const { status: _status, ...given } = input;
-    const rest = withHidden(given, hidden);
+    const rest = withQuiz(survey, withHidden(given, hidden), checked.answers, hidden, partial);
     if (!partial) return c.json(await repo.saveResponse(id, { ...rest, answers: checked.answers }), 201);
     const secret = randomBytes(32).toString("base64url");
     const saved = await repo.savePartialResponse(id, { ...rest, answers: checked.answers }, hashSecret(secret));
@@ -259,15 +296,32 @@ export function createApp(options: CreateAppOptions) {
     const found = await partialFor(id, responseId, token);
     if (!("response" in found)) return c.json({ error: found.error }, found.status);
     const partial = input.status === "partial";
-    const hidden = hiddenOf(survey, input.meta ?? found.response!.meta);
-    const checked = check(survey, input.answers, partial, c.req.header("accept-language"), hidden);
+    const meta = input.meta ?? found.response!.meta;
+    const hidden = hiddenOf(survey, meta);
+    const checked = check(survey, input.answers, partial || timedOut(survey, meta), c.req.header("accept-language"), hidden);
     if ("bad" in checked) return c.json(checked.bad, 400);
     const updated = await repo.updateResponse(
       id,
       responseId,
-      withHidden({ ...input, meta: input.meta ?? found.response!.meta, answers: checked.answers, status: partial ? "partial" : "complete" }, hidden),
+      withQuiz(
+        survey,
+        withHidden({ ...input, meta, answers: checked.answers, status: partial ? "partial" : "complete" }, hidden),
+        checked.answers,
+        hidden,
+        partial,
+      ),
     );
     return c.json(updated, 200);
+  });
+
+  app.openapi(routes.releaseScore, async (c) => {
+    const { id, responseId } = c.req.valid("param");
+    const found = await repo.loadResponse(id, responseId);
+    if (!found) return c.json({ error: "Response not found" }, 404);
+    const quiz = (found.response.meta?.quiz ?? null) as Record<string, unknown> | null;
+    if (!quiz) return c.json({ error: "Not a quiz response" }, 409);
+    const { id: _id, surveyId: _s, createdAt: _c, updatedAt: _u, ...input } = found.response;
+    return c.json(await repo.updateResponse(id, responseId, { ...input, meta: { ...input.meta, quiz: { ...quiz, released: true } } }), 200);
   });
 
   app.openapi(routes.resumeResponse, async (c) => {

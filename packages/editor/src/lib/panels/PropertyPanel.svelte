@@ -99,6 +99,29 @@
     const title = `${el.title ?? ""}${el.title ? " " : ""}{${source.scope ? "$item." : ""}${source.id}}`;
     doc.updateElement(el.id, { title });
   }
+  const quiz = $derived(((view.survey as Loose).settings?.quiz ?? null) as Loose | null);
+  function setQuiz(next: Loose | undefined) {
+    const settings: Loose = { ...((view.survey as Loose).settings ?? {}) };
+    if (next === undefined) delete settings.quiz;
+    else settings.quiz = Object.fromEntries(Object.entries(next).filter(([, v]) => v !== undefined));
+    doc.updateSurvey({ settings: Object.keys(settings).length ? settings : undefined } as Loose, { mergeKey: "survey.quiz" });
+  }
+  /** The correct answer as typed: one value, or several separated by commas for lists. */
+  const answerText = (v: unknown) => (Array.isArray(v) ? v.join(", ") : v === undefined || v === null ? "" : String(v));
+  const listTypes = ["multiple-choice", "tags", "ranking"];
+  function setCorrect(text: string) {
+    if (!el) return;
+    const many = listTypes.includes(el.type) || (el.type === "image-choice" && el.multiple);
+    const parts = text.split(",").map((s) => s.trim()).filter(Boolean);
+    const value = text.trim() === "" ? undefined : many ? parts : el.type === "rating" || el.type === "slider" ? Number(text) : el.type === "boolean" ? text.trim() === "true" : text.trim();
+    set("correctAnswer", value);
+  }
+  const setFeedback = (key: "correct" | "wrong", value: string) => {
+    if (!el) return;
+    const next: Loose = { ...(el.feedback ?? {}), [key]: value === "" ? undefined : value };
+    if (next[key] === undefined) delete next[key];
+    set("feedback", Object.keys(next).length ? next : undefined);
+  };
   function setHiddenFields(text: string) {
     const names = [...new Set(text.split(",").map((s) => s.trim()).filter((s) => /^[A-Za-z0-9_-]+$/.test(s)))];
     doc.updateSurvey({ hiddenFields: names.length ? names : undefined } as Loose);
@@ -147,6 +170,29 @@
               onchange={(c, typing) => setPageCondition(page.id, c, typing)}
             )
           }
+        }
+      }
+      h3 'Quiz'
+      label.kv-props-check {
+        input type=checkbox checked={Boolean(quiz)} onchange={(e) => setQuiz(e.currentTarget.checked ? {} : undefined)}
+        span 'Score answers (a quiz or an assessment)'
+      }
+      if quiz {
+        label {
+          span 'Pass mark (%)'
+          input type=number min=0 max=100 value={quiz.passMark !== undefined ? Math.round(quiz.passMark * 100) : ""} oninput={(e) => setQuiz({ ...quiz, passMark: num(e.currentTarget.value) === undefined ? undefined : num(e.currentTarget.value)! / 100 })}
+        }
+        label {
+          span 'Time limit (s)'
+          input type=number min=1 value={quiz.timeLimit ?? ""} oninput={(e) => setQuiz({ ...quiz, timeLimit: num(e.currentTarget.value) })}
+        }
+        label.kv-props-check {
+          input type=checkbox checked={Boolean(quiz.showCorrect)} onchange={(e) => setQuiz({ ...quiz, showCorrect: e.currentTarget.checked || undefined })}
+          span 'Show correct answers after submitting'
+        }
+        label.kv-props-check {
+          input type=checkbox checked={quiz.releaseScores === "manual"} onchange={(e) => setQuiz({ ...quiz, releaseScores: e.currentTarget.checked ? "manual" : undefined })}
+          span 'Release scores by hand, after review'
         }
       }
       h3 'Hidden fields'
@@ -500,6 +546,31 @@
             span 'Add button'
             input value={tx(el.repeat.addLabel)} placeholder="Add" oninput={(e) => setRepeat("addLabel", e.currentTarget.value)}
           }
+        }
+      }
+      if quiz && el.type !== "panel" && el.type !== "computed" {
+        h4 'Quiz'
+        label {
+          span 'Correct answer'
+          input.kv-props-correct placeholder={listTypes.includes(el.type) ? "a, b" : "value"} value={answerText(el.correctAnswer)} onchange={(e) => setCorrect(e.currentTarget.value)}
+        }
+        label {
+          span 'Points'
+          input type=number min=0 value={el.points ?? ""} placeholder="1" oninput={(e) => set("points", num(e.currentTarget.value))}
+        }
+        if listTypes.includes(el.type) || el.type === "matrix" || el.type === "image-choice" {
+          label.kv-props-check {
+            input type=checkbox checked={Boolean(el.partialCredit)} onchange={(e) => set("partialCredit", e.currentTarget.checked || undefined)}
+            span 'Partial credit'
+          }
+        }
+        label {
+          span 'If right'
+          input value={el.feedback?.correct ?? ""} oninput={(e) => setFeedback("correct", e.currentTarget.value)}
+        }
+        label {
+          span 'If wrong'
+          input value={el.feedback?.wrong ?? ""} oninput={(e) => setFeedback("wrong", e.currentTarget.value)}
         }
       }
       if el.type !== "panel" {

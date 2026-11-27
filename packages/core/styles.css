@@ -141,3 +141,13 @@
 .kv-signature-status { margin: 0; font-size: 0.9em; opacity: 0.75; }
 .kv-progress { display: flex; gap: 0.6rem; align-items: center; font-size: 0.85em; }
 .kv-progress-bar { flex: 1; height: 0.5rem; accent-color: var(--kv-color-primary); }
+.kv-timer { margin: 0; font-variant-numeric: tabular-nums; color: var(--kv-color-muted); }
+.kv-timer[hidden] { display: none; }
+.kv-quiz-score { font-weight: 700; font-size: 1.1em; margin: 0; }
+.kv-quiz-passed { color: #15803d; margin: 0; }
+.kv-quiz-failed { color: var(--kv-color-error); margin: 0; }
+.kv-quiz-answers { display: grid; gap: 0.5rem; padding-left: 1.2rem; }
+.kv-quiz-answers p { margin: 0.1rem 0 0; }
+.kv-quiz-wrong { border-left: 3px solid var(--kv-color-error); padding-left: 0.5rem; }
+.kv-quiz-right { border-left: 3px solid #15803d; padding-left: 0.5rem; }
+.kv-quiz-feedback { font-style: italic; color: var(--kv-color-muted); }

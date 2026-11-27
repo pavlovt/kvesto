@@ -35,6 +35,8 @@ export interface EvaluateOptions {
   variables?: Record<string, string>;
   /** Hidden field values by name, for `{name}` when no question has that id. */
   hidden?: Record<string, string>;
+  /** Scores so far, for `score()`, `score('q1')` and `maxScore()`. */
+  scores?: () => { score: number; max: number; questions: { questionId: string; score: number }[] };
 }
 
 /** Raised for problems found while evaluating, such as an unknown function. */
@@ -204,7 +206,7 @@ const BUILTINS: Record<string, Builtin> = {
 };
 
 /** Names of the built-in functions (plus `iif`). */
-export const BUILTIN_FUNCTIONS: readonly string[] = ["iif", ...Object.keys(BUILTINS)];
+export const BUILTIN_FUNCTIONS: readonly string[] = ["iif", "score", "maxScore", ...Object.keys(BUILTINS)];
 
 /** Look up a reference such as `{q}`, `{matrix.row}` or `{$item.q}`. */
 function lookup(node: Extract<ExpressionNode, { type: "ref" }>, answers: Answers, item: Answers | undefined): unknown {
@@ -276,6 +278,13 @@ export function evaluateNode(node: ExpressionNode, answers: Answers, options: Ev
         }
       }
       case "call": {
+        if (n.name === "score" || n.name === "maxScore") {
+          const s = options.scores?.();
+          if (!s) return 0;
+          if (n.name === "maxScore") return s.max;
+          const id = n.args[0] ? run(n.args[0]) : undefined;
+          return id === undefined || id === null ? s.score : (s.questions.find((q) => q.questionId === String(id))?.score ?? 0);
+        }
         if (n.name === "iif") {
           const [cond, then, otherwise] = n.args;
           if (!cond) return null;

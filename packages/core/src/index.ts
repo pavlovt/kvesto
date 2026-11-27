@@ -36,6 +36,7 @@ export {
 } from "./expression.js";
 export { fileToDataUrl } from "./files.js";
 export { pipeText, formatAnswer, formatComputed, type PipeOptions } from "./piping.js";
+export { scoreQuestion, scoreSurvey, type QuestionScore, type SurveyScore } from "./scoring.js";
 export { THEME_PRESETS, THEME_VARIABLES, applyTheme, themePreset, themeToCss, themeVariables, type Theme, type ThemePreset } from "./theme.js";
 export {
   addLocalePack,

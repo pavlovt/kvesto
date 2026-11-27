@@ -207,3 +207,17 @@ describe("dashboard theme", () => {
     dash.destroy();
   });
 });
+
+describe("quiz scores", () => {
+  it("shows the average, pass rate and score distribution", async () => {
+    const survey = { schemaVersion: 1, id: "q", title: "Q", settings: { quiz: { passMark: 0.5 } }, pages: [{ id: "p", elements: [{ id: "a", type: "text", title: "A", correctAnswer: "x" }] }] };
+    const responses = [1, 0, 1].map((score, i) => ({ id: String(i), surveyId: "q", createdAt: "", answers: {}, meta: { quiz: { score, max: 1, passed: score === 1 } } }));
+    const { mount, unmount } = await import("svelte");
+    const { SurveyResults } = await import("../src/lib/index.js");
+    const target = document.createElement("div");
+    const view = mount(SurveyResults, { target, props: { survey: survey as never, responses: responses as never } });
+    flushSync();
+    expect(target.querySelector(".kv-dash-scores")!.textContent).toContain("Average 67% over 3 scored responses, 67% passed.");
+    unmount(view);
+  });
+});

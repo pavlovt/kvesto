@@ -25,6 +25,7 @@ import { surveyVariables, unknownFunctions, type EvaluateOptions, type Expressio
 import { pipeText } from "./piping.js";
 import { message } from "./i18n.js";
 import { checkQuestionTypes } from "./question-types.js";
+import { scoreSurvey, type SurveyScore } from "./scoring.js";
 import { defaultAnswer, itemKey, validateAnswer, validateFile, validateRepeat, validationTargets } from "./validate.js";
 import type { CustomValidators } from "./validators.js";
 
@@ -161,6 +162,10 @@ export class SurveyModel {
   /** The last value of each trigger's condition, so a trigger runs only when its condition becomes true. */
   private readonly triggerState: boolean[] = [];
   private token: string | undefined;
+  /** When the whole survey's time is up (ms since 1970), and the current page's. */
+  private surveyDeadline: number | null = null;
+  private pageDeadline: { pageIndex: number; at: number } | null = null;
+  private timer: ReturnType<typeof setTimeout> | undefined;
   private progressTimer: ReturnType<typeof setTimeout> | undefined;
   private progressSaving: Promise<string | undefined> = Promise.resolve(undefined);
 
@@ -213,6 +218,9 @@ export class SurveyModel {
       if (q.resetIf) this.resetState.set(q.id, evaluateCondition(q.resetIf, this.state.logic.answers, undefined, this.logicOptions));
     }
     this.applyRules();
+    const limit = this.survey.settings?.quiz?.timeLimit;
+    if (limit) this.surveyDeadline = this.now() + limit * 1000;
+    this.armTimer();
     // Triggers whose condition already holds at the start (from prefilled answers) don't run.
     (this.survey.triggers ?? []).forEach((t, i) => {
       this.triggerState[i] = evaluateCondition(t.when, this.state.logic.answers, undefined, this.logicOptions);
@@ -313,6 +321,48 @@ export class SurveyModel {
       if (!next) return;
       this.state = this.compute({ ...this.state, answers: next });
     }
+  }
+
+  private now(): number {
+    return (this.options.now?.() ?? new Date()).getTime();
+  }
+
+  /** When time runs out on this page or the survey (ms since 1970), or null without a time limit. */
+  get deadline(): number | null {
+    const page = this.pageDeadline?.pageIndex === this.state.pageIndex ? this.pageDeadline.at : null;
+    const both = [page, this.surveyDeadline].filter((d): d is number => d !== null);
+    return both.length ? Math.min(...both) : null;
+  }
+
+  /** Start the current page's clock, and wake up when the next limit runs out. */
+  private armTimer(): void {
+    clearTimeout(this.timer);
+    if (this.state.status !== "running") return;
+    const page = this.survey.pages[this.state.pageIndex]!;
+    if (page.timeLimit && this.pageDeadline?.pageIndex !== this.state.pageIndex) {
+      this.pageDeadline = { pageIndex: this.state.pageIndex, at: this.now() + page.timeLimit * 1000 };
+    }
+    const at = this.deadline;
+    if (at === null) return;
+    this.timer = setTimeout(() => this.timeUp(), Math.max(0, at - this.now()));
+  }
+
+  /** Time is up: the page moves on without checking it, or the survey submits what it has. */
+  private timeUp(): void {
+    if (this.state.status !== "running") return;
+    const surveyOver = this.surveyDeadline !== null && this.now() >= this.surveyDeadline;
+    const nextIndex = this.visiblePageIndexes().find((i) => i > this.state.pageIndex);
+    if (surveyOver || nextIndex === undefined) {
+      void this.complete({ timedOut: true });
+      return;
+    }
+    this.update({ pageIndex: nextIndex, stepId: null });
+    this.armTimer();
+  }
+
+  /** The quiz score of the current answers (visible questions only). */
+  score(): SurveyScore {
+    return scoreSurvey(this.survey, this.state.logic.answers, this.state.logic.visibleQuestions);
   }
 
   /** The token of the saved progress, once progress has been saved (or resumed). */
@@ -675,21 +725,35 @@ export class SurveyModel {
     return true;
   }
 
-  /** Validates every visible page, saves through the storage adapter if any, then calls onComplete. */
-  async complete(): Promise<CompletionResult | null> {
-    if (this.state.status !== "running" || this.state.uploading.length) return null;
-    for (const i of this.visiblePageIndexes()) {
-      if (!this.validatePage(i)) {
-        this.update({ pageIndex: i });
-        return null;
+  /**
+   * Validates every visible page, saves through the storage adapter if any,
+   * then calls onComplete. When a time limit ran out (`timedOut`), what was
+   * answered is submitted without checking.
+   */
+  async complete({ timedOut = false }: { timedOut?: boolean } = {}): Promise<CompletionResult | null> {
+    if (this.state.status !== "running" || (this.state.uploading.length && !timedOut)) return null;
+    if (!timedOut) {
+      for (const i of this.visiblePageIndexes()) {
+        if (!this.validatePage(i)) {
+          this.update({ pageIndex: i });
+          return null;
+        }
       }
     }
+    clearTimeout(this.timer);
+    const quiz = this.survey.settings?.quiz;
+    const scored = quiz ? this.score() : null;
+    const meta: Record<string, unknown> = {
+      ...this.options.meta,
+      ...(Object.keys(this.hidden).length ? { hidden: { ...this.hidden } } : {}),
+      // The server recalculates this; it is here for storage that has no server.
+      ...(scored ? { quiz: { score: scored.score, max: scored.max, ...(scored.passed !== undefined ? { passed: scored.passed } : {}), ...(timedOut ? { timedOut: true } : {}) } } : {}),
+      ...(timedOut && !scored ? { timedOut: true } : {}),
+    };
     const response: ResponseInput = {
       // Only visible questions: answers to questions hidden by logic are dropped.
       answers: { ...this.state.logic.answers },
-      ...(this.options.meta || Object.keys(this.hidden).length
-        ? { meta: { ...this.options.meta, ...(Object.keys(this.hidden).length ? { hidden: { ...this.hidden } } : {}) } }
-        : {}),
+      ...(Object.keys(meta).length ? { meta } : {}),
     };
     clearTimeout(this.progressTimer);
     this.update({ status: "submitting", submitError: null });
@@ -717,6 +781,7 @@ export class SurveyModel {
       this.applyRules();
       this.runTriggers();
     }
+    if (patch.pageIndex !== undefined || patch.status !== undefined) this.armTimer();
     for (const l of this.listeners) l(this.state);
   }
 

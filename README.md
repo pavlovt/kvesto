@@ -422,6 +422,29 @@ survey's theme with a live preview and exports it as CSS or JSON.
 The editor and the dashboard have their own light, dark and auto looks: pass `theme: "dark"` (or `"auto"`) to
 `mountEditor` / `mountDashboard`, or switch with the menu in their toolbar.
 
+#### Quizzes and scoring
+
+```json
+{ "settings": { "quiz": { "passMark": 0.7, "showCorrect": true, "timeLimit": 600 } },
+  "pages": [{ "id": "p1", "timeLimit": 120, "elements": [
+    { "id": "capital", "type": "single-choice", "title": "Capital of France?", "correctAnswer": "paris",
+      "choices": [{ "value": "rome", "label": "Rome" }, { "value": "paris", "label": "Paris" }],
+      "feedback": { "correct": "Right!", "wrong": "It is Paris." } },
+    { "id": "primes", "type": "multiple-choice", "title": "Primes", "correctAnswer": ["2", "3"], "points": 2,
+      "partialCredit": true, "penalty": 0.5, "choices": [{ "value": "2", "label": "2" }, { "value": "3", "label": "3" }, { "value": "4", "label": "4" }] }
+  ] }] }
+```
+
+A question scores through `correctAnswer` (worth `points`, default 1; lists and matrices can give `partialCredit`,
+minus `penalty` per wrong pick), or through `score` on its choices for assessments. `score()`, `score('q1')` and
+`maxScore()` work in expressions, so a variable can turn a score into a result ("advanced") without quiz mode. With
+`settings.quiz` the completion screen shows the score, pass or fail against `passMark`, and with `showCorrect` the
+right answers and `feedback`. `releaseScores: "manual"` keeps the score back until someone calls
+`POST /surveys/{id}/responses/{responseId}/release`. `timeLimit` (whole survey, or per page) shows a countdown;
+when a page's time is up the survey moves on, and when the survey's is up it submits what was answered. The server
+always recalculates the score into `meta.quiz` and ignores one the client sent. The dashboard shows the average,
+pass rate and score distribution.
+
 #### Content blocks and images
 
 Pages and panels can also hold elements that show something but take no answer:
