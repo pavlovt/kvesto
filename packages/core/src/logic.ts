@@ -1,4 +1,4 @@
-import { pageQuestions, type AnswerValue, type Answers, type Comparison, type Condition, type ConditionValue, type Page, type Question, type Survey } from "@kvesto/schema";
+import { pageQuestions, type AnswerValue, type Element, type Answers, type Comparison, type Condition, type ConditionValue, type Page, type Question, type Survey } from "@kvesto/schema";
 
 export function isEmptyAnswer(value: AnswerValue | undefined): boolean {
   if (value === undefined || value === null || value === "") return true;
@@ -86,8 +86,10 @@ export function evaluateCondition(condition: Condition, answers: Answers): boole
 export interface SurveyLogic {
   /** Ids of the pages that are currently shown, in order. */
   visiblePages: Set<string>;
-  /** Ids of the questions that are currently shown (a hidden page hides all its questions). */
+  /** Ids of the questions that are currently shown (a hidden page or panel hides all its questions). */
   visibleQuestions: Set<string>;
+  /** Ids of the panels that are currently shown. */
+  visiblePanels: Set<string>;
   /** Ids of the questions that are currently required (`required`, or `requiredIf` holds). */
   requiredQuestions: Set<string>;
   /** Answers with hidden questions removed: what gets submitted. */
@@ -104,24 +106,36 @@ export interface SurveyLogic {
 export function resolveLogic(survey: Survey, answers: Answers): SurveyLogic {
   const visiblePages = new Set<string>();
   const visibleQuestions = new Set<string>();
+  const visiblePanels = new Set<string>();
   const requiredQuestions = new Set<string>();
   const effective: Answers = {};
+
+  const visit = (elements: readonly Element[], parentVisible: boolean) => {
+    for (const el of elements) {
+      const visible = parentVisible && (!el.visibleIf || evaluateCondition(el.visibleIf, effective));
+      if (el.type === "panel") {
+        if (visible) visiblePanels.add(el.id);
+        // Still walk a hidden panel: nothing inside is visible, but the walk keeps document order.
+        visit(el.elements, visible);
+        continue;
+      }
+      if (!visible) continue;
+      visibleQuestions.add(el.id);
+      if (el.required || (el.requiredIf && evaluateCondition(el.requiredIf, effective))) requiredQuestions.add(el.id);
+      const v = answers[el.id];
+      if (v !== undefined) effective[el.id] = v;
+    }
+  };
 
   for (const page of survey.pages) {
     const pageVisible = !page.visibleIf || evaluateCondition(page.visibleIf, effective);
     if (pageVisible) visiblePages.add(page.id);
-    for (const q of pageQuestions(page)) {
-      const visible = pageVisible && (!q.visibleIf || evaluateCondition(q.visibleIf, effective));
-      if (!visible) continue;
-      visibleQuestions.add(q.id);
-      if (q.required || (q.requiredIf && evaluateCondition(q.requiredIf, effective))) requiredQuestions.add(q.id);
-      const v = answers[q.id];
-      if (v !== undefined) effective[q.id] = v;
-    }
+    visit(page.elements, pageVisible);
   }
-  return { visiblePages, visibleQuestions, requiredQuestions, answers: effective };
+  return { visiblePages, visibleQuestions, visiblePanels, requiredQuestions, answers: effective };
 }
 
+/** The visible questions of a page, in order, including those inside visible panels. */
 export function visibleElements(page: Page, logic: SurveyLogic): Question[] {
   return pageQuestions(page).filter((q) => logic.visibleQuestions.has(q.id));
 }

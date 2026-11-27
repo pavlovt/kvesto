@@ -1,6 +1,6 @@
 import {
-  pageQuestions,
   type AnswerValue,
+  type Element,
   type FileAnswer,
   type FileQuestion,
   type MatrixAnswer,
@@ -118,8 +118,8 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
       if (state.survey.description) parts.push(h(doc, "p", { class: "kv-description" }, state.survey.description));
     }
     if (state.page.title) parts.push(h(doc, "h3", { class: "kv-page-title" }, state.page.title));
-    views = pageQuestions(state.page).map((q) => renderQuestion(q, state));
-    parts.push(...views.map((v) => v.el));
+    views = [];
+    parts.push(...state.page.elements.map((el) => renderElement(el, state)));
 
     const nav = h(doc, "div", { class: "kv-nav" });
     const back = h(doc, "button", { type: "button", class: "kv-prev" }, labels.prev);
@@ -127,6 +127,23 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
     nav.append(back, h(doc, "button", { type: "submit", class: "kv-next" }, labels.next));
     parts.push(h(doc, "p", { class: "kv-submit-error", role: "alert", hidden: "" }), nav);
     root.replaceChildren(...parts);
+  }
+
+  /** Render a question or a panel (with its contents), registering a view for each. */
+  function renderElement(el: Element, state: SurveyState): El {
+    if (el.type !== "panel") {
+      const view = renderQuestion(el, state);
+      views.push(view);
+      return view.el;
+    }
+    const wrap = h(doc, "fieldset", { class: "kv-panel", "data-panel": el.id });
+    if (el.title) wrap.append(h(doc, "legend", { class: "kv-panel-title" }, el.title));
+    if (el.description) wrap.append(h(doc, "p", { class: "kv-panel-description" }, el.description));
+    const body = h(doc, "div", { class: "kv-panel-body" });
+    for (const child of el.elements) body.append(renderElement(child, state));
+    wrap.append(body);
+    views.push({ el: wrap, update: (s) => void (wrap.hidden = !s.logic.visiblePanels.has(el.id)) });
+    return wrap;
   }
 
   function renderQuestion(q: Question, state: SurveyState): QuestionView {

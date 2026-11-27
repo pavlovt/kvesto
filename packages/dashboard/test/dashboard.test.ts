@@ -53,4 +53,36 @@ describe("mountDashboard", () => {
     await settle();
     expect(target.textContent).toContain('Survey "nope" not found.');
   });
+
+  it("shows panel titles as group headings", async () => {
+    const storage = memoryStorage();
+    const grouped: SurveyInput = {
+      schemaVersion: 1,
+      id: "grouped",
+      title: "Grouped",
+      pages: [
+        {
+          id: "p",
+          elements: [
+            { id: "a", type: "boolean", title: "A" },
+            {
+              id: "g",
+              type: "panel",
+              title: "Group one",
+              elements: [
+                { id: "b", type: "boolean", title: "B" },
+                { id: "c", type: "boolean", title: "C" },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    await storage.saveSurvey(grouped as never);
+    const target = document.createElement("div");
+    mountDashboard(target, { storage, surveyId: "grouped" });
+    await settle();
+    const groups = [...target.querySelectorAll(".kv-dash-group")].map((g) => g.textContent);
+    expect(groups).toEqual(["Group one"]);
+  });
 });

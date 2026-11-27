@@ -1,4 +1,4 @@
-import { allQuestions, type FileAnswer, type Question, type Survey, type SurveyResponse } from "@kvesto/schema";
+import { allQuestions, walkElements, type FileAnswer, type Question, type Survey, type SurveyResponse } from "@kvesto/schema";
 
 export interface MatrixRowSummary {
   value: string;
@@ -16,8 +16,16 @@ export interface RankingSummary {
   firstPlace: number;
 }
 
+/** A panel around a summarized question. */
+export interface PanelHeading {
+  id: string;
+  title?: string;
+}
+
 export interface QuestionSummary {
   question: Question;
+  /** The panels the question sits in, outermost first (for group headings). Empty when it is not in a panel. */
+  panels: PanelHeading[];
   answered: number;
   /** For choice, dropdown, boolean and rating questions: count per option. */
   counts?: { value: string; label: string; count: number }[];
@@ -36,10 +44,16 @@ export interface QuestionSummary {
 
 /** Aggregate responses per question. Used by the dashboard; handy for custom reports too. */
 export function summarizeResponses(survey: Survey, responses: SurveyResponse[], sampleSize = 5): QuestionSummary[] {
+  const headings = new Map<string, PanelHeading>();
+  const panelsOf = new Map<string, PanelHeading[]>();
+  walkElements(survey, (el, at) => {
+    if (el.type === "panel") headings.set(el.id, { id: el.id, ...(el.title ? { title: el.title } : {}) });
+    else panelsOf.set(el.id, at.panels.map((id) => headings.get(id)!));
+  });
   return allQuestions(survey)
     .map((question) => {
       const values = responses.map((r) => r.answers[question.id]).filter((v) => v !== undefined && v !== null && v !== "");
-      const summary: QuestionSummary = { question, answered: values.length };
+      const summary: QuestionSummary = { question, panels: panelsOf.get(question.id) ?? [], answered: values.length };
 
       const tally = (options: { value: string; label: string }[], key: (v: unknown) => string[]) => {
         const counts = new Map(options.map((o) => [o.value, 0]));

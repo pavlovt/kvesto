@@ -141,3 +141,61 @@ describe("new question types and logic", () => {
     for (const s of [badOp, extraKey, badRow, dupes]) expect(SurveySchema.safeParse(s).success).toBe(false);
   });
 });
+
+describe("panels", () => {
+  const withPanels = {
+    schemaVersion: 1,
+    id: "panels",
+    title: "Panels",
+    pages: [
+      {
+        id: "p1",
+        elements: [
+          { id: "pet", type: "boolean", title: "Do you have a pet?" },
+          {
+            id: "pet-panel",
+            type: "panel",
+            title: "About your pet",
+            visibleIf: { question: "pet", op: "eq", value: true },
+            elements: [
+              { id: "name", type: "text", title: "Name" },
+              { id: "inner", type: "panel", elements: [{ id: "age", type: "rating", title: "Age" }] },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+
+  it("accepts nested panels and applies question defaults inside them", () => {
+    const parsed = SurveySchema.parse(withPanels);
+    const panel = parsed.pages[0]!.elements[1]!;
+    expect(panel.type).toBe("panel");
+    const inner = panel.type === "panel" ? panel.elements[1]! : null;
+    const age = inner?.type === "panel" ? inner.elements[0]! : null;
+    expect(age?.type === "rating" && age.max).toBe(5);
+  });
+
+  it("keeps ids unique across panels and questions", () => {
+    const bad = structuredClone(withPanels);
+    (bad.pages[0]!.elements[1] as { id: string }).id = "pet";
+    expect(SurveySchema.safeParse(bad).error?.issues[0]?.message).toMatch(/Duplicate element id "pet"/);
+  });
+
+  it("only lets conditions refer to earlier questions, not panels or later questions", () => {
+    const panelRef = structuredClone(withPanels);
+    (panelRef.pages[0]!.elements[0] as Record<string, unknown>).visibleIf = { question: "name", op: "empty" };
+    expect(SurveySchema.safeParse(panelRef).success).toBe(false);
+    const toPanel = structuredClone(withPanels);
+    const inner = (toPanel.pages[0]!.elements[1] as { elements: Record<string, unknown>[] }).elements[0]!;
+    inner.visibleIf = { question: "pet-panel", op: "empty" };
+    expect(SurveySchema.safeParse(toPanel).success).toBe(false);
+    const panelOwnCondition = structuredClone(withPanels);
+    (panelOwnCondition.pages[0]!.elements[1] as Record<string, unknown>).visibleIf = { question: "name", op: "empty" };
+    expect(SurveySchema.safeParse(panelOwnCondition).success).toBe(false);
+  });
+
+  it("still accepts surveys without panels", () => {
+    expect(SurveySchema.safeParse(survey).success).toBe(true);
+  });
+});

@@ -34,12 +34,17 @@ describe("mountEditor", () => {
     const survey = { schemaVersion: 1 as const, id: "s", title: "S", pages: [{ id: "p", elements: [] }] };
     mountEditor(target, { survey, preview: false, onchange: (s) => changes.push(s) });
     flushSync();
-    expect(target.querySelectorAll("button")).toHaveLength(10); // one per question type, no Save without storage
+    expect(target.querySelectorAll("button")).toHaveLength(11); // one per question type and panel, no Save without storage
 
     const rating = [...target.querySelectorAll("button")].find((b) => b.textContent === "rating")!;
     rating.click();
     flushSync();
     expect(changes.at(-1)?.pages[0]?.elements[0]?.type).toBe("rating");
+
+    const panel = [...target.querySelectorAll("button")].find((b) => b.textContent === "panel")!;
+    panel.click();
+    flushSync();
+    expect(changes.at(-1)?.pages[0]?.elements[1]).toEqual({ id: "panel1", type: "panel", title: "Group 1", elements: [] });
 
     const textarea = target.querySelector("textarea")!;
     textarea.value = "{ nope";

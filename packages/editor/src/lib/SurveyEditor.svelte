@@ -16,7 +16,7 @@
 </script>
 
 <script lang="ts">
-  import { allQuestions, SurveySchema, type QuestionType } from "@kvesto/core";
+  import { allQuestions, SurveySchema, walkElements, type QuestionType } from "@kvesto/core";
   import SurveyPreview from "./SurveyPreview.svelte";
   import { starterSurvey } from "./starter.js";
 
@@ -97,6 +97,24 @@
     source = JSON.stringify(doc, null, 2);
   }
 
+  function addPanel() {
+    let doc: SurveyInput;
+    try {
+      doc = JSON.parse(source);
+    } catch {
+      status = "Fix the JSON before adding a panel.";
+      return;
+    }
+    const page = doc.pages.at(-1);
+    if (!page) return;
+    const ids = new Set<string>();
+    walkElements(doc, (el) => void ids.add(el.id));
+    let n = 1;
+    while (ids.has(`panel${n}`)) n++;
+    page.elements.push({ id: `panel${n}`, type: "panel", title: `Group ${n}`, elements: [] });
+    source = JSON.stringify(doc, null, 2);
+  }
+
   async function save() {
     if (!parsed.survey || !storage) return;
     try {
@@ -117,6 +135,8 @@
         each questionTypes as type {
           button type=button onclick={() => addQuestion(type)} '{type}'
         }
+        button type=button onclick={addPanel} 'panel'
+
         if storage {
           button.kv-editor-primary type=button onclick={save} disabled={!parsed.survey} 'Save'
         }

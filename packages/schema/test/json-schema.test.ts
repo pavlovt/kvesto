@@ -2,13 +2,13 @@ import { readFileSync } from "node:fs";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import { describe, expect, it } from "vitest";
 import { SURVEY_JSON_SCHEMA_URL, SurveySchema, surveyJsonSchema } from "../src/index.js";
-import { advancedSurvey, feedbackSurvey } from "../../core/test/fixtures.js";
+import { advancedSurvey, feedbackSurvey, panelSurvey } from "../../core/test/fixtures.js";
 
 const validate = new Ajv2020({ strict: false }).compile(surveyJsonSchema());
 
 describe("surveyJsonSchema", () => {
   it("accepts the fixture surveys, which SurveySchema also accepts", () => {
-    for (const survey of [feedbackSurvey, advancedSurvey]) {
+    for (const survey of [feedbackSurvey, advancedSurvey, panelSurvey]) {
       expect(SurveySchema.safeParse(survey).success).toBe(true);
       expect(validate(survey), JSON.stringify(validate.errors)).toBe(true);
     }

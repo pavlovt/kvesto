@@ -456,6 +456,7 @@ These do not block the first milestones, but should be settled before the one th
 | M1 · Foundations | Done (unreleased) |
 | M2 · Server access control | Done (unreleased) |
 | M3 · Validators | Done (unreleased) |
-| M4 – M32 | Planned |
+| M4 · Panels | Done (unreleased) |
+| M5 – M32 | Planned |
 
 Update this table as milestones land, with the release they shipped in.

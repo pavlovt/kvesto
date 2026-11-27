@@ -129,9 +129,24 @@ React, Vue or Svelte instead of using the bundled renderer.
 | `ranking` | choice values, best first | |
 | `file` | `[{ name, type, size, url }]` | `accept`, `maxSize` (bytes), `maxFiles` (default 1) |
 
+#### Panels
+
+A `panel` groups questions (and other panels) under an optional title and description. It takes `visibleIf`, and
+hiding it hides everything inside. Panels only change the layout: question ids stay unique across the survey and
+answers stay flat, keyed by question id.
+
+```json
+{ "id": "pet", "type": "panel", "title": "About your pet",
+  "visibleIf": { "question": "hasPet", "op": "eq", "value": true },
+  "elements": [
+    { "id": "petName", "type": "text", "title": "Name", "required": true },
+    { "id": "petAge", "type": "rating", "title": "Age", "min": 0, "max": 20 }
+  ] }
+```
+
 #### Conditional logic
 
-Any question takes `visibleIf` and `requiredIf`; a page takes `visibleIf`. A condition is plain JSON, never code:
+Any question takes `visibleIf` and `requiredIf`; pages and panels take `visibleIf`. A condition is plain JSON, never code:
 
 ```json
 { "id": "why", "type": "comment", "title": "What went wrong?",

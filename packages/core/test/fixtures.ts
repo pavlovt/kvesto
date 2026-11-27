@@ -100,3 +100,38 @@ export const advancedSurvey: SurveyInput = {
     },
   ],
 };
+
+/** Nested panels with conditions on the panels and inside them. */
+export const panelSurvey: SurveyInput = {
+  schemaVersion: 1,
+  id: "pets",
+  title: "Pets",
+  pages: [
+    {
+      id: "p1",
+      elements: [
+        { id: "hasPet", type: "boolean", title: "Do you have a pet?", required: true },
+        {
+          id: "pet",
+          type: "panel",
+          title: "About your pet",
+          description: "Tell us a little more.",
+          visibleIf: { question: "hasPet", op: "eq", value: true },
+          elements: [
+            { id: "petName", type: "text", title: "Name", required: true },
+            {
+              id: "health",
+              type: "panel",
+              title: "Health",
+              elements: [
+                { id: "vet", type: "boolean", title: "Seen a vet this year?" },
+                { id: "vetName", type: "text", title: "Which vet?", visibleIf: { question: "vet", op: "eq", value: true } },
+              ],
+            },
+          ],
+        },
+        { id: "comment", type: "comment", title: "Anything else?" },
+      ],
+    },
+  ],
+};

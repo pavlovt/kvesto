@@ -47,6 +47,9 @@
   const survey = $derived(props.survey ?? loaded?.survey ?? null);
   const responses = $derived(props.responses ?? loaded?.responses ?? []);
   const summary = $derived<QuestionSummary[]>(survey ? summarizeResponses(survey, responses) : []);
+  // Panels around a question, as "Outer / Inner"; untitled panels are left out.
+  const groupLabel = (item: QuestionSummary | undefined) =>
+    item ? item.panels.flatMap((p) => (p.title ? [p.title] : [])).join(" / ") : "";
   const pct = (count: number, total: number) => (total ? Math.round((count / total) * 100) : 0);
   // Ranking bars: first place fills the bar, last place leaves it empty.
   const rankScore = (avg: number, n: number) => (n > 1 && avg > 0 ? Math.round(((n - avg) / (n - 1)) * 100) : 0);
@@ -61,7 +64,10 @@
     .kv-dash-results {
       h1 '{survey.title}'
       p.kv-dash-muted '{responses.length} responses'
-      each summary as item (item.question.id) {
+      each summary as item, i (item.question.id) {
+        if groupLabel(item) && groupLabel(item) !== groupLabel(summary[i - 1]) {
+          p.kv-dash-group '{groupLabel(item)}'
+        }
         section.kv-dash-card {
           h2 '{item.question.title}'
           p.kv-dash-muted '{item.answered} answered'
@@ -131,6 +137,7 @@
 <style>
   .kv-dash-results h1 { font-size: 1.5rem; margin: 0 0 0.25rem; }
   .kv-dash-card { background: white; border: 1px solid #e5e7eb; border-radius: 0.5rem; padding: 1rem; margin-bottom: 1rem; max-width: 48rem; }
+  .kv-dash-group { font-weight: 700; font-size: 0.95rem; color: #374151; margin: 1.25rem 0 0.5rem; max-width: 48rem; }
   .kv-dash-card h2 { font-size: 1.05rem; margin: 0 0 0.25rem; }
   .kv-dash-num { text-align: right; font-variant-numeric: tabular-nums; }
   .kv-dash-bar-row { display: grid; grid-template-columns: 10rem 1fr 3rem; gap: 0.5rem; align-items: center; margin: 0.3rem 0; }

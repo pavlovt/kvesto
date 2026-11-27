@@ -5,6 +5,7 @@
  * when the format changes in a breaking way and add a migration in `migrate.ts`.
  */
 import { z } from "zod";
+import { walkElements } from "./elements.js";
 
 export const SURVEY_SCHEMA_VERSION = 1 as const;
 
@@ -267,12 +268,61 @@ export const QuestionSchema = z.discriminatedUnion("type", [
   FileQuestionSchema,
 ]);
 
+/**
+ * A group of elements with an optional title, shown as one block. Panels can
+ * be nested. Hiding a panel hides everything in it. Panels don't change the
+ * answers: questions keep unique ids across the survey and answers stay flat,
+ * keyed by question id.
+ */
+export interface Panel {
+  type: "panel";
+  id: string;
+  title?: DisplayText;
+  description?: DisplayText;
+  /** Show the panel (and everything in it) only while this condition holds. */
+  visibleIf?: Condition;
+  elements: Element[];
+}
+
+/** Survey JSON for a panel as authored, before defaults are applied. */
+export interface PanelInput {
+  type: "panel";
+  id: string;
+  title?: DisplayText;
+  description?: DisplayText;
+  visibleIf?: Condition;
+  elements: ElementInput[];
+}
+
+/** Something a page or panel can hold: a question or a panel. */
+export type Element = Question | Panel;
+export type ElementInput = z.input<typeof QuestionSchema> | PanelInput;
+export type ElementType = Element["type"];
+
+export const PanelSchema: z.ZodType<Panel, PanelInput> = z
+  .object({
+    type: z.literal("panel"),
+    id,
+    title: DisplayTextSchema.optional(),
+    description: DisplayTextSchema.optional(),
+    visibleIf: ConditionSchema.optional(),
+    get elements() {
+      return z.array(ElementSchema);
+    },
+  })
+  .meta({ id: "Panel", description: "A titled group of questions and panels." }) as unknown as z.ZodType<Panel, PanelInput>;
+
+export const ElementSchema: z.ZodType<Element, ElementInput> = z
+  .lazy(() => z.union([QuestionSchema, PanelSchema]))
+  .meta({ id: "Element", description: "A question or a panel." });
+
 export const PageSchema = z.object({
   id,
   title: DisplayTextSchema.optional(),
   /** Show the page only while this condition holds. Hidden pages are skipped. */
   visibleIf: ConditionSchema.optional(),
-  elements: z.array(QuestionSchema),
+  /** Questions and panels, in order. */
+  elements: z.array(ElementSchema),
 });
 
 /** Is `validator` meaningful for `question`? Returns the reason when not. */
@@ -354,39 +404,50 @@ export const SurveySchema = z
       }
     };
 
-    survey.pages.forEach((page, pi) => {
-      // A page condition can only use questions from earlier pages.
-      checkCondition(page.visibleIf, ["pages", pi, "visibleIf"], new Set(seen.keys()));
-      page.elements.forEach((q, qi) => {
-        const path = ["pages", pi, "elements", qi];
-        const earlier = new Set(seen.keys());
-        checkCondition(q.visibleIf, [...path, "visibleIf"], earlier);
-        checkCondition(q.requiredIf, [...path, "requiredIf"], earlier);
-        if (seen.has(q.id)) {
-          ctx.addIssue({ code: "custom", path: [...path, "id"], message: `Duplicate question id "${q.id}"` });
+    const elementIds = new Set<string>();
+    let pageIndex = -1;
+    walkElements(survey, (el, at) => {
+      if (at.pageIndex !== pageIndex) {
+        pageIndex = at.pageIndex;
+        // A page condition can only use questions from earlier pages.
+        const page = survey.pages[pageIndex]!;
+        checkCondition(page.visibleIf, ["pages", pageIndex, "visibleIf"], new Set(seen.keys()));
+      }
+      const path = at.path;
+      const earlier = new Set(seen.keys());
+      checkCondition(el.visibleIf, [...path, "visibleIf"], earlier);
+      if (elementIds.has(el.id)) {
+        ctx.addIssue({ code: "custom", path: [...path, "id"], message: `Duplicate element id "${el.id}"` });
+      }
+      elementIds.add(el.id);
+      if (el.type === "panel") return;
+      const q = el;
+      checkCondition(q.requiredIf, [...path, "requiredIf"], earlier);
+      if ("choices" in q && !uniqueValues(q.choices)) {
+        ctx.addIssue({ code: "custom", path: [...path, "choices"], message: "Choice values must be unique" });
+      }
+      if (q.type === "matrix") {
+        if (!uniqueValues(q.rows)) ctx.addIssue({ code: "custom", path: [...path, "rows"], message: "Row values must be unique" });
+        if (!uniqueValues(q.columns)) {
+          ctx.addIssue({ code: "custom", path: [...path, "columns"], message: "Column values must be unique" });
         }
-        if ("choices" in q && !uniqueValues(q.choices)) {
-          ctx.addIssue({ code: "custom", path: [...path, "choices"], message: "Choice values must be unique" });
+      }
+      if (q.type === "rating" && q.min > q.max) {
+        ctx.addIssue({ code: "custom", path: [...path, "max"], message: "max must be at least min" });
+      }
+      q.validators?.forEach((v, vi) => {
+        const vpath = [...path, "validators", vi];
+        const problem = validatorProblem(q, v);
+        if (problem) ctx.addIssue({ code: "custom", path: vpath, message: problem });
+        if ("min" in v && v.min !== undefined && v.max !== undefined && v.min > v.max) {
+          ctx.addIssue({ code: "custom", path: [...vpath, "max"], message: "max must be at least min" });
         }
-        if (q.type === "matrix") {
-          if (!uniqueValues(q.rows)) ctx.addIssue({ code: "custom", path: [...path, "rows"], message: "Row values must be unique" });
-          if (!uniqueValues(q.columns)) {
-            ctx.addIssue({ code: "custom", path: [...path, "columns"], message: "Column values must be unique" });
-          }
-        }
-        if (q.type === "rating" && q.min > q.max) {
-          ctx.addIssue({ code: "custom", path: [...path, "max"], message: "max must be at least min" });
-        }
-        q.validators?.forEach((v, vi) => {
-          const vpath = [...path, "validators", vi];
-          const problem = validatorProblem(q, v);
-          if (problem) ctx.addIssue({ code: "custom", path: vpath, message: problem });
-          if ("min" in v && v.min !== undefined && v.max !== undefined && v.min > v.max) {
-            ctx.addIssue({ code: "custom", path: [...vpath, "max"], message: "max must be at least min" });
-          }
-        });
-        seen.set(q.id, q);
       });
+      seen.set(q.id, q);
+    });
+    // Pages without elements still get their condition checked.
+    survey.pages.forEach((page, pi) => {
+      if (page.elements.length === 0) checkCondition(page.visibleIf, ["pages", pi, "visibleIf"], new Set(seen.keys()));
     });
   });
 

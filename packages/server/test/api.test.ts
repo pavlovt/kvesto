@@ -219,6 +219,39 @@ describe("files", () => {
   });
 });
 
+describe("panels", () => {
+  it("stores surveys with panels and validates answers inside visible panels", async () => {
+    const grouped = {
+      schemaVersion: 1,
+      id: "grouped",
+      title: "Grouped",
+      pages: [
+        {
+          id: "p1",
+          elements: [
+            { id: "pet", type: "boolean", title: "Pet?" },
+            {
+              id: "about",
+              type: "panel",
+              title: "About the pet",
+              visibleIf: { question: "pet", op: "eq", value: true },
+              elements: [{ id: "name", type: "text", title: "Name", required: true }],
+            },
+          ],
+        },
+      ],
+    };
+    expect((await send("POST", "/surveys", grouped)).status).toBe(201);
+    expect(await (await send("GET", "/surveys/grouped")).json()).toEqual(grouped);
+    expect((await send("POST", "/surveys/grouped/responses", { answers: { pet: true } })).status).toBe(400);
+    const ok = await send("POST", "/surveys/grouped/responses", { answers: { pet: false, name: "ignored" } });
+    expect(ok.status).toBe(201);
+    expect((await ok.json()).answers).toEqual({ pet: false });
+    const doc = await (await send("GET", "/openapi.json")).json();
+    expect(doc.components.schemas.Panel).toBeDefined();
+  });
+});
+
 describe("validators", () => {
   const signup = {
     schemaVersion: 1,
