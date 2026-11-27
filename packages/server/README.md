@@ -29,6 +29,50 @@ KVESTO_ADMIN_ORIGINS=https://admin.example.com npx kvesto-server  # sites that m
 - Outbound requests (webhooks) go only to public HTTPS addresses, checked again after DNS resolution, with no
   redirects followed.
 
+## Rate limits and spam
+
+```ts
+createApp({
+  repository,
+  rateLimit: { budgets: { "response:create": { limit: 10, windowSeconds: 600 } } }, // or `true` for the defaults
+  clientAddress: { trustProxy: 1 }, // one load balancer in front sets X-Forwarded-For
+  verifyChallenge: turnstileChallenge(process.env.TURNSTILE_SECRET!), // or hcaptchaChallenge, recaptchaChallenge
+  signingSecret: process.env.KVESTO_SECRET, // shared by all servers
+});
+```
+
+Budgets (`DEFAULT_BUDGETS`) are per client address and survey for `response:create`, `response:update` (progress
+saves) and `file:upload`, and per address for all admin routes. Over a budget the server answers 429 with
+`Retry-After`. `X-Forwarded-For` is ignored unless `trustProxy` says how many proxies to trust, so nobody can pick
+their own address. The `kvesto-server` command turns rate limits on (`KVESTO_RATE_LIMIT=off` to disable,
+`KVESTO_TRUST_PROXY=1` behind a proxy, `KVESTO_SECRET` for the signing and respondent secrets).
+
+The default store keeps counts in memory. With several servers, share them, for example in Redis:
+
+```ts
+import { Redis } from "ioredis";
+const redis = new Redis();
+const store: RateLimitStore = {
+  async hit(key, windowMs) {
+    const [[, count], [, ttl]] = (await redis.multi().incr(key).pttl(key).exec()) as [[null, number], [null, number]];
+    if (ttl < 0) await redis.pexpire(key, windowMs);
+    return { count, resetAt: Date.now() + (ttl < 0 ? windowMs : ttl) };
+  },
+};
+createApp({ repository, rateLimit: { store } });
+```
+
+Surveys can add bot friction with `settings.antiSpam`, enforced by the server:
+
+- `honeypot: true`: the runner adds a field people can't see or reach; a response that fills it in is refused.
+- `minSeconds`: `GET /surveys/{id}` returns a signed `X-Kvesto-Start` time, `httpStorage` sends it back, and a
+  response sooner than this is refused (a resumed partial response counts from when it was created).
+- `challenge: true`: the runner's `challenge` option returns a CAPTCHA token, sent as `meta.challenge` and checked
+  by `verifyChallenge`.
+- `duplicateWindow`: the same answers from the same address and browser within this many seconds are refused (409).
+
+Refusals carry `reason: "spam"` or `"duplicate"`; the fields used for the checks aren't stored.
+
 ## Mount it in your own Hono app
 
 ```ts

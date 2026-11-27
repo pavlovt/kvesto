@@ -12,6 +12,21 @@ export {
 } from "./webhooks.js";
 export * as tables from "./db/schema.js";
 export {
+  clientAddress,
+  DEFAULT_BUDGETS,
+  hcaptchaChallenge,
+  memoryRateLimitStore,
+  recaptchaChallenge,
+  siteVerifyChallenge,
+  turnstileChallenge,
+  type Budget,
+  type BudgetName,
+  type ClientAddressOptions,
+  type RateLimitOptions,
+  type RateLimitStore,
+  type VerifyChallenge,
+} from "./abuse.js";
+export {
   apiKeyAuth,
   openAccess,
   KVESTO_ACTIONS,

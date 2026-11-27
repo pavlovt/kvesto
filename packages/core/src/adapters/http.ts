@@ -53,11 +53,25 @@ export function httpStorage(options: HttpStorageOptions): Required<SurveyStorage
   }
 
   const enc = encodeURIComponent;
+  // The server's signed "loaded at" token for each survey (for `antiSpam.minSeconds`), sent back with the response.
+  const started = new Map<string, string>();
+  const withStart = <T extends { meta?: Record<string, unknown> }>(surveyId: string, body: T): T => {
+    const start = started.get(surveyId);
+    return start ? { ...body, meta: { ...body.meta, start } } : body;
+  };
   /** The response a resume token belongs to: the token is `responseId.secret`. */
   const progressPath = (surveyId: string, token: string) => `/surveys/${enc(surveyId)}/responses/${enc(token.split(".")[0]!)}`;
 
   return {
-    loadSurvey: (id) => request<Survey>("GET", `/surveys/${enc(id)}`, undefined, true),
+    loadSurvey: async (id) => {
+      const extra = typeof options.headers === "function" ? await options.headers() : (options.headers ?? {});
+      const res = await doFetch(`${base}/surveys/${enc(id)}`, { method: "GET", headers: { accept: "application/json", ...extra } });
+      if (res.status === 404) return null;
+      if (!res.ok) throw new HttpStorageError(res.status, await res.json().catch(() => undefined));
+      const start = res.headers.get("x-kvesto-start");
+      if (start) started.set(id, start);
+      return (await res.json()) as Survey;
+    },
     saveSurvey: async (survey) => (await request<Survey>("PUT", `/surveys/${enc(survey.id)}`, survey))!,
     deleteSurvey: async (id) => {
       await request("DELETE", `/surveys/${enc(id)}`);
@@ -70,7 +84,7 @@ export function httpStorage(options: HttpStorageOptions): Required<SurveyStorage
             status: "complete",
             token: opts.resumeToken,
           }))!
-        : (await request<SurveyResponse>("POST", `/surveys/${enc(surveyId)}/responses`, response))!,
+        : (await request<SurveyResponse>("POST", `/surveys/${enc(surveyId)}/responses`, withStart(surveyId, response)))!,
     // A partial response on the server; the token is `responseId.secret`, and the secret never goes in a URL.
     saveProgress: async (surveyId, draft) => {
       const body = { answers: draft.answers, status: "partial", meta: { ...draft.meta, progress: { pageIndex: draft.pageIndex, stepId: draft.stepId ?? null } } };
@@ -78,7 +92,7 @@ export function httpStorage(options: HttpStorageOptions): Required<SurveyStorage
         await request<SurveyResponse>("PATCH", progressPath(surveyId, draft.token), { ...body, token: draft.token });
         return { token: draft.token };
       }
-      const created = (await request<SurveyResponse>("POST", `/surveys/${enc(surveyId)}/responses`, body))!;
+      const created = (await request<SurveyResponse>("POST", `/surveys/${enc(surveyId)}/responses`, withStart(surveyId, body)))!;
       return { token: created.resumeToken! };
     },
     loadProgress: async (surveyId, token) => {

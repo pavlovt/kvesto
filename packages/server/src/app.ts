@@ -35,6 +35,17 @@ import {
   type Survey,
 } from "@kvesto/core";
 import { openAccess, type Authorize, type KvestoAction } from "./auth.js";
+import {
+  clientAddress,
+  DEFAULT_BUDGETS,
+  memoryRateLimitStore,
+  startTime,
+  startToken,
+  type BudgetName,
+  type ClientAddressOptions,
+  type RateLimitOptions,
+  type VerifyChallenge,
+} from "./abuse.js";
 import type { RespondentRecord, SurveyRepository } from "./repository.js";
 import * as routes from "./routes.js";
 import { guardOutboundUrl } from "./outbound.js";
@@ -58,6 +69,21 @@ export interface CreateAppOptions {
    * bytes (default 5 MB for surveys, 1 MB for responses and other JSON).
    */
   limits?: { survey?: Partial<SurveyLimits>; answers?: Partial<AnswerLimits>; surveyBytes?: number; jsonBytes?: number };
+  /**
+   * Rate limits: `true` for the defaults (`DEFAULT_BUDGETS`), or a store (shared, such as Redis, when you run several
+   * servers) and budgets. Over a budget the server answers 429 with `Retry-After`. Off unless set; the
+   * `kvesto-server` command turns it on.
+   */
+  rateLimit?: boolean | RateLimitOptions;
+  /** Where the client's address comes from: `trustProxy` (proxies allowed to set X-Forwarded-For) or `clientIp`. */
+  clientAddress?: ClientAddressOptions;
+  /** Checks CAPTCHA tokens for surveys with `settings.antiSpam.challenge`, e.g. `turnstileChallenge(secret)`. */
+  verifyChallenge?: VerifyChallenge;
+  /**
+   * Signs the "loaded at" tokens that `settings.antiSpam.minSeconds` checks. Default: random for this process, so
+   * set one when several servers share the work or restarts are common.
+   */
+  signingSecret?: string;
   /** Serve /openapi.json and the /docs UI. Default true. */
   docs?: boolean;
   /** Largest accepted upload in bytes, whatever a question allows. Default 10 MB. */
@@ -127,11 +153,21 @@ const originIn = (list: string | string[] | false, origin: string): string | nul
   return all.includes("*") ? "*" : all.includes(origin) ? origin : null;
 };
 
-/** The response's meta without `browserId`, which is only used for the hash. */
+const CLIENT_META = ["browserId", "honeypot", "start", "challenge"];
+/** The response's meta without what the client sends only for checks (browser id, honeypot, start token, CAPTCHA). */
 function withoutBrowserId<T extends { meta?: Record<string, unknown> }>(input: T): T {
-  if (!input.meta || !("browserId" in input.meta)) return input;
-  const { browserId: _b, ...meta } = input.meta;
+  if (!input.meta || !CLIENT_META.some((k) => k in input.meta!)) return input;
+  const meta = Object.fromEntries(Object.entries(input.meta).filter(([k]) => !CLIENT_META.includes(k)));
   return { ...input, meta: Object.keys(meta).length ? meta : undefined };
+}
+
+/** Which rate-limit budget a request uses, if any. */
+function budgetFor(method: string, path: string): BudgetName | null {
+  if (method === "OPTIONS") return null;
+  if (method === "POST" && /\/surveys\/[^/]+\/responses$/.test(path)) return "response:create";
+  if ((method === "PATCH" && /\/responses\/[^/]+$/.test(path)) || (method === "POST" && /\/responses\/[^/]+\/resume$/.test(path))) return "response:update";
+  if (method === "POST" && /\/surveys\/[^/]+\/files$/.test(path)) return "file:upload";
+  return isRespondentRoute(method, path) ? null : "admin";
 }
 
 /** The declared hidden fields' values in a response's `meta.hidden`: strings only, cut to 500 characters. */
@@ -335,6 +371,7 @@ export function createApp(options: CreateAppOptions) {
     app.use(
       "*",
       cors({
+        exposeHeaders: ["X-Kvesto-Start", "X-Request-Id", "Retry-After"],
         origin: (origin, c) => {
           // A preflight asks for the method it is about to use.
           const method = c.req.method === "OPTIONS" ? (c.req.header("access-control-request-method") ?? "GET") : c.req.method;
@@ -343,6 +380,69 @@ export function createApp(options: CreateAppOptions) {
       }),
     );
   }
+
+  // Rate limits, per address (and survey for the respondent budgets).
+  const ipOf = (c: Context) => clientAddress(c, options.clientAddress);
+  const limiter = options.rateLimit
+    ? {
+        store: (typeof options.rateLimit === "object" && options.rateLimit.store) || memoryRateLimitStore(),
+        budgets: { ...DEFAULT_BUDGETS, ...(typeof options.rateLimit === "object" ? options.rateLimit.budgets : {}) },
+      }
+    : null;
+  if (limiter) {
+    app.use("*", async (c, next) => {
+      const name = budgetFor(c.req.method, c.req.path);
+      if (!name) return next();
+      const budget = limiter.budgets[name];
+      const surveyId = name === "admin" ? "" : (c.req.path.match(/\/surveys\/([^/]+)/)?.[1] ?? "");
+      const { count, resetAt } = await limiter.store.hit(`${name}:${ipOf(c)}:${surveyId}`, budget.windowSeconds * 1000);
+      if (count > budget.limit) {
+        const retry = Math.max(1, Math.ceil((resetAt - Date.now()) / 1000));
+        return c.json({ error: "Too many requests, try again later" }, 429, { "retry-after": String(retry) });
+      }
+      await next();
+    });
+  }
+  // Duplicate detection counts in the same store (or its own one when rate limits are off).
+  const spamStore = limiter?.store ?? memoryRateLimitStore();
+  const signingSecret = options.signingSecret ?? randomBytes(32).toString("hex");
+
+  /**
+   * Bot friction from `settings.antiSpam`: the honeypot on every save, and on submission the minimum time (from the
+   * signed start token, or when a partial response was created) and the CAPTCHA.
+   */
+  const spamCheck = async (
+    c: Context,
+    survey: Survey,
+    meta: Record<string, unknown> | undefined,
+    { completing, createdAt }: { completing: boolean; createdAt?: string },
+  ): Promise<{ status: 400; body: { error: string; reason?: "spam" } } | null> => {
+    const rules = survey.settings?.antiSpam;
+    if (!rules) return null;
+    const spam = (error: string) => ({ status: 400 as const, body: { error, reason: "spam" as const } });
+    if (rules.honeypot && typeof meta?.honeypot === "string" && meta.honeypot !== "") return spam("Refused as spam");
+    if (!completing) return null;
+    if (rules.minSeconds) {
+      const started = startTime(signingSecret, survey.id, meta?.start) ?? (createdAt ? Date.parse(createdAt) : null);
+      if (started === null || Date.now() - started < rules.minSeconds * 1000) return spam("Submitted too fast");
+    }
+    if (rules.challenge) {
+      if (!options.verifyChallenge) throw new Error(`Survey "${survey.id}" needs a challenge, but createApp() has no verifyChallenge`);
+      const token = meta?.challenge;
+      if (typeof token !== "string" || token === "" || token.length > 4096 || !(await options.verifyChallenge(c, token, ipOf(c)))) {
+        return spam("The challenge was not passed");
+      }
+    }
+    return null;
+  };
+  /** Whether the same answers came from the same address and browser within `antiSpam.duplicateWindow`. */
+  const isDuplicate = async (c: Context, survey: Survey, answers: Answers) => {
+    const window = survey.settings?.antiSpam?.duplicateWindow;
+    if (!window) return false;
+    const print = createHash("sha256").update(`${ipOf(c)}\0${c.req.header("user-agent") ?? ""}\0${JSON.stringify(answers)}`).digest("hex");
+    return (await spamStore.hit(`duplicate:${survey.id}:${print}`, window * 1000)).count > 1;
+  };
+  const DUPLICATE = { error: "The same answers were just submitted", reason: "duplicate" as const };
 
   // Request body sizes, and document limits checked on the raw JSON before it is parsed (so hostile nesting
   // can't exhaust the stack in validation).
@@ -460,6 +560,8 @@ export function createApp(options: CreateAppOptions) {
 
   app.openapi(routes.getSurvey, async (c) => {
     const survey = await repo.loadSurvey(c.req.valid("param").id);
+    // A signed "loaded at" time, sent back with the response, for the minimum time to complete.
+    if (survey?.settings?.antiSpam?.minSeconds) c.header("X-Kvesto-Start", startToken(signingSecret, survey.id));
     return survey ? c.json(survey, 200) : c.json({ error: "Survey not found" }, 404);
   });
 
@@ -491,8 +593,11 @@ export function createApp(options: CreateAppOptions) {
     if (!("respondent" in admitted)) return c.json(admitted.body, admitted.status);
     const { respondent } = admitted;
     const hidden = hiddenOf(survey, input.meta);
+    const spam = await spamCheck(c, survey, input.meta, { completing: !partial });
+    if (spam) return c.json(spam.body, spam.status);
     const checked = check(survey, input.answers, partial || timedOut(survey, input.meta), c.req.header("accept-language"), hidden);
     if ("bad" in checked) return c.json(checked.bad, 400);
+    if (!partial && (await isDuplicate(c, survey, checked.answers))) return c.json(DUPLICATE, 409);
     // Answers to questions hidden by conditional logic are dropped, as the core runtime does.
     const { status: _status, ...given } = withoutBrowserId(input);
     const rest = withQuiz(survey, withHidden(given, hidden), checked.answers, hidden, partial);
@@ -537,10 +642,13 @@ export function createApp(options: CreateAppOptions) {
     const partial = input.status === "partial";
     const admitted = await admit(c, survey, input.meta, { creating: false, completing: !partial });
     if (!("respondent" in admitted)) return c.json(admitted.body, admitted.status);
+    const spam = await spamCheck(c, survey, input.meta, { completing: !partial, createdAt: found.response!.createdAt });
+    if (spam) return c.json(spam.body, spam.status);
     const meta = withoutBrowserId({ meta: input.meta ?? found.response!.meta }).meta;
     const hidden = hiddenOf(survey, meta);
     const checked = check(survey, input.answers, partial || timedOut(survey, meta), c.req.header("accept-language"), hidden);
     if ("bad" in checked) return c.json(checked.bad, 400);
+    if (!partial && (await isDuplicate(c, survey, checked.answers))) return c.json(DUPLICATE, 409);
     const updated = await repo.updateResponse(
       id,
       responseId,

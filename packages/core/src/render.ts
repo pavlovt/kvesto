@@ -372,9 +372,17 @@ export function renderSurvey(target: El, model: SurveyModel, options: RenderOpti
     const back = h(doc, "button", { type: "button", class: "kv-prev" }, labels.prev);
     back.addEventListener("click", () => (byQuestion ? model.prevStep() : model.prev()));
     nav.append(back, h(doc, "button", { type: "submit", class: "kv-next" }, labels.next));
+    if (settings.antiSpam?.honeypot) parts.push(honeypot());
     parts.push(h(doc, "p", { class: "kv-submit-error", role: "alert", hidden: "" }), nav);
     if (clockTimer !== undefined) parts.unshift(clock);
     root.replaceChildren(...parts);
+  }
+
+  /** A field that people can't see or reach (bots fill it in). */
+  function honeypot(): El {
+    const input = h(doc, "input", { type: "text", name: "website", tabindex: "-1", autocomplete: "off" }) as HTMLInputElement;
+    input.addEventListener("input", () => model.setHoneypot(input.value));
+    return h(doc, "div", { class: "kv-hp", "aria-hidden": "true" }, h(doc, "label", {}, "Leave this empty", input));
   }
 
   /** Render a question or a panel (with its contents), registering a view for each. */

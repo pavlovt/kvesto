@@ -72,6 +72,11 @@ export interface CreateSurveyOptions {
   /** Values for the survey's `hiddenFields`, by name. Undeclared names are ignored. */
   hidden?: Record<string, string>;
   /**
+   * For surveys with `settings.antiSpam.challenge`: returns a CAPTCHA token (from Turnstile, hCaptcha, reCAPTCHA…)
+   * when the respondent submits. It is sent as `meta.challenge` for the server's `verifyChallenge`.
+   */
+  challenge?: () => string | Promise<string>;
+  /**
    * Whether this respondent has answered already, for `settings.oneResponsePer`. Default: for "browser", whether
    * this browser submitted it (remembered in localStorage).
    */
@@ -757,9 +762,21 @@ export class SurveyModel {
     clearTimeout(this.timer);
     const quiz = this.survey.settings?.quiz;
     const scored = quiz ? this.score() : null;
+    const antiSpam = this.survey.settings?.antiSpam;
+    let challenge: string | undefined;
+    if (antiSpam?.challenge && this.options.challenge) {
+      try {
+        challenge = await this.options.challenge();
+      } catch (err) {
+        this.update({ submitError: err instanceof Error ? err.message : String(err) });
+        return null;
+      }
+    }
     const meta: Record<string, unknown> = {
       ...this.options.meta,
       ...this.browserMeta(),
+      ...(antiSpam?.honeypot ? { honeypot: this.honeypot } : {}),
+      ...(challenge ? { challenge } : {}),
       ...(Object.keys(this.hidden).length ? { hidden: { ...this.hidden } } : {}),
       // The server recalculates this; it is here for storage that has no server.
       ...(scored ? { quiz: { score: scored.score, max: scored.max, ...(scored.passed !== undefined ? { passed: scored.passed } : {}), ...(timedOut ? { timedOut: true } : {}) } } : {}),
@@ -792,6 +809,12 @@ export class SurveyModel {
       else this.update({ status: "running", submitError: err instanceof Error ? err.message : String(err) });
       return null;
     }
+  }
+
+  private honeypot = "";
+  /** What a bot typed into the hidden honeypot field (the renderer calls this). */
+  setHoneypot(value: string): void {
+    this.honeypot = value;
   }
 
   /** `{ browserId }` for a survey limited to one response per browser, so the server can enforce it. */

@@ -124,7 +124,8 @@ export const submitResponse = createRoute({
     401: error("The survey needs an identified respondent"),
     403: error("The survey is not open"),
     404: error("Survey not found"),
-    409: error("The survey is full, or this respondent answered already"),
+    409: error("The survey is full, this respondent answered already, or the same answers were just sent"),
+    429: error("Too many requests (see Retry-After)"),
   },
 });
 
@@ -142,6 +143,7 @@ export const updateResponse = createRoute({
     403: error("Wrong resume token, or the survey is not open"),
     404: error("Response not found"),
     409: error("The response is already complete, or the survey is full"),
+    429: error("Too many requests (see Retry-After)"),
   },
 });
 

@@ -467,6 +467,11 @@ id from `createApp({ identifyRespondent: (c) => … })`, which reads your own se
 (or null). Responses keep it as `respondentId`, except in an `anonymous` survey, where only a salted hash
 (HMAC with `createApp({ respondentSecret })`) is kept, enough to refuse a second response.
 
+`settings.antiSpam` adds bot friction that the server enforces: a honeypot field, a minimum time to complete, a
+CAPTCHA token (the runner's `challenge` option; Turnstile, hCaptcha and reCAPTCHA verifiers on the server) and
+duplicate detection. The server also has rate limits; see the
+[server README](packages/server/README.md#rate-limits-and-spam).
+
 #### Themes
 
 The default stylesheet is built on CSS custom properties. Pick a preset or set variables (without `--kv-`):

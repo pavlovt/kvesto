@@ -656,6 +656,19 @@ export const SurveySettingsSchema = z.looseObject({
   anonymous: z.boolean().optional(),
   /** Shown instead of the survey when it isn't open, is full, or was already answered. */
   closedMessage: DisplayTextSchema.optional(),
+  /** Bot friction, enforced by the server. All optional. */
+  antiSpam: z
+    .object({
+      /** A field people can't see; a response that fills it in is refused. */
+      honeypot: z.boolean().optional(),
+      /** Refuse responses submitted sooner than this many seconds after the survey was loaded. */
+      minSeconds: z.number().int().min(1).max(3600).optional(),
+      /** Require a CAPTCHA token, checked by the server's `verifyChallenge`. */
+      challenge: z.boolean().optional(),
+      /** Refuse the same answers from the same address and browser within this many seconds. */
+      duplicateWindow: z.number().int().min(1).max(86_400).optional(),
+    })
+    .optional(),
 }).refine((s) => !s.opensAt || !s.closesAt || Date.parse(s.opensAt) < Date.parse(s.closesAt), {
   message: "closesAt must be after opensAt",
   path: ["closesAt"],

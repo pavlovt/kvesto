@@ -4,8 +4,8 @@ This is the plan for growing Kvesto from today's skeleton into a full survey too
 Each milestone is meant to be one focused change on `main`: it builds, type-checks and passes tests on its own, and
 can ship in a patch or minor release without waiting for the next one.
 
-> **Where we are now:** M34 (hardened HTTP defaults and document limits) is the latest finished milestone. Next up:
-> M35 (rate limiting and spam protection). The [Status](#status) table at the bottom lists every milestone.
+> **Where we are now:** M35 (rate limiting and spam protection) is the latest finished milestone. Next up:
+> M36 (upload hardening). The [Status](#status) table at the bottom lists every milestone.
 
 Milestones marked **★** are ideas that go beyond the original feature list. They come from looking at how other
 form and survey tools solve the same problems (conversational forms, headless form renderers, open source
@@ -1197,6 +1197,7 @@ Decided:
 | M32 · Survey availability settings | Done (unreleased). `oneResponsePer: "browser"` is best effort (a browser id in localStorage); closed messages translated for en, bg, de only |
 | M33 · Security baseline and disclosure process | Done (unreleased). Secret scanning, push protection and private reporting are repository settings to turn on in GitHub |
 | M34 · Hardened HTTP defaults and document limits | Done (unreleased). Admin routes no longer allow any origin by default: set `adminCors` (or `KVESTO_ADMIN_ORIGINS`); the URL guard shipped with M29 |
-| M35 – M79 | Planned |
+| M35 · Rate limiting and spam protection | Done (unreleased). Rate limits are opt-in in `createApp` (on in `kvesto-server`); `antiSpam` has no editor UI yet |
+| M36 – M79 | Planned |
 
 Update this table as milestones land, with the release they shipped in.

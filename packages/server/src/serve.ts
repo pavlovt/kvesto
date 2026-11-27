@@ -22,6 +22,10 @@ const app = createApp({
   repository: drizzleRepository(createSqliteDb(dbFile)),
   ...(keys.length ? { authorize: apiKeyAuth({ keys }) } : {}),
   adminCors: adminOrigins.length ? adminOrigins : false,
+  // Rate limits are on unless KVESTO_RATE_LIMIT=off. Behind a proxy, set KVESTO_TRUST_PROXY to the number of proxies.
+  rateLimit: process.env.KVESTO_RATE_LIMIT !== "off",
+  clientAddress: { trustProxy: Number(process.env.KVESTO_TRUST_PROXY ?? 0) || 0 },
+  ...(process.env.KVESTO_SECRET ? { signingSecret: process.env.KVESTO_SECRET, respondentSecret: process.env.KVESTO_SECRET } : {}),
 });
 
 serve({ fetch: app.fetch, port }, (info) => {
