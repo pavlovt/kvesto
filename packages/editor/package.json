@@ -1,6 +1,6 @@
 {
   "name": "@kvesto/editor",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Embeddable visual survey editor for Kvesto: a Svelte 5 component, plus a prebuilt bundle for any framework.",
   "license": "MIT",
   "keywords": [

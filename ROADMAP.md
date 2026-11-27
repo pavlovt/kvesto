@@ -953,16 +953,16 @@ Decided:
 
 | Milestone | Status |
 | --- | --- |
-| M1 · Foundations | Done (unreleased) |
-| M2 · Server access control | Done (unreleased) |
-| M3 · Validators | Done (unreleased) |
-| M4 · Panels | Done (unreleased) |
-| M5 · Repeating panels | Done (unreleased). Not yet: nested repeats, file questions inside repeats |
-| M6 · Grid questions | Done (unreleased). Not yet: respondent-added rows |
-| M7 · Editor document model, undo and redo | Done (unreleased) |
-| M8 · Structure view and property panel | Done (unreleased) |
-| M9 · Drag and drop | Done (unreleased). Not yet: auto-scroll while dragging, dragging in the preview |
-| M10 · Visual logic builder | Done (unreleased) |
+| M1 · Foundations | Done (0.2.0) |
+| M2 · Server access control | Done (0.2.0) |
+| M3 · Validators | Done (0.2.0) |
+| M4 · Panels | Done (0.2.0) |
+| M5 · Repeating panels | Done (0.2.0). Not yet: nested repeats, file questions inside repeats |
+| M6 · Grid questions | Done (0.2.0). Not yet: respondent-added rows |
+| M7 · Editor document model, undo and redo | Done (0.2.0) |
+| M8 · Structure view and property panel | Done (0.2.0) |
+| M9 · Drag and drop | Done (0.2.0). Not yet: auto-scroll while dragging, dragging in the preview |
+| M10 · Visual logic builder | Done (0.2.0) |
 | M11 – M73 | Planned |
 
 Update this table as milestones land, with the release they shipped in.

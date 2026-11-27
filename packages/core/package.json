@@ -1,6 +1,6 @@
 {
   "name": "@kvesto/core",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Framework-agnostic survey runtime: reads Kvesto survey JSON, renders it, and saves responses through a pluggable storage adapter.",
   "license": "MIT",
   "keywords": [
