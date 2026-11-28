@@ -15,14 +15,14 @@
   `/`, `[` or `.`. Colours and sizes that the default theme doesn't have become `@theme` tokens in the app's
   `app.css`. The editor and dashboard apps load Tailwind without Preflight, because the packages they embed still
   rely on browser defaults.
-- `@kvesto/editor` is styled with Tailwind too, with every utility prefixed: `class="kv:grid kv:gap-3"`. Its
-  Tailwind source is `src/lib/editor.css` (the `ui-*` colour tokens, the dark theme, and the few rules for markup
-  the core renders); the build compiles it, so users don't need Tailwind. Don't put two utilities for the same
-  property on one element (all utilities have the same specificity): pick one in the class expression instead
-  (`class={on ? 'kv:bg-ui-accent-soft' : 'kv:bg-ui-surface'}`). Inside a `class={…}` expression use single quotes,
-  because BraceML HTML-escapes double quotes there. The dashboard package and `@kvesto/core/styles.css` are still
-  plain CSS until their milestones in `ROADMAP.md` (M81–M82) move them; don't mix the two in one component before
-  then.
+- `@kvesto/editor` and `@kvesto/dashboard` are styled with Tailwind too, with every utility prefixed:
+  `class="kv:grid kv:gap-3"`. Their Tailwind sources are `src/lib/editor.css` and `src/lib/dashboard.css` (the
+  `ui-*` colour tokens, the dark theme, and the few rules for markup the components don't own, such as the
+  preview's questions or the `<html>` class used while printing); the build compiles them, so users don't need
+  Tailwind. Don't put two utilities for the same property on one element (all utilities have the same
+  specificity): pick one in the class expression instead (`class={on ? 'kv:bg-ui-accent-soft' : 'kv:bg-ui-surface'}`).
+  Inside a `class={…}` expression use single quotes, because BraceML HTML-escapes double quotes there.
+  `@kvesto/core/styles.css` is still plain CSS until its milestone in `ROADMAP.md` (M82) moves it.
 
 ## BraceML reference
 

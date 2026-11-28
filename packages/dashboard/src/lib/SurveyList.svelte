@@ -38,44 +38,42 @@
       .catch((e: Error) => (error = e.message))
       .finally(() => (loading = false));
   });
+
+  // Tailwind classes (prefixed `kv:`; see dashboard.css).
+  const cell = "kv:py-2 kv:px-3 kv:border-b kv:border-b-ui-border";
 </script>
 
 <template lang="braceml">
   if loading {
-    p.kv-dash-muted 'Loading…'
+    p.kv-dash-muted class="kv:text-ui-muted kv:text-[0.9rem]" 'Loading…'
   } else if error {
-    p.kv-dash-error 'Could not load surveys: {error}'
+    p.kv-dash-error class="kv:text-ui-danger kv:whitespace-pre-wrap" 'Could not load surveys: {error}'
   } else {
-    table.kv-dash-list {
+    table.kv-dash-list class="kv:border-collapse kv:bg-ui-surface kv:min-w-[24rem]" {
       thead > tr {
-        th 'Survey'
-        th.kv-dash-num 'Responses'
+        th class="{cell} kv:text-left" 'Survey'
+        th.kv-dash-num class="{cell} kv:text-right kv:tabular-nums" 'Responses'
       }
       tbody {
         each surveys as survey (survey.id) {
           tr {
-            td {
+            td class="{cell} kv:text-left" {
               if href {
                 a href={href(survey.id)} '{survey.title}'
               } else {
-                button.kv-dash-link type=button onclick={() => onselect?.(survey.id)} '{survey.title}'
+                button.kv-dash-link(
+                  type=button
+                  class="kv:font-inherit kv:[font-size:inherit] kv:text-ui-accent kv:bg-transparent kv:[border:0] kv:p-0 kv:cursor-pointer kv:underline"
+                  onclick={() => onselect?.(survey.id)}
+                ) '{survey.title}'
               }
             }
-            td.kv-dash-num '{survey.responseCount ?? 0}'
+            td.kv-dash-num class="{cell} kv:text-right kv:tabular-nums" '{survey.responseCount ?? 0}'
           }
         } else {
-          tr > td colspan=2 '{emptyText}'
+          tr > td class="{cell} kv:text-left" colspan=2 '{emptyText}'
         }
       }
     }
   }
 </template>
-
-<style>
-  .kv-dash-list { border-collapse: collapse; background: var(--kv-ui-surface, white); min-width: 24rem; }
-  .kv-dash-list th, .kv-dash-list td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--kv-ui-border, #e5e7eb); }
-  .kv-dash-list .kv-dash-num { text-align: right; font-variant-numeric: tabular-nums; }
-  .kv-dash-link { font: inherit; color: var(--kv-ui-accent, #2563eb); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
-  .kv-dash-muted { color: var(--kv-ui-muted, #6b7280); font-size: 0.9rem; }
-  .kv-dash-error { color: var(--kv-ui-danger, #b91c1c); white-space: pre-wrap; }
-</style>

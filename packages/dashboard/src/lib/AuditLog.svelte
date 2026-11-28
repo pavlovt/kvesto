@@ -81,84 +81,75 @@
   }
   const base = $derived(api.baseUrl.replace(/\/+$/, ""));
   const when = (iso: string) => iso.replace("T", " ").slice(0, 19);
+
+  // Tailwind classes used more than once (prefixed `kv:`; see dashboard.css).
+  const formClass = "kv:flex kv:flex-wrap kv:gap-3 kv:[align-items:end] kv:[margin:0.75rem_0_1rem] kv:text-[0.9rem]";
+  const labelClass = "kv:flex kv:flex-col kv:gap-[0.2rem]";
+  const cellClass = "kv:border-b kv:border-b-ui-border kv:py-[0.35rem] kv:px-[0.6rem] kv:text-left kv:align-top kv:whitespace-nowrap";
+  const fieldClass = "kv:font-inherit kv:text-[0.85rem] kv:cursor-pointer";
 </script>
 
 <template lang="braceml">
   section.kv-dash-audit {
-    h1 'Audit log'
-    p.kv-dash-muted 'Every admin request: who made it, what it did and how the server answered. Oldest first.'
-    form.kv-dash-form onsubmit={search} {
-      label {
+    h1 class="kv:text-[1.5rem] kv:[margin:0_0_0.25rem]" 'Audit log'
+    p.kv-dash-muted class="kv:text-ui-muted kv:text-[0.9rem]" 'Every admin request: who made it, what it did and how the server answered. Oldest first.'
+    form.kv-dash-form class={formClass} onsubmit={search} {
+      label class={labelClass} {
         span 'Actor'
-        input value={filter.actor} oninput={(e) => (filter.actor = e.currentTarget.value)}
+        input class={fieldClass} value={filter.actor} oninput={(e) => (filter.actor = e.currentTarget.value)}
       }
-      label {
+      label class={labelClass} {
         span 'Action'
-        input placeholder="response:delete" value={filter.action} oninput={(e) => (filter.action = e.currentTarget.value)}
+        input class={fieldClass} placeholder="response:delete" value={filter.action} oninput={(e) => (filter.action = e.currentTarget.value)}
       }
-      label {
+      label class={labelClass} {
         span 'Survey'
-        input value={filter.surveyId} oninput={(e) => (filter.surveyId = e.currentTarget.value)}
+        input class={fieldClass} value={filter.surveyId} oninput={(e) => (filter.surveyId = e.currentTarget.value)}
       }
-      label {
+      label class={labelClass} {
         span 'From'
-        input type=date value={filter.from} onchange={(e) => (filter.from = e.currentTarget.value)}
+        input class={fieldClass} type=date value={filter.from} onchange={(e) => (filter.from = e.currentTarget.value)}
       }
-      label {
+      label class={labelClass} {
         span 'To'
-        input type=date value={filter.to} onchange={(e) => (filter.to = e.currentTarget.value)}
+        input class={fieldClass} type=date value={filter.to} onchange={(e) => (filter.to = e.currentTarget.value)}
       }
-      button type=submit 'Search'
-      a.kv-dash-csv href="{base}{csvPath}" download="audit.csv" onclick={downloadCsv} 'Download CSV'
+      button class={fieldClass} type=submit 'Search'
+      a.kv-dash-csv class="kv:text-ui-accent kv:self-center" href="{base}{csvPath}" download="audit.csv" onclick={downloadCsv} 'Download CSV'
     }
     if error {
-      p.kv-dash-error '{error}'
+      p.kv-dash-error class="kv:text-ui-danger kv:whitespace-pre-wrap" '{error}'
     }
-    .kv-dash-table-scroll > table.kv-dash-table {
+    .kv-dash-table-scroll class="kv:overflow-x-auto kv:max-w-full" > table.kv-dash-table class="kv:border-collapse kv:text-[0.85rem] kv:bg-ui-surface" {
       thead > tr {
-        th scope=col '#'
-        th scope=col 'When (UTC)'
-        th scope=col 'Actor'
-        th scope=col 'Action'
-        th scope=col 'Request'
-        th scope=col 'Survey'
-        th scope=col 'Status'
-        th scope=col 'IP'
+        th class={cellClass} scope=col '#'
+        th class={cellClass} scope=col 'When (UTC)'
+        th class={cellClass} scope=col 'Actor'
+        th class={cellClass} scope=col 'Action'
+        th class={cellClass} scope=col 'Request'
+        th class={cellClass} scope=col 'Survey'
+        th class={cellClass} scope=col 'Status'
+        th class={cellClass} scope=col 'IP'
       }
       tbody {
         each entries as entry (entry.seq) {
-          tr class:kv-dash-failed={entry.status >= 400} {
-            td.kv-dash-num '{entry.seq}'
-            td '{when(entry.at)}'
-            td '{entry.actor}'
-            td '{entry.action}'
-            td title="Request {entry.requestId}" '{entry.method} {entry.path}'
-            td '{entry.surveyId ?? ""}'
-            td.kv-dash-num '{entry.status}'
-            td '{entry.ip}'
+          tr class={entry.status >= 400 ? 'kv:text-ui-danger' : ''} class:kv-dash-failed={entry.status >= 400} {
+            td.kv-dash-num class="{cellClass} kv:tabular-nums" '{entry.seq}'
+            td class={cellClass} '{when(entry.at)}'
+            td class={cellClass} '{entry.actor}'
+            td class={cellClass} '{entry.action}'
+            td class={cellClass} title="Request {entry.requestId}" '{entry.method} {entry.path}'
+            td class={cellClass} '{entry.surveyId ?? ""}'
+            td.kv-dash-num class="{cellClass} kv:tabular-nums" '{entry.status}'
+            td class={cellClass} '{entry.ip}'
           }
         } else {
-          tr > td colspan=8 '{loading ? "Loading…" : "No entries match."}'
+          tr > td class={cellClass} colspan=8 '{loading ? "Loading…" : "No entries match."}'
         }
       }
     }
     if nextAfter !== undefined {
-      p > button.kv-dash-more type=button disabled={loading} onclick={() => load(true)} 'Load more'
+      p > button.kv-dash-more class={fieldClass} type=button disabled={loading} onclick={() => load(true)} 'Load more'
     }
   }
 </template>
-
-<style>
-  .kv-dash-audit h1 { font-size: 1.5rem; margin: 0 0 0.25rem; }
-  .kv-dash-form { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: end; margin: 0.75rem 0 1rem; font-size: 0.9rem; }
-  .kv-dash-form label { display: flex; flex-direction: column; gap: 0.2rem; }
-  .kv-dash-form input, .kv-dash-form button, .kv-dash-more { font: inherit; font-size: 0.85rem; cursor: pointer; }
-  .kv-dash-csv { color: var(--kv-ui-accent, #2563eb); align-self: center; }
-  .kv-dash-table-scroll { overflow-x: auto; max-width: 100%; }
-  .kv-dash-table { border-collapse: collapse; font-size: 0.85rem; background: var(--kv-ui-surface, white); }
-  .kv-dash-table th, .kv-dash-table td { border-bottom: 1px solid var(--kv-ui-border, #e5e7eb); padding: 0.35rem 0.6rem; text-align: left; vertical-align: top; white-space: nowrap; }
-  .kv-dash-num { text-align: right; font-variant-numeric: tabular-nums; }
-  .kv-dash-failed { color: var(--kv-ui-danger, #b91c1c); }
-  .kv-dash-muted { color: var(--kv-ui-muted, #6b7280); font-size: 0.9rem; }
-  .kv-dash-error { color: var(--kv-ui-danger, #b91c1c); white-space: pre-wrap; }
-</style>

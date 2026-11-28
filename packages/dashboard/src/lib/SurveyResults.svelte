@@ -161,39 +161,53 @@
   const pct = (count: number, total: number) => (total ? Math.round((count / total) * 100) : 0);
   // Ranking bars: first place fills the bar, last place leaves it empty.
   const rankScore = (avg: number, n: number) => (n > 1 && avg > 0 ? Math.round(((n - avg) / (n - 1)) * 100) : 0);
+
+  // Tailwind classes used more than once (prefixed `kv:`; see dashboard.css).
+  const mutedClass = "kv:text-ui-muted kv:text-[0.9rem]";
+  const fieldClass = "kv:font-inherit kv:text-[0.85rem]";
+  const viewButton = (on: boolean) =>
+    "kv:font-inherit kv:text-[0.85rem] kv:cursor-pointer kv:border kv:text-inherit kv:py-[0.2rem] kv:px-[0.6rem] " +
+    (on ? "kv:bg-ui-accent-soft kv:border-ui-accent-line" : "kv:bg-ui-surface kv:border-ui-border-strong");
+  const cardClass =
+    "kv:bg-ui-surface kv:border kv:border-ui-border kv:rounded-lg kv:p-4 kv:mb-4 kv:max-w-[48rem] kv:print:break-inside-avoid kv:print:border-[#999]";
+  const h2Class = "kv:text-[1.05rem] kv:[margin:0_0_0.25rem]";
+  const barRow = "kv:grid kv:grid-cols-[10rem_1fr_3rem] kv:gap-2 kv:items-center kv:[margin:0.3rem_0]";
+  const bar = "kv:[background:var(--kv-ui-accent-soft,#eef2ff)] kv:rounded-[999px] kv:h-[0.6rem] kv:overflow-hidden";
+  const num = "kv:text-right kv:tabular-nums";
+  const matrixCell = "kv:py-[0.35rem] kv:px-3 kv:border-b kv:border-b-ui-border";
 </script>
 
 <template lang="braceml">
   if loading {
-    p.kv-dash-muted 'Loading…'
+    p.kv-dash-muted class={mutedClass} 'Loading…'
   } else if error {
-    p.kv-dash-error '{error}'
+    p.kv-dash-error class="kv:text-ui-danger kv:whitespace-pre-wrap" '{error}'
   } else if survey {
     .kv-dash-results {
-      h1 '{survey.title}'
-      p.kv-dash-muted '{responses.length} responses'
-      .kv-dash-filters {
-        .kv-dash-views role=group aria-label="View" {
-          button type=button aria-pressed={view === "summary"} onclick={() => (view = "summary")} 'Summary'
-          button type=button aria-pressed={view === "table"} onclick={() => (view = "table")} 'Table'
+      h1 class="kv:text-[1.5rem] kv:[margin:0_0_0.25rem]" '{survey.title}'
+      p.kv-dash-muted class={mutedClass} '{responses.length} responses'
+      .kv-dash-filters class="kv:flex kv:flex-wrap kv:gap-3 kv:[margin:0_0_1rem] kv:text-[0.9rem] kv:print:hidden" {
+        .kv-dash-views class="kv:flex kv:gap-1" role=group aria-label="View" {
+          button type=button class={viewButton(view === 'summary')} aria-pressed={view === "summary"} onclick={() => (view = "summary")} 'Summary'
+          button type=button class={viewButton(view === 'table')} aria-pressed={view === "table"} onclick={() => (view = "table")} 'Table'
         }
-        .kv-dash-exports {
-          button type=button onclick={() => download("csv")} 'CSV'
-          button type=button onclick={() => download("xlsx")} 'Excel'
-          button type=button onclick={() => window.print()} 'Print'
+        .kv-dash-exports class="kv:flex kv:gap-1" {
+          button type=button class="{fieldClass} kv:cursor-pointer" onclick={() => download("csv")} 'CSV'
+          button type=button class="{fieldClass} kv:cursor-pointer" onclick={() => download("xlsx")} 'Excel'
+          button type=button class="{fieldClass} kv:cursor-pointer" onclick={() => window.print()} 'Print'
         }
-        label {
+        label class="kv:flex kv:gap-[0.35rem] kv:items-center" {
           span 'From'
-          input type=date value={from} onchange={(e) => (from = e.currentTarget.value)}
+          input class={fieldClass} type=date value={from} onchange={(e) => (from = e.currentTarget.value)}
         }
-        label {
+        label class="kv:flex kv:gap-[0.35rem] kv:items-center" {
           span 'To'
-          input type=date value={to} onchange={(e) => (to = e.currentTarget.value)}
+          input class={fieldClass} type=date value={to} onchange={(e) => (to = e.currentTarget.value)}
         }
         if filterable.length {
-          label {
+          label class="kv:flex kv:gap-[0.35rem] kv:items-center" {
             span 'Answer'
-            select aria-label="Question to filter by" value={answerQuestion} onchange={(e) => ((answerQuestion = e.currentTarget.value), (answerValue = ""))} {
+            select class={fieldClass} aria-label="Question to filter by" value={answerQuestion} onchange={(e) => ((answerQuestion = e.currentTarget.value), (answerValue = ""))} {
               option value="" 'Any question'
               each filterable as f (f.id) {
                 option value={f.id} '{f.title}'
@@ -201,7 +215,7 @@
             }
           }
           if answerQuestion {
-            select aria-label="Answer to filter by" value={answerValue} onchange={(e) => (answerValue = e.currentTarget.value)} {
+            select class={fieldClass} aria-label="Answer to filter by" value={answerValue} onchange={(e) => (answerValue = e.currentTarget.value)} {
               option value="" 'Any answer'
               each filterable.find((f) => f.id === answerQuestion)?.options ?? [] as o (o.value) {
                 option value={o.value} '{o.label}'
@@ -211,9 +225,9 @@
         }
         if hiddenValues.some((h) => h.values.length) {
           each hiddenValues as h (h.name) {
-            label {
+            label class="kv:flex kv:gap-[0.35rem] kv:items-center" {
               span '{h.name}'
-              select value={hiddenFilter[h.name] ?? ""} onchange={(e) => (hiddenFilter = { ...hiddenFilter, [h.name]: e.currentTarget.value })} {
+              select class={fieldClass} value={hiddenFilter[h.name] ?? ""} onchange={(e) => (hiddenFilter = { ...hiddenFilter, [h.name]: e.currentTarget.value })} {
                 option value="" 'Any'
                 each h.values as v (v) {
                   option value={v} '{v}'
@@ -227,33 +241,33 @@
         ResponseTable survey={survey} responses={responses} ondelete={props.api ? deleteResponse : undefined}
       }
       if view === "summary" && scores {
-        section.kv-dash-card.kv-dash-scores {
-          h2 'Scores'
+        section.kv-dash-card.kv-dash-scores class={cardClass} {
+          h2 class={h2Class} 'Scores'
           p 'Average {scores.average}% over {scores.n} scored {scores.n === 1 ? "response" : "responses"}{scores.passRate !== null ? `, ${scores.passRate}% passed` : ""}.'
           each scores.distribution as d (d.score) {
-            .kv-dash-bar-row {
+            .kv-dash-bar-row class={barRow} {
               span.kv-dash-bar-label '{d.score} {d.score === 1 ? "point" : "points"}'
-              .kv-dash-bar > .kv-dash-bar-fill style="width: {pct(d.count, scores.n)}%"
-              span.kv-dash-num '{d.count}'
+              .kv-dash-bar class={bar} > .kv-dash-bar-fill class="kv:bg-ui-accent kv:h-full" style="width: {pct(d.count, scores.n)}%"
+              span.kv-dash-num class={num} '{d.count}'
             }
           }
         }
       }
       if view === "summary" && completion {
-        section.kv-dash-card.kv-dash-completion {
-          h2 'Completion'
+        section.kv-dash-card.kv-dash-completion class={cardClass} {
+          h2 class={h2Class} 'Completion'
           p '{completion.completed} of {completion.started} started responses were completed ({pct(completion.completed, completion.started)}%).'
-          label.kv-dash-toggle {
+          label.kv-dash-toggle class="kv:flex kv:gap-[0.4rem] kv:items-center kv:text-[0.9rem]" {
             input type=checkbox checked={includePartial} onchange={(e) => (includePartial = e.currentTarget.checked)}
             span 'Include the {partials} partial {partials === 1 ? "response" : "responses"} in the results'
           }
-          h3 'Where people stop'
-          ul.kv-dash-dropoff {
+          h3 class="kv:text-[0.95rem] kv:[margin:0.75rem_0_0.25rem]" 'Where people stop'
+          ul.kv-dash-dropoff class="kv:list-none kv:m-0 kv:p-0" {
             each completion.reached as q (q.id) {
-              li.kv-dash-bar-row {
+              li.kv-dash-bar-row class={barRow} {
                 span.kv-dash-bar-label '{q.title}'
-                .kv-dash-bar > .kv-dash-bar-fill style="width: {pct(q.count, completion.started)}%"
-                span.kv-dash-num title="Reached by {q.count} of {completion.started}" '{q.count}'
+                .kv-dash-bar class={bar} > .kv-dash-bar-fill class="kv:bg-ui-accent kv:h-full" style="width: {pct(q.count, completion.started)}%"
+                span.kv-dash-num class={num} title="Reached by {q.count} of {completion.started}" '{q.count}'
               }
             }
           }
@@ -261,37 +275,37 @@
       }
       each shownSummary as item, i (item.question.id) {
         if groupLabel(item) && groupLabel(item) !== groupLabel(shownSummary[i - 1]) {
-          p.kv-dash-group '{groupLabel(item)}'
+          p.kv-dash-group class="kv:font-bold kv:text-[0.95rem] kv:text-ui-text-2 kv:[margin:1.25rem_0_0.5rem] kv:max-w-[48rem]" '{groupLabel(item)}'
         }
-        section.kv-dash-card {
-          h2 '{item.question.title}'
-          p.kv-dash-muted '{item.answered} answered{item.repeat ? " (counting every item)" : ""}'
+        section.kv-dash-card class={cardClass} {
+          h2 class={h2Class} '{item.question.title}'
+          p.kv-dash-muted class={mutedClass} '{item.answered} answered{item.repeat ? " (counting every item)" : ""}'
           if item.average !== undefined {
             p 'Average: {item.average.toFixed(1)}'
           }
           if item.counts {
             each item.counts as option (option.value) {
-              .kv-dash-bar-row {
+              .kv-dash-bar-row class={barRow} {
                 span.kv-dash-bar-label '{option.label}'
-                .kv-dash-bar > .kv-dash-bar-fill style="width: {pct(option.count, item.answered)}%"
-                span.kv-dash-num '{option.count}'
+                .kv-dash-bar class={bar} > .kv-dash-bar-fill class="kv:bg-ui-accent kv:h-full" style="width: {pct(option.count, item.answered)}%"
+                span.kv-dash-num class={num} '{option.count}'
               }
             }
           }
           if item.matrix {
-            .kv-dash-matrix-scroll > table.kv-dash-matrix {
+            .kv-dash-matrix-scroll class="kv:overflow-x-auto" > table.kv-dash-matrix class="kv:border-collapse" {
               thead > tr {
-                th ''
+                th class={matrixCell} ''
                 each item.question.type === "matrix" ? item.question.columns : [] as col (col.value) {
-                  th.kv-dash-num '{col.label}'
+                  th.kv-dash-num class="{matrixCell} {num}" '{col.label}'
                 }
               }
               tbody {
                 each item.matrix as row (row.value) {
                   tr {
-                    th '{row.label}'
+                    th class="{matrixCell} kv:text-left kv:font-normal" '{row.label}'
                     each row.counts as cell (cell.value) {
-                      td.kv-dash-num.kv-dash-heat style="--share: {pct(cell.count, row.answered)}%" title="{pct(cell.count, row.answered)}%" '{cell.count}'
+                      td.kv-dash-num.kv-dash-heat class="{matrixCell} {num} kv:[background:color-mix(in_srgb,var(--kv-ui-accent,#2563eb)_calc(var(--share)_*_0.5),transparent)]" style="--share: {pct(cell.count, row.answered)}%" title="{pct(cell.count, row.answered)}%" '{cell.count}'
                     }
                   }
                 }
@@ -299,19 +313,19 @@
             }
           }
           if item.grid {
-            .kv-dash-matrix-scroll > table.kv-dash-matrix {
+            .kv-dash-matrix-scroll class="kv:overflow-x-auto" > table.kv-dash-matrix class="kv:border-collapse" {
               thead > tr {
-                th ''
+                th class={matrixCell} ''
                 each item.question.type === "grid" ? item.question.columns : [] as col (col.value) {
-                  th '{col.label}'
+                  th class={matrixCell} '{col.label}'
                 }
               }
               tbody {
                 each item.grid as row (row.value) {
                   tr {
-                    th '{row.label}'
+                    th class="{matrixCell} kv:text-left kv:font-normal" '{row.label}'
                     each row.columns as cell (cell.value) {
-                      td '{cellText(cell)}'
+                      td class={matrixCell} '{cellText(cell)}'
                     }
                   }
                 }
@@ -319,22 +333,22 @@
             }
           }
           if item.ranking {
-            p.kv-dash-muted 'Average position, best first'
+            p.kv-dash-muted class={mutedClass} 'Average position, best first'
             each item.ranking as option (option.value) {
-              .kv-dash-bar-row {
+              .kv-dash-bar-row class={barRow} {
                 span.kv-dash-bar-label '{option.label}'
-                .kv-dash-bar > .kv-dash-bar-fill style="width: {rankScore(option.averageRank, item.ranking.length)}%"
-                span.kv-dash-num title="Ranked first {option.firstPlace}×" '{option.averageRank ? option.averageRank.toFixed(1) : "–"}'
+                .kv-dash-bar class={bar} > .kv-dash-bar-fill class="kv:bg-ui-accent kv:h-full" style="width: {rankScore(option.averageRank, item.ranking.length)}%"
+                span.kv-dash-num class={num} title="Ranked first {option.firstPlace}×" '{option.averageRank ? option.averageRank.toFixed(1) : "–"}'
               }
             }
           }
           if item.files {
-            p.kv-dash-muted '{item.fileCount} {item.fileCount === 1 ? "file" : "files"}, latest first'
+            p.kv-dash-muted class={mutedClass} '{item.fileCount} {item.fileCount === 1 ? "file" : "files"}, latest first'
             ul {
               each item.files as file {
                 li {
                   if file.type.startsWith("image/") {
-                    img.kv-dash-thumb src={file.url} alt={file.name} loading=lazy
+                    img.kv-dash-thumb class="kv:block kv:max-w-[12rem] kv:max-h-[5rem] kv:border kv:border-ui-border kv:rounded-[0.25rem] kv:mb-[0.2rem] kv:bg-[#fff]" src={file.url} alt={file.name} loading=lazy
                   }
                   a href={file.url} download={file.name} target=_blank rel=noopener '{file.name}'
                 }
@@ -353,37 +367,3 @@
     }
   }
 </template>
-
-<style>
-  .kv-dash-thumb { display: block; max-width: 12rem; max-height: 5rem; border: 1px solid var(--kv-ui-border, #e5e7eb); border-radius: 0.25rem; margin-bottom: 0.2rem; background: #fff; }
-  .kv-dash-results h1 { font-size: 1.5rem; margin: 0 0 0.25rem; }
-  .kv-dash-card { background: var(--kv-ui-surface, white); border: 1px solid var(--kv-ui-border, #e5e7eb); border-radius: 0.5rem; padding: 1rem; margin-bottom: 1rem; max-width: 48rem; }
-  .kv-dash-group { font-weight: 700; font-size: 0.95rem; color: var(--kv-ui-text-2, #374151); margin: 1.25rem 0 0.5rem; max-width: 48rem; }
-  .kv-dash-card h2 { font-size: 1.05rem; margin: 0 0 0.25rem; }
-  .kv-dash-num { text-align: right; font-variant-numeric: tabular-nums; }
-  .kv-dash-dropoff { list-style: none; margin: 0; padding: 0; }
-  .kv-dash-filters { display: flex; flex-wrap: wrap; gap: 0.75rem; margin: 0 0 1rem; font-size: 0.9rem; }
-  .kv-dash-filters label { display: flex; gap: 0.35rem; align-items: center; }
-  .kv-dash-filters input, .kv-dash-filters select, .kv-dash-views button { font: inherit; font-size: 0.85rem; }
-  .kv-dash-views, .kv-dash-exports { display: flex; gap: 0.25rem; }
-  .kv-dash-exports button { font: inherit; font-size: 0.85rem; cursor: pointer; }
-  /* Printing: the results only, without the controls. */
-  @media print {
-    .kv-dash-filters { display: none; }
-    .kv-dash-card { break-inside: avoid; border-color: #999; }
-  }
-  .kv-dash-views button { cursor: pointer; border: 1px solid var(--kv-ui-border-strong, #d1d5db); background: var(--kv-ui-surface, white); color: inherit; padding: 0.2rem 0.6rem; }
-  .kv-dash-views button[aria-pressed="true"] { background: var(--kv-ui-accent-soft, #eff6ff); border-color: var(--kv-ui-accent-line, #93c5fd); }
-  .kv-dash-completion h3 { font-size: 0.95rem; margin: 0.75rem 0 0.25rem; }
-  .kv-dash-toggle { display: flex; gap: 0.4rem; align-items: center; font-size: 0.9rem; }
-  .kv-dash-bar-row { display: grid; grid-template-columns: 10rem 1fr 3rem; gap: 0.5rem; align-items: center; margin: 0.3rem 0; }
-  .kv-dash-bar { background: var(--kv-ui-accent-soft, #eef2ff); border-radius: 999px; height: 0.6rem; overflow: hidden; }
-  .kv-dash-bar-fill { background: var(--kv-ui-accent, #2563eb); height: 100%; }
-  .kv-dash-matrix-scroll { overflow-x: auto; }
-  .kv-dash-matrix { border-collapse: collapse; }
-  .kv-dash-matrix th, .kv-dash-matrix td { padding: 0.35rem 0.75rem; border-bottom: 1px solid var(--kv-ui-border, #e5e7eb); }
-  .kv-dash-matrix tbody th { text-align: left; font-weight: normal; }
-  .kv-dash-heat { background: color-mix(in srgb, var(--kv-ui-accent, #2563eb) calc(var(--share) * 0.5), transparent); }
-  .kv-dash-muted { color: var(--kv-ui-muted, #6b7280); font-size: 0.9rem; }
-  .kv-dash-error { color: var(--kv-ui-danger, #b91c1c); white-space: pre-wrap; }
-</style>

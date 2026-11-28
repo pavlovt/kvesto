@@ -74,13 +74,28 @@
   }
   const ariaSort = (key: string) => (sortKey === key ? (descending ? "descending" : "ascending") : "none");
   const when = (iso: string) => iso.replace("T", " ").slice(0, 16);
+
+  // Tailwind classes (prefixed `kv:`; see dashboard.css).
+  const cellClass =
+    "kv:border-b kv:border-b-ui-border kv:py-[0.35rem] kv:px-[0.6rem] kv:text-left kv:align-top kv:whitespace-nowrap " +
+    "kv:max-w-[20rem] kv:overflow-hidden kv:text-ellipsis";
+  const sortMarks = { ascending: "kv:after:content-['_▲']", descending: "kv:after:content-['_▼']", none: "" };
+  const sortButton = (key: string) =>
+    "kv:font-inherit kv:[font-size:inherit] kv:font-semibold! kv:bg-transparent kv:[border:0] kv:p-0 kv:cursor-pointer kv:text-inherit " +
+    sortMarks[ariaSort(key)];
+  const headButton = "kv:font-inherit kv:text-[0.85rem] kv:cursor-pointer kv:print:hidden";
+  const pagerButton = "kv:font-inherit kv:[font-size:inherit] kv:cursor-pointer";
+  const srOnly = "kv:absolute kv:w-px kv:h-px kv:overflow-hidden kv:[clip:rect(0_0_0_0)]";
 </script>
 
 <template lang="braceml">
   // Masked personal data (a pii question) shows as a marker, not as text.
   snippet cell(text: string | undefined) {
     if text === MASKED {
-      span.kv-dash-redacted title="Personal data, masked for your role" 'redacted'
+      span.kv-dash-redacted(
+        class="kv:inline-block kv:text-[0.75rem] kv:italic kv:py-0 kv:px-[0.35rem] kv:rounded-[0.25rem] kv:bg-ui-hover kv:text-ui-muted"
+        title="Personal data, masked for your role"
+      ) 'redacted'
     } else {
       '{text}'
     }
@@ -89,22 +104,27 @@
     if !responses.length {
       p.kv-dash-muted 'No responses match.'
     } else {
-      .kv-dash-table-scroll {
-        table.kv-dash-table {
+      .kv-dash-table-scroll class="kv:overflow-x-auto kv:max-w-full" {
+        table.kv-dash-table class="kv:border-collapse kv:text-[0.85rem] kv:bg-ui-surface" {
           thead > tr {
-            th scope=col > span.kv-dash-sr 'Open'
-            th scope=col aria-sort={ariaSort("createdAt")} > button type=button onclick={() => sortBy("createdAt")} 'Submitted'
+            th class={cellClass} scope=col > span.kv-dash-sr class={srOnly} 'Open'
+            th class={cellClass} scope=col aria-sort={ariaSort("createdAt")} > button type=button class={sortButton('createdAt')} onclick={() => sortBy("createdAt")} 'Submitted'
             each columns as col (col.key) {
-              th scope=col aria-sort={ariaSort(col.key)} > button type=button onclick={() => sortBy(col.key)} '{col.label}'
+              th class={cellClass} scope=col aria-sort={ariaSort(col.key)} > button type=button class={sortButton(col.key)} onclick={() => sortBy(col.key)} '{col.label}'
             }
           }
           tbody {
             each shown as row (row.response.id) {
-              tr class:kv-dash-partial={row.response.status === "partial"} {
-                td > button.kv-dash-open type=button aria-label="Open response {row.response.id}" onclick={() => (open = row.response.id)} 'View'
-                td.kv-dash-when '{when(row.response.createdAt)}{row.response.status === "partial" ? " (partial)" : ""}'
+              tr class={row.response.status === 'partial' ? 'kv:text-ui-muted' : ''} class:kv-dash-partial={row.response.status === "partial"} {
+                td class={cellClass} > button.kv-dash-open(
+                  type=button
+                  class="kv:font-inherit kv:text-[0.8rem] kv:cursor-pointer"
+                  aria-label="Open response {row.response.id}"
+                  onclick={() => (open = row.response.id)}
+                ) 'View'
+                td.kv-dash-when class="{cellClass} kv:tabular-nums" '{when(row.response.createdAt)}{row.response.status === "partial" ? " (partial)" : ""}'
                 each columns as col (col.key) {
-                  td {
+                  td class={cellClass} {
                     @render cell(row.cells[col.key])
                   }
                 }
@@ -114,68 +134,40 @@
         }
       }
       if opened {
-        section.kv-dash-detail aria-label="Response {opened.response.id}" {
-          .kv-dash-detail-head {
-            h2 'Response {when(opened.response.createdAt)}'
-            button type=button onclick={printOne} 'Print'
+        section.kv-dash-detail(
+          class="kv:mt-4 kv:border kv:border-ui-border kv:rounded-lg kv:py-3 kv:px-4 kv:max-w-[48rem] kv:bg-ui-surface"
+          aria-label="Response {opened.response.id}"
+        ) {
+          .kv-dash-detail-head class="kv:flex kv:gap-2 kv:items-center" {
+            h2 class="kv:text-[1rem] kv:[margin:0_auto_0_0]" 'Response {when(opened.response.createdAt)}'
+            button type=button class={headButton} onclick={printOne} 'Print'
             if ondelete {
-              button.kv-dash-delete type=button onclick={deleteOne} '{confirmDelete ? "Really delete?" : "Delete"}'
+              button.kv-dash-delete type=button class="{headButton} kv:text-ui-danger" onclick={deleteOne} '{confirmDelete ? "Really delete?" : "Delete"}'
             }
-            button type=button onclick={() => (open = null)} 'Close'
+            button type=button class={headButton} onclick={() => (open = null)} 'Close'
           }
           dl {
             each columns as col (col.key) {
               if opened.cells[col.key] {
-                dt '{col.label}'
-                dd {
+                dt class="kv:font-semibold kv:mt-2" '{col.label}'
+                dd class="kv:[margin:0.1rem_0_0] kv:whitespace-pre-wrap" {
                   @render cell(opened.cells[col.key])
                 }
               }
             }
           }
           if deleteError {
-            p.kv-dash-error 'Could not delete: {deleteError}'
+            p.kv-dash-error class="kv:text-ui-danger" 'Could not delete: {deleteError}'
           }
         }
       }
       if pages > 1 {
-        nav.kv-dash-pager aria-label="Pages" {
-          button type=button disabled={page === 0} onclick={() => (page = Math.max(0, page - 1))} 'Previous'
+        nav.kv-dash-pager class="kv:flex kv:gap-3 kv:items-center kv:mt-2 kv:text-[0.9rem]" aria-label="Pages" {
+          button type=button class={pagerButton} disabled={page === 0} onclick={() => (page = Math.max(0, page - 1))} 'Previous'
           span '{Math.min(page, pages - 1) + 1} of {pages}'
-          button type=button disabled={page >= pages - 1} onclick={() => (page = Math.min(pages - 1, page + 1))} 'Next'
+          button type=button class={pagerButton} disabled={page >= pages - 1} onclick={() => (page = Math.min(pages - 1, page + 1))} 'Next'
         }
       }
     }
   }
 </template>
-
-<style>
-  .kv-dash-table-scroll { overflow-x: auto; max-width: 100%; }
-  .kv-dash-table { border-collapse: collapse; font-size: 0.85rem; background: var(--kv-ui-surface, white); }
-  .kv-dash-table th, .kv-dash-table td { border-bottom: 1px solid var(--kv-ui-border, #e5e7eb); padding: 0.35rem 0.6rem; text-align: left; vertical-align: top; white-space: nowrap; max-width: 20rem; overflow: hidden; text-overflow: ellipsis; }
-  .kv-dash-table th button { font: inherit; font-weight: 600; background: none; border: 0; padding: 0; cursor: pointer; color: inherit; }
-  .kv-dash-table th[aria-sort="ascending"] button::after { content: " ▲"; }
-  .kv-dash-table th[aria-sort="descending"] button::after { content: " ▼"; }
-  .kv-dash-partial { color: var(--kv-ui-muted, #6b7280); }
-  .kv-dash-when { font-variant-numeric: tabular-nums; }
-  .kv-dash-pager { display: flex; gap: 0.75rem; align-items: center; margin-top: 0.5rem; font-size: 0.9rem; }
-  .kv-dash-pager button { font: inherit; cursor: pointer; }
-  .kv-dash-open { font: inherit; font-size: 0.8rem; cursor: pointer; }
-  .kv-dash-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-  .kv-dash-detail { margin-top: 1rem; border: 1px solid var(--kv-ui-border, #e5e7eb); border-radius: 0.5rem; padding: 0.75rem 1rem; max-width: 48rem; background: var(--kv-ui-surface, white); }
-  .kv-dash-detail-head { display: flex; gap: 0.5rem; align-items: center; }
-  .kv-dash-detail-head h2 { font-size: 1rem; margin: 0 auto 0 0; }
-  .kv-dash-detail-head button { font: inherit; font-size: 0.85rem; cursor: pointer; }
-  .kv-dash-detail dt { font-weight: 600; margin-top: 0.5rem; }
-  .kv-dash-redacted { display: inline-block; font-size: 0.75rem; font-style: italic; padding: 0 0.35rem; border-radius: 0.25rem; background: var(--kv-ui-hover, #f3f4f6); color: var(--kv-ui-muted, #6b7280); }
-  .kv-dash-detail-head .kv-dash-delete { color: var(--kv-ui-danger, #b91c1c); }
-  .kv-dash-error { color: var(--kv-ui-danger, #b91c1c); }
-  .kv-dash-detail dd { margin: 0.1rem 0 0; white-space: pre-wrap; }
-  /* "Print" on one response prints only that response. */
-  @media print {
-    :global(html.kv-dash-printing-one body *) { visibility: hidden; }
-    :global(html.kv-dash-printing-one) .kv-dash-detail, :global(html.kv-dash-printing-one) .kv-dash-detail * { visibility: visible; }
-    :global(html.kv-dash-printing-one) .kv-dash-detail { position: absolute; inset: 0 auto auto 0; border: 0; }
-    .kv-dash-detail-head button { display: none; }
-  }
-</style>

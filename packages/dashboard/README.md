@@ -60,7 +60,11 @@ const options = { baseUrl: "/api/kvesto", headers: { authorization: `Bearer ${ke
 mountDashboard(el, { storage: httpStorage(options), api: options });
 ```
 
-The components' styles are scoped and use `kv-dash-*` class names.
+The dashboard's styles are Tailwind CSS, compiled into the package: you don't need Tailwind yourself. The Svelte
+components import `@kvesto/dashboard`'s own CSS file, and the `standalone` build adds it to the page when it loads.
+Every class it defines has the `kv:` prefix and it has no reset (Preflight), so it doesn't restyle anything outside
+the dashboard, and it works on pages that use Tailwind themselves. The dashboard's colours can be set from outside
+with the `--kv-ui-*` custom properties on `.kv-dashboard` (for example `--kv-ui-accent`).
 
 ## License
 

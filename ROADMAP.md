@@ -1260,6 +1260,7 @@ Decided:
 | M41 · Security test suite | Done (0.3.0). The ZAP scan runs in CI only (not checked locally); fails only on FAIL-level findings |
 | M42 – M79 | Planned |
 | M80 · Editor package on Tailwind | Done (not released yet). Computed styles match 0.3.0 in 18 editor states at five widths, light and dark. The utilities hold under a host's Preflight or element reset; elements the editor leaves to browser defaults (palette buttons, selects, the preview's form) still follow such a reset, so the editor app keeps loading Tailwind without Preflight |
-| M81 – M82 | Planned |
+| M81 · Dashboard package on Tailwind | Done (not released yet). Computed styles match 0.3.0 in 21 dashboard states (list, summary, table, response detail, print, tokens, audit, dark) at two widths. Same limit as M80: the utilities hold under a host's reset, elements left to browser defaults still follow it, so the dashboard app keeps loading Tailwind without Preflight |
+| M82 | Planned |
 
 Update this table as milestones land, with the release they shipped in.

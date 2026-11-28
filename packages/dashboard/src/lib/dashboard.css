@@ -1,0 +1,111 @@
+/*
+ * Tailwind source for the dashboard's styles. The build compiles it into dist/dashboard.css (imported by the
+ * package entry) and into the standalone bundle, so apps using the dashboard don't need Tailwind.
+ *
+ * - Every utility has the `kv:` prefix and there is no Preflight, so nothing here touches the host page (apart
+ *   from the print-one-response rules at the end, which the dashboard turns on itself while printing).
+ * - The theme is inlined: the compiled CSS defines no variables, so Tailwind never claims `--kv-*` names.
+ * - The utilities are not in a cascade layer, so a host's unlayered CSS can't override them by accident.
+ */
+@import "tailwindcss/theme.css" prefix(kv) theme(inline);
+@import "tailwindcss/utilities.css" source(none);
+@source "./";
+
+/*
+ * The dashboard's colours. `--kv-ui-*` variables are set by the dark theme below and can be set by the host; the
+ * second value is the light default.
+ */
+@theme inline {
+  --color-ui-bg: var(--kv-ui-bg, transparent);
+  --color-ui-fg: var(--kv-ui-fg, inherit);
+  --color-ui-surface: var(--kv-ui-surface, white);
+  --color-ui-accent: var(--kv-ui-accent, #2563eb);
+  --color-ui-accent-soft: var(--kv-ui-accent-soft, #eff6ff);
+  --color-ui-accent-line: var(--kv-ui-accent-line, #93c5fd);
+  --color-ui-border: var(--kv-ui-border, #e5e7eb);
+  --color-ui-border-strong: var(--kv-ui-border-strong, #d1d5db);
+  --color-ui-text-2: var(--kv-ui-text-2, #374151);
+  --color-ui-muted: var(--kv-ui-muted, #6b7280);
+  --color-ui-hover: var(--kv-ui-hover, #f3f4f6);
+  --color-ui-danger: var(--kv-ui-danger, #b91c1c);
+  --color-ui-warn: var(--kv-ui-warn, #f59e0b);
+  --color-ui-warn-soft: var(--kv-ui-warn-soft, #fffbeb);
+}
+
+/* `font: inherit` without the size, so it can be combined with a `text-[…]` size on form controls. */
+@utility font-inherit {
+  font-family: inherit;
+  font-style: inherit;
+  font-variant: inherit;
+  font-weight: inherit;
+  font-stretch: inherit;
+  line-height: inherit;
+}
+
+/* Dark when asked, or with "auto" when the device prefers it. */
+.kv-dashboard[data-kv-ui-theme="dark"] {
+  --kv-ui-bg: #0f172a;
+  --kv-ui-fg: #e5e7eb;
+  --kv-ui-surface: #1e293b;
+  --kv-ui-accent: #60a5fa;
+  --kv-ui-on-accent: #0b1220;
+  --kv-ui-accent-text: #93c5fd;
+  --kv-ui-accent-soft: #1e3a5f;
+  --kv-ui-accent-line: #3b82f6;
+  --kv-ui-border: #334155;
+  --kv-ui-border-strong: #475569;
+  --kv-ui-text: #f1f5f9;
+  --kv-ui-text-2: #cbd5e1;
+  --kv-ui-muted: #94a3b8;
+  --kv-ui-subtle: #64748b;
+  --kv-ui-hover: #273449;
+  --kv-ui-danger: #f87171;
+  --kv-ui-danger-line: #b91c1c;
+  --kv-ui-warn: #f59e0b;
+  --kv-ui-warn-soft: #3b2f12;
+  --kv-ui-review: #8b5cf6;
+  --kv-ui-review-text: #c4b5fd;
+  --kv-ui-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  .kv-dashboard[data-kv-ui-theme="auto"] {
+    --kv-ui-bg: #0f172a;
+    --kv-ui-fg: #e5e7eb;
+    --kv-ui-surface: #1e293b;
+    --kv-ui-accent: #60a5fa;
+    --kv-ui-on-accent: #0b1220;
+    --kv-ui-accent-text: #93c5fd;
+    --kv-ui-accent-soft: #1e3a5f;
+    --kv-ui-accent-line: #3b82f6;
+    --kv-ui-border: #334155;
+    --kv-ui-border-strong: #475569;
+    --kv-ui-text: #f1f5f9;
+    --kv-ui-text-2: #cbd5e1;
+    --kv-ui-muted: #94a3b8;
+    --kv-ui-subtle: #64748b;
+    --kv-ui-hover: #273449;
+    --kv-ui-danger: #f87171;
+    --kv-ui-danger-line: #b91c1c;
+    --kv-ui-warn: #f59e0b;
+    --kv-ui-warn-soft: #3b2f12;
+    --kv-ui-review: #8b5cf6;
+    --kv-ui-review-text: #c4b5fd;
+    --kv-ui-scheme: dark;
+  }
+}
+
+/* "Print" on one response prints only that response: ResponseTable sets the class on <html> while printing. */
+@media print {
+  html.kv-dash-printing-one body * {
+    visibility: hidden;
+  }
+  html.kv-dash-printing-one .kv-dash-detail,
+  html.kv-dash-printing-one .kv-dash-detail * {
+    visibility: visible;
+  }
+  html.kv-dash-printing-one .kv-dash-detail {
+    position: absolute;
+    inset: 0 auto auto 0;
+    border: 0;
+  }
+}

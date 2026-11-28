@@ -89,99 +89,89 @@
   const day = (iso: string | null, none: string) => (iso ? iso.slice(0, 10) : none);
   const status = (t: ApiTokenInfo) =>
     t.revokedAt ? "Revoked" : t.expiresAt && Date.parse(t.expiresAt) < Date.now() ? "Expired" : "Active";
+
+  // Tailwind classes used more than once (prefixed `kv:`; see dashboard.css).
+  const formClass = "kv:flex kv:flex-wrap kv:gap-3 kv:[align-items:end] kv:[margin:0.75rem_0_1rem] kv:text-[0.9rem]";
+  const labelClass = "kv:flex kv:flex-col kv:gap-[0.2rem]";
+  const cellClass = "kv:border-b kv:border-b-ui-border kv:py-[0.35rem] kv:px-[0.6rem] kv:text-left kv:align-top kv:whitespace-nowrap";
+  const fieldClass = "kv:font-inherit kv:text-[0.85rem]";
+  const buttonClass = "kv:font-inherit kv:text-[0.85rem] kv:cursor-pointer";
 </script>
 
 <template lang="braceml">
   section.kv-dash-tokens {
-    h1 'API tokens'
-    p.kv-dash-muted 'Tokens let scripts and other apps use the API with one role, on all surveys or a few.'
-    form.kv-dash-form onsubmit={create} {
-      label {
+    h1 class="kv:text-[1.5rem] kv:[margin:0_0_0.25rem]" 'API tokens'
+    p.kv-dash-muted class="kv:text-ui-muted kv:text-[0.9rem]" 'Tokens let scripts and other apps use the API with one role, on all surveys or a few.'
+    form.kv-dash-form class={formClass} onsubmit={create} {
+      label class={labelClass} {
         span 'Name'
-        input required maxlength=100 value={name} oninput={(e) => (name = e.currentTarget.value)}
+        input class={fieldClass} required maxlength=100 value={name} oninput={(e) => (name = e.currentTarget.value)}
       }
-      label {
+      label class={labelClass} {
         span 'Role'
-        select value={role} onchange={(e) => (role = e.currentTarget.value as typeof role)} {
+        select class={fieldClass} value={role} onchange={(e) => (role = e.currentTarget.value as typeof role)} {
           option value="viewer" 'Viewer: read results'
           option value="analyst" 'Analyst: results and exports'
           option value="editor" 'Editor: surveys and results'
           option value="owner" 'Owner: everything'
         }
       }
-      label {
+      label class={labelClass} {
         span 'Surveys'
-        input placeholder="All surveys, or ids separated by commas" value={surveys} oninput={(e) => (surveys = e.currentTarget.value)}
+        input class={fieldClass} placeholder="All surveys, or ids separated by commas" value={surveys} oninput={(e) => (surveys = e.currentTarget.value)}
       }
-      label {
+      label class={labelClass} {
         span 'Expires after (days)'
-        input type=number min=0 max=3650 title="0 for never" value={days} oninput={(e) => (days = e.currentTarget.value)}
+        input class={fieldClass} type=number min=0 max=3650 title="0 for never" value={days} oninput={(e) => (days = e.currentTarget.value)}
       }
-      button type=submit disabled={!name.trim()} 'Create token'
+      button class={buttonClass} type=submit disabled={!name.trim()} 'Create token'
     }
     if created {
-      .kv-dash-new-token role=status {
-        p 'The token "{created.name}". Copy it now: it is not shown again.'
-        input.kv-dash-token-value readonly aria-label="New token" value={created.token} onfocus={(e) => e.currentTarget.select()}
-        button type=button onclick={() => (created = null)} 'Done'
+      .kv-dash-new-token(
+        class="kv:flex kv:flex-wrap kv:gap-2 kv:items-center kv:border kv:border-ui-warn kv:bg-ui-warn-soft kv:rounded-lg kv:py-[0.6rem] kv:px-[0.8rem] kv:mb-4 kv:max-w-[48rem]"
+        role=status
+      ) {
+        p class="kv:m-0 kv:basis-full" 'The token "{created.name}". Copy it now: it is not shown again.'
+        input.kv-dash-token-value class="kv:[font-family:ui-monospace,monospace] kv:text-[0.85rem] kv:flex-1 kv:min-w-[16rem]" readonly aria-label="New token" value={created.token} onfocus={(e) => e.currentTarget.select()}
+        button class={buttonClass} type=button onclick={() => (created = null)} 'Done'
       }
     }
     if error {
-      p.kv-dash-error '{error}'
+      p.kv-dash-error class="kv:text-ui-danger kv:whitespace-pre-wrap" '{error}'
     }
     if loading {
-      p.kv-dash-muted 'Loading…'
+      p.kv-dash-muted class="kv:text-ui-muted kv:text-[0.9rem]" 'Loading…'
     } else {
-      .kv-dash-table-scroll > table.kv-dash-table {
+      .kv-dash-table-scroll class="kv:overflow-x-auto kv:max-w-full" > table.kv-dash-table class="kv:border-collapse kv:text-[0.85rem] kv:bg-ui-surface" {
         thead > tr {
-          th scope=col 'Name'
-          th scope=col 'Can'
-          th scope=col 'Surveys'
-          th scope=col 'Expires'
-          th scope=col 'Last used'
-          th scope=col 'Status'
-          th scope=col > span.kv-dash-sr 'Revoke'
+          th class={cellClass} scope=col 'Name'
+          th class={cellClass} scope=col 'Can'
+          th class={cellClass} scope=col 'Surveys'
+          th class={cellClass} scope=col 'Expires'
+          th class={cellClass} scope=col 'Last used'
+          th class={cellClass} scope=col 'Status'
+          th class={cellClass} scope=col > span.kv-dash-sr class="kv:absolute kv:w-px kv:h-px kv:overflow-hidden kv:[clip:rect(0_0_0_0)]" 'Revoke'
         }
         tbody {
           each tokens as t (t.id) {
-            tr class:kv-dash-partial={status(t) !== "Active"} {
-              td '{t.name}'
-              td.kv-dash-wrap '{t.actions.join(", ")}'
-              td.kv-dash-wrap '{t.surveyIds ? t.surveyIds.join(", ") : "All"}'
-              td '{day(t.expiresAt, "Never")}'
-              td '{day(t.lastUsedAt, "–")}'
-              td '{status(t)}'
-              td {
+            tr class={status(t) !== 'Active' ? 'kv:text-ui-muted' : ''} class:kv-dash-partial={status(t) !== "Active"} {
+              td class={cellClass} '{t.name}'
+              td.kv-dash-wrap class="kv:border-b kv:border-b-ui-border kv:py-[0.35rem] kv:px-[0.6rem] kv:text-left kv:align-top kv:whitespace-normal kv:max-w-[20rem]" '{t.actions.join(", ")}'
+              td.kv-dash-wrap class="kv:border-b kv:border-b-ui-border kv:py-[0.35rem] kv:px-[0.6rem] kv:text-left kv:align-top kv:whitespace-normal kv:max-w-[20rem]" '{t.surveyIds ? t.surveyIds.join(", ") : "All"}'
+              td class={cellClass} '{day(t.expiresAt, "Never")}'
+              td class={cellClass} '{day(t.lastUsedAt, "–")}'
+              td class={cellClass} '{status(t)}'
+              td class={cellClass} {
                 if !t.revokedAt {
-                  button.kv-dash-danger type=button aria-label="Revoke {t.name}" onclick={() => revoke(t.id)} '{confirming === t.id ? "Really revoke?" : "Revoke"}'
+                  button.kv-dash-danger class="{buttonClass} kv:text-ui-danger" type=button aria-label="Revoke {t.name}" onclick={() => revoke(t.id)} '{confirming === t.id ? "Really revoke?" : "Revoke"}'
                 }
               }
             }
           } else {
-            tr > td colspan=7 'No tokens yet.'
+            tr > td class={cellClass} colspan=7 'No tokens yet.'
           }
         }
       }
     }
   }
 </template>
-
-<style>
-  .kv-dash-tokens h1 { font-size: 1.5rem; margin: 0 0 0.25rem; }
-  .kv-dash-form { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: end; margin: 0.75rem 0 1rem; font-size: 0.9rem; }
-  .kv-dash-form label { display: flex; flex-direction: column; gap: 0.2rem; }
-  .kv-dash-form input, .kv-dash-form select, .kv-dash-form button, .kv-dash-new-token button, .kv-dash-danger { font: inherit; font-size: 0.85rem; }
-  .kv-dash-form button, .kv-dash-new-token button, .kv-dash-danger { cursor: pointer; }
-  .kv-dash-new-token { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; border: 1px solid var(--kv-ui-warn, #f59e0b); background: var(--kv-ui-warn-soft, #fffbeb); border-radius: 0.5rem; padding: 0.6rem 0.8rem; margin-bottom: 1rem; max-width: 48rem; }
-  .kv-dash-new-token p { margin: 0; flex-basis: 100%; }
-  .kv-dash-token-value { font-family: ui-monospace, monospace; font-size: 0.85rem; flex: 1; min-width: 16rem; }
-  .kv-dash-danger { color: var(--kv-ui-danger, #b91c1c); }
-  .kv-dash-table-scroll { overflow-x: auto; max-width: 100%; }
-  .kv-dash-table { border-collapse: collapse; font-size: 0.85rem; background: var(--kv-ui-surface, white); }
-  .kv-dash-table th, .kv-dash-table td { border-bottom: 1px solid var(--kv-ui-border, #e5e7eb); padding: 0.35rem 0.6rem; text-align: left; vertical-align: top; white-space: nowrap; }
-  .kv-dash-table .kv-dash-wrap { white-space: normal; max-width: 20rem; }
-  .kv-dash-partial { color: var(--kv-ui-muted, #6b7280); }
-  .kv-dash-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-  .kv-dash-muted { color: var(--kv-ui-muted, #6b7280); font-size: 0.9rem; }
-  .kv-dash-error { color: var(--kv-ui-danger, #b91c1c); white-space: pre-wrap; }
-</style>
