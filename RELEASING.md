@@ -41,6 +41,10 @@ published by hand.
 
 ## Every later release
 
+In CHANGELOG.md, rename `## Unreleased` to `## [0.2.0] - YYYY-MM-DD` and add a new empty `## Unreleased` above it.
+At the bottom, add links for the commits its entries don't link yet and the compare link
+(`[0.2.0]: https://github.com/pavlovt/kvesto/compare/v0.1.2...v0.2.0`). Then:
+
 ```sh
 pnpm release:version 0.2.0
 git commit -am "Release v0.2.0"

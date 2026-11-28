@@ -27,6 +27,10 @@
   rule per `kv-` selector and fills it with `@apply` (no utility classes in the markup). Keep the `--kv-*`
   variables and presets as they are (they're the theming API), and write a declaration as plain CSS when no utility
   gives the exact same result (`font: inherit`, `border: 0`, `background` shorthands).
+- Every user-visible change adds a line under `## Unreleased` in CHANGELOG.md, in the section that fits (Added,
+  Changed, Fixed, Breaking changes, Docs, Tests, Infrastructure), with the milestone number. Commit links
+  (`([abc1234])`, defined at the bottom) are added for earlier commits, since a commit can't name its own hash. On
+  release, `## Unreleased` becomes `## [x.y.z] - YYYY-MM-DD` (see RELEASING.md).
 
 ## BraceML reference
 
