@@ -1,0 +1,200 @@
+/*!
+ * Default theme for @kvesto/core. Every colour, size and font is a custom
+ * property, so a theme only sets variables: on `.kv-survey`, through the
+ * renderer's `theme` option, or with a preset (`data-kv-theme` = light, dark,
+ * auto, compact or contrast). `--kv-accent` and `--kv-error` still work.
+ */
+
+/*
+ * Tailwind source of `@kvesto/core/styles.css`; the build compiles it into dist/styles.css. It defines no utility
+ * classes: the rules keep the renderer's `kv-` class names (and their specificity), and `@apply` fills them in.
+ * The theme is inlined, so the only custom properties in the output are the `--kv-*` theming API below.
+ * Declarations without an exact utility stay as CSS: `font: inherit`, `border: 0`, the variable-driven padding, and
+ * the `background` shorthands (a `bg-*` utility would leave a host page's `background-image` in place).
+ */
+@import "tailwindcss/theme.css" theme(inline);
+@import "tailwindcss/utilities.css" source(none);
+
+/* The `--kv-*` variables as Tailwind colours and radii: `text-error`, `border-border`, `rounded-kv`, … */
+@theme inline {
+  --color-primary: var(--kv-color-primary);
+  --color-on-primary: var(--kv-color-on-primary);
+  --color-error: var(--kv-color-error);
+  --color-muted: var(--kv-color-muted);
+  --color-border: var(--kv-color-border);
+  --color-border-strong: var(--kv-color-border-strong);
+  --color-outline: var(--kv-color-outline);
+  --radius-kv: var(--kv-radius);
+  --radius-kv-large: var(--kv-radius-large);
+}
+
+.kv-survey {
+  --kv-color-primary: var(--kv-accent, #2563eb);
+  --kv-color-on-primary: white;
+  --kv-color-error: var(--kv-error, #b91c1c);
+  --kv-color-muted: #4b5563;
+  --kv-color-border: #e5e7eb;
+  --kv-color-border-strong: #d1d5db;
+  --kv-color-surface: white;
+  --kv-color-stripe: rgba(0, 0, 0, 0.03);
+  --kv-color-outline: rgba(0, 0, 0, 0.15);
+  --kv-color-tint: rgba(37, 99, 235, 0.1);
+  --kv-radius: 0.375rem;
+  --kv-radius-large: 0.5rem;
+  --kv-gap: 1rem;
+  --kv-control-padding: 0.45rem 0.6rem;
+  @apply grid gap-(--kv-gap) max-w-[40rem];
+  font: inherit;
+  font-family: var(--kv-font, inherit);
+  color: var(--kv-color-text, inherit);
+  background: var(--kv-color-bg, transparent);
+  color-scheme: var(--kv-color-scheme, normal);
+}
+.kv-survey[data-kv-theme="dark"] {
+  --kv-color-bg: #111827;
+  --kv-color-text: #f3f4f6;
+  --kv-color-primary: #60a5fa;
+  --kv-color-on-primary: #0b1220;
+  --kv-color-error: #f87171;
+  --kv-color-muted: #9ca3af;
+  --kv-color-border: #374151;
+  --kv-color-border-strong: #4b5563;
+  --kv-color-surface: #1f2937;
+  --kv-color-stripe: rgba(255, 255, 255, 0.04);
+  --kv-color-outline: rgba(255, 255, 255, 0.2);
+  --kv-color-tint: rgba(96, 165, 250, 0.2);
+  --kv-color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  .kv-survey[data-kv-theme="auto"] {
+    --kv-color-bg: #111827;
+    --kv-color-text: #f3f4f6;
+    --kv-color-primary: #60a5fa;
+    --kv-color-on-primary: #0b1220;
+    --kv-color-error: #f87171;
+    --kv-color-muted: #9ca3af;
+    --kv-color-border: #374151;
+    --kv-color-border-strong: #4b5563;
+    --kv-color-surface: #1f2937;
+    --kv-color-stripe: rgba(255, 255, 255, 0.04);
+    --kv-color-outline: rgba(255, 255, 255, 0.2);
+    --kv-color-tint: rgba(96, 165, 250, 0.2);
+    --kv-color-scheme: dark;
+  }
+}
+.kv-survey[data-kv-theme="compact"] {
+  --kv-gap: 0.5rem;
+  --kv-control-padding: 0.25rem 0.4rem;
+  @apply text-[0.92em];
+}
+.kv-survey[data-kv-theme="contrast"] {
+  --kv-color-bg: #fff;
+  --kv-color-text: #000;
+  --kv-color-primary: #0b3fb3;
+  --kv-color-on-primary: #fff;
+  --kv-color-error: #9b0000;
+  --kv-color-muted: #1f2937;
+  --kv-color-border: #000;
+  --kv-color-border-strong: #000;
+  --kv-color-outline: #000;
+  --kv-color-tint: #dbe5ff;
+}
+.kv-question { border: 0; @apply m-0 p-0 grid gap-[0.4rem]; }
+.kv-question-title { @apply font-semibold p-0; }
+.kv-required { @apply text-error; }
+.kv-question input[type="text"], .kv-question input[type="email"], .kv-question input[type="number"],
+.kv-question textarea, .kv-question select { font: inherit; padding: var(--kv-control-padding); border-radius: var(--kv-control-radius, 0); }
+.kv-rating { @apply flex gap-3 flex-wrap; }
+.kv-error, .kv-submit-error { @apply text-error m-0 text-[0.9em]; }
+.kv-nav { @apply flex gap-2; }
+.kv-nav button { font: inherit; @apply py-2 px-4 cursor-pointer; }
+.kv-next { border: 0; background: var(--kv-color-primary); @apply text-on-primary rounded-kv; }
+.kv-question[hidden] { @apply hidden; }
+.kv-panel { @apply border border-border rounded-kv-large m-0 pt-3 px-4 pb-4 grid gap-[0.4rem]; }
+.kv-panel[hidden] { @apply hidden; }
+.kv-panel-title { @apply font-bold py-0 px-1; }
+.kv-panel-description { @apply m-0 text-muted; }
+.kv-panel-body { @apply grid gap-(--kv-gap); }
+.kv-repeat-items { @apply grid gap-(--kv-gap); }
+.kv-repeat-item { @apply border border-dashed border-border-strong rounded-kv-large p-3 grid gap-3; }
+.kv-repeat-item-head { @apply flex justify-between items-center gap-2; }
+.kv-repeat-item-title { @apply font-semibold; }
+.kv-repeat-add, .kv-repeat-remove { font: inherit; justify-self: start; @apply cursor-pointer; }
+.kv-repeat-add[hidden], .kv-repeat-remove[hidden] { @apply hidden; }
+.kv-matrix-scroll { @apply overflow-x-auto; }
+.kv-matrix { @apply border-collapse; }
+.kv-matrix th, .kv-matrix td { @apply py-[0.35rem] px-[0.6rem] text-center; }
+.kv-matrix tbody th { @apply text-left font-normal; }
+.kv-matrix tbody tr:nth-child(odd) { background: var(--kv-color-stripe); }
+.kv-matrix-cell { @apply block cursor-pointer; }
+.kv-ranking-hint, .kv-file-status { @apply m-0 text-[0.9em] opacity-75; }
+.kv-ranking { @apply list-none m-0 p-0 grid gap-[0.35rem]; }
+.kv-ranking-item { @apply flex items-center gap-2 py-[0.4rem] px-[0.6rem] border border-outline rounded-kv cursor-grab; background: var(--kv-color-surface); }
+.kv-ranking-item.kv-dragging { @apply opacity-50; }
+.kv-ranking-pos { @apply font-semibold min-w-[1.5em]; }
+.kv-ranking-label { @apply flex-1; }
+.kv-ranking-item button, .kv-ranking-keep, .kv-file-remove { font: inherit; @apply cursor-pointer; }
+.kv-ranking-keep { justify-self: start; }
+.kv-files { @apply m-0 pl-[1.2rem]; }
+.kv-grid { @apply border-collapse; }
+.kv-grid th, .kv-grid td { @apply py-[0.3rem] px-2 text-left; }
+.kv-grid tbody th { @apply font-normal; }
+.kv-grid input, .kv-grid select { font: inherit; @apply py-[0.3rem] px-[0.45rem] min-w-24; }
+.kv-block[hidden] { @apply hidden; }
+.kv-content p { @apply mt-0 mx-0 mb-2; }
+.kv-image img { @apply max-w-full h-auto; }
+.kv-computed { @apply font-semibold tabular-nums; }
+.kv-multi-text { @apply grid gap-[0.4rem]; }
+.kv-multi-text-item { @apply grid grid-cols-[minmax(6rem,12rem)_1fr] gap-2 items-center; }
+.kv-slider { @apply flex gap-3 items-center; }
+.kv-slider input { @apply flex-1; }
+.kv-slider--unset { @apply opacity-55; }
+.kv-tags { @apply list-none m-0 p-0 flex flex-wrap gap-[0.35rem]; }
+.kv-tag { @apply inline-flex gap-1 items-center py-[0.1rem] px-2 rounded-[999px]; background: var(--kv-color-tint); }
+.kv-tag-remove { font: inherit; border: 0; background: none; @apply cursor-pointer py-0 px-[0.15rem]; }
+.kv-image-choices { @apply grid grid-cols-[repeat(auto-fill,minmax(8rem,1fr))] gap-[0.6rem]; }
+.kv-image-choice { @apply grid gap-[0.3rem] justify-items-center p-[0.4rem] border border-border rounded-kv-large cursor-pointer; }
+.kv-image-choice img { @apply max-w-full h-auto; }
+.kv-image-choice:has(input:checked) { @apply border-primary; box-shadow: 0 0 0 2px var(--kv-color-primary); }
+/* The pad is paper, in every theme. */
+.kv-signature-pad { @apply border border-border-strong rounded-kv max-w-full h-auto cursor-crosshair; background: #fff; }
+.kv-signature-actions { @apply flex gap-3 items-center; }
+.kv-signature-clear { font: inherit; @apply cursor-pointer; }
+.kv-signature-clear[hidden] { @apply hidden; }
+.kv-signature-status { @apply m-0 text-[0.9em] opacity-75; }
+.kv-progress { @apply flex gap-[0.6rem] items-center text-[0.85em]; }
+.kv-progress-bar { @apply flex-1 h-2 accent-primary; }
+.kv-timer { @apply m-0 tabular-nums text-muted; }
+.kv-timer[hidden] { @apply hidden; }
+.kv-quiz-score { @apply font-bold text-[1.1em] m-0; }
+.kv-quiz-passed { @apply text-[#15803d] m-0; }
+.kv-quiz-failed { @apply text-error m-0; }
+.kv-quiz-answers { @apply grid gap-2 pl-[1.2rem]; }
+.kv-quiz-answers p { @apply mt-[0.1rem] mx-0 mb-0; }
+.kv-quiz-wrong { @apply border-l-3 border-l-error pl-2; }
+.kv-quiz-right { @apply border-l-3 border-l-[#15803d] pl-2; }
+.kv-quiz-feedback { @apply italic text-muted; }
+.kv-error-summary { @apply border-2 border-error rounded-kv py-[0.6rem] px-[0.9rem]; }
+.kv-error-summary[hidden] { @apply hidden; }
+.kv-error-summary-title { @apply mt-0 mx-0 mb-[0.3rem] font-bold text-error; }
+.kv-error-summary ul { @apply m-0 pl-[1.2rem]; }
+.kv-error-summary a { @apply text-error; }
+.kv-signature-typed input { font: inherit; padding: var(--kv-control-padding); @apply w-[min(100%,24rem)]; }
+/* Targets of at least 24 by 24 CSS pixels (WCAG 2.5.8), and a visible focus everywhere. */
+.kv-survey input[type="radio"], .kv-survey input[type="checkbox"] { @apply w-[1.15rem] h-[1.15rem] m-[0.2rem]; }
+.kv-survey .kv-choice, .kv-survey .kv-rating-item, .kv-survey .kv-matrix-cell { @apply min-h-6 inline-flex items-center gap-[0.3rem]; }
+.kv-survey .kv-choice { @apply flex; }
+.kv-survey button { @apply min-h-6 min-w-6; }
+.kv-survey :focus-visible { @apply outline-2 outline-primary outline-offset-2; }
+.kv-sr-only { @apply absolute w-px h-px p-0 -m-px overflow-hidden whitespace-nowrap; clip: rect(0 0 0 0); border: 0; }
+/* The anti-spam honeypot: out of sight and out of the tab order, but not display:none (some bots skip those). */
+.kv-survey .kv-hp { @apply absolute -left-[10000px] w-px h-px overflow-hidden; }
+
+/* Printing a survey: the questions and answers, without buttons, timers or progress. */
+@media print {
+  .kv-survey .kv-nav, .kv-survey .kv-progress, .kv-survey .kv-timer, .kv-survey .kv-error-summary,
+  .kv-survey .kv-repeat-add, .kv-survey .kv-repeat-remove, .kv-survey .kv-ranking-item button,
+  .kv-survey .kv-signature-actions, .kv-survey .kv-signature-typed, .kv-survey .kv-ranking-keep { @apply hidden!; }
+  .kv-survey .kv-question, .kv-survey .kv-panel { @apply break-inside-avoid; }
+  .kv-survey { background: none; @apply max-w-none text-black; }
+}

@@ -40,7 +40,7 @@ describe("themes", () => {
 
   it("have a rule in the stylesheet for every preset, and dark values for auto", () => {
     // Tests run from the package folder (import.meta.url is not a file URL under happy-dom).
-    const css = readFileSync("styles.css", "utf8");
+    const css = readFileSync("src/styles.css", "utf8");
     for (const preset of THEME_PRESETS.filter((p) => p !== "light")) expect(css, preset).toContain(`[data-kv-theme="${preset}"]`);
     expect(css).toMatch(/@media \(prefers-color-scheme: dark\)\s*\{\s*\.kv-survey\[data-kv-theme="auto"\]/);
   });

@@ -149,6 +149,9 @@ importers:
         specifier: workspace:^
         version: link:../schema
     devDependencies:
+      '@tailwindcss/cli':
+        specifier: ^4.3.5
+        version: 4.3.5
       ajv:
         specifier: ^8.20.0
         version: 8.20.0
@@ -164,6 +167,9 @@ importers:
       happy-dom:
         specifier: 21.0.4
         version: 21.0.4
+      tailwindcss:
+        specifier: ^4.3.5
+        version: 4.3.5
       typescript:
         specifier: 5.9.3
         version: 5.9.3

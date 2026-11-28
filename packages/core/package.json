@@ -28,12 +28,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./styles.css": "./styles.css",
+    "./styles.css": "./dist/styles.css",
     "./package.json": "./package.json"
   },
   "files": [
     "dist",
-    "styles.css",
     "src",
     "README.md",
     "LICENSE"
@@ -42,7 +41,7 @@
     "*.css"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && tailwindcss -i src/styles.css -o dist/styles.css",
     "prepack": "pnpm run build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
@@ -51,11 +50,13 @@
     "@kvesto/schema": "workspace:^"
   },
   "devDependencies": {
+    "@tailwindcss/cli": "^4.3.5",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
     "axe-core": "4.10.2",
     "fast-check": "^4.11.0",
     "happy-dom": "21.0.4",
+    "tailwindcss": "^4.3.5",
     "typescript": "5.9.3",
     "vitest": "3.2.7"
   },

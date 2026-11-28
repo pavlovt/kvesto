@@ -23,8 +23,8 @@ to embed. Only ideas are taken; no code is copied from any other project.
 - **Server parity.** Anything the runner validates, the server validates too, through the same core functions
   (`validateAnswers` today). Every new route uses `createRoute` and gets a test in `packages/server/test/api.test.ts`.
 - **Svelte markup is BraceML.** New editor and dashboard UI follows `AGENTS.md`.
-- **Styling is Tailwind CSS.** The apps use Tailwind v4 utilities. The packages move from plain CSS to Tailwind in
-  Phase 17 (M80–M82); until a package's milestone lands, new styles in it follow that package's existing CSS.
+- **Styling is Tailwind CSS.** The apps use Tailwind v4 utilities, the editor and dashboard packages `kv:`-prefixed
+  utilities, and the core's stylesheet `@apply` in its `kv-` rules (Phase 17, M80–M82; see `AGENTS.md`).
 - **Done means:** tests for the new behaviour, `pnpm build && pnpm typecheck && pnpm test` green, the README or
   package README updated, and the editor's question palette and the dashboard handling the feature (or a note in the
   milestone saying why not yet).
@@ -953,7 +953,8 @@ non-inline types. Regex validators are length-limited (M3). The milestones below
 ### M70 · UI kits and a Svelte wrapper
 
 - **Scope:** renderer themes that output Tailwind and shadcn/ui markup, and `@kvesto/svelte` next to the React and
-  Vue wrappers from M26. The Tailwind theme may already be covered by M82.
+  Vue wrappers from M26. M82 only moved the default stylesheet to a Tailwind source: a renderer theme whose markup
+  carries Tailwind utility classes is still to do.
 - **Depends on:** M23, M26.
 - **Packages:** new packages.
 - **Schema impact:** none.
@@ -1261,6 +1262,6 @@ Decided:
 | M42 – M79 | Planned |
 | M80 · Editor package on Tailwind | Done (not released yet). Computed styles match 0.3.0 in 18 editor states at five widths, light and dark. The utilities hold under a host's Preflight or element reset; elements the editor leaves to browser defaults (palette buttons, selects, the preview's form) still follow such a reset, so the editor app keeps loading Tailwind without Preflight |
 | M81 · Dashboard package on Tailwind | Done (not released yet). Computed styles match 0.3.0 in 21 dashboard states (list, summary, table, response detail, print, tokens, audit, dark) at two widths. Same limit as M80: the utilities hold under a host's reset, elements left to browser defaults still follow it, so the dashboard app keeps loading Tailwind without Preflight |
-| M82 | Planned |
+| M82 · Core form styles on Tailwind | Done (not released yet). `@kvesto/core/styles.css` is compiled from `src/styles.css` into `dist/styles.css`; the rules keep their `kv-` selectors and `@apply` exact utilities, so computed styles match 0.3.0 for every fixture and an all-types survey in each preset, a custom theme, the error state, focus and print. The `background` shorthands stay plain CSS so a host's `background-image` is still reset. The M70 renderer theme with utility classes in the markup is not part of this |
 
 Update this table as milestones land, with the release they shipped in.

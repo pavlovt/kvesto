@@ -22,7 +22,11 @@
   Tailwind. Don't put two utilities for the same property on one element (all utilities have the same
   specificity): pick one in the class expression instead (`class={on ? 'kv:bg-ui-accent-soft' : 'kv:bg-ui-surface'}`).
   Inside a `class={…}` expression use single quotes, because BraceML HTML-escapes double quotes there.
-  `@kvesto/core/styles.css` is still plain CSS until its milestone in `ROADMAP.md` (M82) moves it.
+- `@kvesto/core/styles.css` (the survey form) is built from `packages/core/src/styles.css` into `dist/styles.css`.
+  The renderer's markup is plain DOM with `kv-` class names that users theme and override, so that file keeps one
+  rule per `kv-` selector and fills it with `@apply` (no utility classes in the markup). Keep the `--kv-*`
+  variables and presets as they are (they're the theming API), and write a declaration as plain CSS when no utility
+  gives the exact same result (`font: inherit`, `border: 0`, `background` shorthands).
 
 ## BraceML reference
 
