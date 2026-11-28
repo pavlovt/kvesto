@@ -2,9 +2,33 @@
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   color: #111827;
   background: #f9fafb;
+  /* "only light" stops a browser's forced dark mode from repainting the page. */
+  color-scheme: only light;
+  --shell-bar: white;
+  --shell-line: #e5e7eb;
+  --shell-muted: #6b7280;
+}
+/* The page around the editor follows the editor's own Light / Dark / Auto choice. */
+:root:has(.kv-editor[data-kv-ui-theme="dark"]) {
+  color: #e5e7eb;
+  background: #0f172a;
+  color-scheme: dark;
+  --shell-bar: #1e293b;
+  --shell-line: #334155;
+  --shell-muted: #94a3b8;
+}
+@media (prefers-color-scheme: dark) {
+  :root:has(.kv-editor[data-kv-ui-theme="auto"]) {
+    color: #e5e7eb;
+    background: #0f172a;
+    color-scheme: dark;
+    --shell-bar: #1e293b;
+    --shell-line: #334155;
+    --shell-muted: #94a3b8;
+  }
 }
 body { margin: 0; }
-.topbar { display: flex; gap: 1rem; align-items: baseline; padding: 0.75rem 1.25rem; background: white; border-bottom: 1px solid #e5e7eb; }
+.topbar { display: flex; gap: 1rem; align-items: baseline; padding: 0.75rem 1.25rem; background: var(--shell-bar); border-bottom: 1px solid var(--shell-line); }
 main { padding: 1.25rem; }
-.muted { color: #6b7280; font-size: 0.9rem; }
+.muted { color: var(--shell-muted); font-size: 0.9rem; }
 pre { overflow: auto; }

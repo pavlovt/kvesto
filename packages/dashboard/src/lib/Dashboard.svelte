@@ -8,7 +8,7 @@
     surveyId?: string;
     /** Show survey texts in this locale. Default: each survey's default locale. */
     locale?: string;
-    /** The dashboard's look: "light" (default), "dark", or "auto" to follow the device. A menu changes it. */
+    /** The dashboard's look: "light" (default), "dark", or "auto" to follow the device. A menu changes it, and the choice is remembered in this browser. */
     theme?: "light" | "dark" | "auto";
     /**
      * The Kvesto server behind an `httpStorage` (pass the same options). With it, the dashboard also manages
@@ -26,8 +26,26 @@
 
   let { storage, surveyId, locale, theme = "light", api }: DashboardProps = $props();
   let section = $state<"surveys" | "tokens" | "audit">("surveys");
+  // The menu's choice is remembered in this browser; `theme` is the default until one is made.
+  const themeKey = "kvesto-dashboard-theme";
+  function savedTheme(): typeof theme | undefined {
+    try {
+      const value = localStorage.getItem(themeKey);
+      return value === "light" || value === "dark" || value === "auto" ? value : undefined;
+    } catch {
+      return undefined; // no localStorage (server rendering, blocked storage)
+    }
+  }
+  function setTheme(value: NonNullable<typeof theme>) {
+    uiTheme = value;
+    try {
+      localStorage.setItem(themeKey, value);
+    } catch {
+      // not remembered, but the change still applies
+    }
+  }
   // svelte-ignore state_referenced_locally
-  let uiTheme = $state(theme);
+  let uiTheme = $state(savedTheme() ?? theme);
 
   // svelte-ignore state_referenced_locally
   let selected = $state<string | null>(surveyId ?? null);
@@ -35,7 +53,7 @@
 
 <template lang="braceml">
   .kv-dashboard data-kv-ui-theme={uiTheme} {
-    select.kv-dash-ui-theme aria-label="Dashboard theme" value={uiTheme} onchange={(e) => (uiTheme = e.currentTarget.value as typeof uiTheme)} {
+    select.kv-dash-ui-theme aria-label="Dashboard theme" value={uiTheme} onchange={(e) => setTheme(e.currentTarget.value as typeof uiTheme)} {
       option value="light" 'Light'
       option value="dark" 'Dark'
       option value="auto" 'Auto'
@@ -69,8 +87,9 @@
   .kv-dash-sections button { font: inherit; font-size: 0.9rem; cursor: pointer; border: 1px solid var(--kv-ui-border-strong, #d1d5db); background: var(--kv-ui-surface, white); color: inherit; padding: 0.25rem 0.75rem; }
   .kv-dash-sections button[aria-pressed="true"] { background: var(--kv-ui-accent-soft, #eff6ff); border-color: var(--kv-ui-accent-line, #93c5fd); }
   .kv-dash-back { font: inherit; color: var(--kv-ui-accent, #2563eb); background: none; border: 0; padding: 0; cursor: pointer; }
-  /* Light by default (the colours above); dark when asked, or with "auto" when the device prefers it. */
-  .kv-dashboard { background: var(--kv-ui-bg, transparent); color: var(--kv-ui-fg, inherit); color-scheme: var(--kv-ui-scheme, normal); }
+  /* Light by default (the colours above); dark when asked, or with "auto" when the device prefers it.
+     "only light" stops a browser's forced dark mode from repainting the light theme. */
+  .kv-dashboard { background: var(--kv-ui-bg, transparent); color: var(--kv-ui-fg, inherit); color-scheme: var(--kv-ui-scheme, only light); }
   .kv-dashboard[data-kv-ui-theme="dark"] {
     --kv-ui-bg: #0f172a;
     --kv-ui-fg: #e5e7eb;

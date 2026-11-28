@@ -20,7 +20,7 @@
      * review. Without it the "Translate with AI" button is hidden.
      */
     translate?: TranslateFn;
-    /** The editor's own look: "light" (default), "dark", or "auto" to follow the device. A toolbar menu changes it. */
+    /** The editor's own look: "light" (default), "dark", or "auto" to follow the device. A toolbar menu changes it, and the choice is remembered in this browser. */
     theme?: "light" | "dark" | "auto";
     /** Where the Kvesto server is reachable, e.g. "https://example.com/api". Shows link and embed snippets on the Theme tab. */
     publicUrl?: string;
@@ -42,8 +42,26 @@
 
   let { survey = starterSurvey, storage, onchange, onsave, preview = true, view = "design", translate, theme = "light", publicUrl }: SurveyEditorProps =
     $props();
+  // The toolbar menu's choice is remembered in this browser; `theme` is the default until one is made.
+  const themeKey = "kvesto-editor-theme";
+  function savedTheme(): typeof theme | undefined {
+    try {
+      const value = localStorage.getItem(themeKey);
+      return value === "light" || value === "dark" || value === "auto" ? value : undefined;
+    } catch {
+      return undefined; // no localStorage (server rendering, blocked storage)
+    }
+  }
+  function setTheme(value: NonNullable<typeof theme>) {
+    uiTheme = value;
+    try {
+      localStorage.setItem(themeKey, value);
+    } catch {
+      // not remembered, but the change still applies
+    }
+  }
   // svelte-ignore state_referenced_locally
-  let uiTheme = $state(theme);
+  let uiTheme = $state(savedTheme() ?? theme);
   // svelte-ignore state_referenced_locally
   let tab = $state<"design" | "theme" | "translations" | "json">(view);
 
@@ -168,7 +186,7 @@
           onclick={() => (tab = "theme")}
         ) 'Theme'
       }
-      select.kv-editor-ui-theme aria-label="Editor theme" value={uiTheme} onchange={(e) => (uiTheme = e.currentTarget.value as typeof uiTheme)} {
+      select.kv-editor-ui-theme aria-label="Editor theme" value={uiTheme} onchange={(e) => setTheme(e.currentTarget.value as typeof uiTheme)} {
         option value="light" 'Light'
         option value="dark" 'Dark'
         option value="auto" 'Auto'
@@ -317,8 +335,9 @@
   .kv-editor-muted { color: var(--kv-ui-muted, #6b7280); font-size: 0.9rem; }
   .kv-editor-layout { display: flex; gap: 0.35rem; align-items: center; font-size: 0.85rem; margin-bottom: 0.5rem; }
   .kv-editor-error { color: var(--kv-ui-danger, #b91c1c); white-space: pre-wrap; overflow: auto; margin: 0; }
-  /* Light by default (the colours above); dark when asked, or with "auto" when the device prefers it. */
-  .kv-editor { background: var(--kv-ui-bg, transparent); color: var(--kv-ui-fg, inherit); color-scheme: var(--kv-ui-scheme, normal); }
+  /* Light by default (the colours above); dark when asked, or with "auto" when the device prefers it.
+     "only light" stops a browser's forced dark mode from repainting the light theme. */
+  .kv-editor { background: var(--kv-ui-bg, transparent); color: var(--kv-ui-fg, inherit); color-scheme: var(--kv-ui-scheme, only light); }
   .kv-editor[data-kv-ui-theme="dark"] {
     --kv-ui-bg: #0f172a;
     --kv-ui-fg: #e5e7eb;

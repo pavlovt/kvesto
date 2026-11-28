@@ -388,6 +388,20 @@ describe("themes in the editor", () => {
     ui.editor.destroy();
   });
 
+  it("remembers the chosen editor theme after a reload", () => {
+    localStorage.clear();
+    const first = setup(false);
+    const pick = first.$<HTMLSelectElement>(".kv-editor-ui-theme");
+    pick.value = "dark";
+    pick.dispatchEvent(new Event("change", { bubbles: true }));
+    flushSync();
+    first.editor.destroy();
+    const second = setup(false);
+    expect(second.$(".kv-editor").getAttribute("data-kv-ui-theme")).toBe("dark");
+    second.editor.destroy();
+    localStorage.clear();
+  });
+
   it("edits the survey's theme and exports it", () => {
     const ui = setup(false);
     ui.$$<HTMLButtonElement>(".kv-editor-tabs button").find((b) => b.textContent === "Theme")!.click();

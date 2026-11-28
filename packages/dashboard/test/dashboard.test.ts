@@ -206,6 +206,23 @@ describe("dashboard theme", () => {
     expect(root.getAttribute("data-kv-ui-theme")).toBe("dark");
     dash.destroy();
   });
+
+  it("remembers the chosen theme after a reload", async () => {
+    localStorage.clear();
+    const target = document.createElement("div");
+    const first = mountDashboard(target, { storage: memoryStorage() });
+    await settle();
+    const pick = target.querySelector<HTMLSelectElement>(".kv-dash-ui-theme")!;
+    pick.value = "dark";
+    pick.dispatchEvent(new Event("change", { bubbles: true }));
+    flushSync();
+    first.destroy();
+    const second = mountDashboard(target, { storage: memoryStorage() });
+    await settle();
+    expect(target.querySelector(".kv-dashboard")!.getAttribute("data-kv-ui-theme")).toBe("dark");
+    second.destroy();
+    localStorage.clear();
+  });
 });
 
 describe("quiz scores", () => {
