@@ -48,7 +48,11 @@ const editor = mountEditor(document.getElementById("editor")!, {
 | `preview` | `boolean` | Show the live preview. Default `true`. |
 | `view` | `"design" \| "json"` | Which tab opens first. Default `"design"`. |
 
-The component's own styles are scoped and use `kv-editor-*` class names.
+The editor's styles are Tailwind CSS, compiled into the package: you don't need Tailwind yourself. The Svelte
+component imports `@kvesto/editor`'s own CSS file, and the `standalone` build adds it to the page when it loads.
+Every class it defines has the `kv:` prefix and it has no reset (Preflight), so it doesn't restyle anything outside
+the editor, and it works on pages that use Tailwind themselves. The editor's colours can be
+set from outside with the `--kv-ui-*` custom properties on `.kv-editor` (for example `--kv-ui-accent`).
 
 ## Design and JSON views
 

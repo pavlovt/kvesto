@@ -67,12 +67,15 @@
     return text;
   }
   const valueText = (v: unknown) => (Array.isArray(v) ? v.join(", ") : v === undefined || v === null ? "" : String(v));
+
+  // Tailwind classes used more than once (prefixed `kv:`; see editor.css).
+  const controlClass = "kv:font-inherit kv:text-[0.85rem] kv:min-w-0";
 </script>
 
 <template lang="braceml">
-  .kv-triggers {
+  .kv-triggers class="kv:grid kv:gap-2" {
     each triggers as t, i (i) {
-      .kv-trigger {
+      .kv-trigger class="kv:border kv:border-ui-border kv:rounded-md kv:p-[0.4rem] kv:grid kv:gap-[0.35rem]" {
         ConditionBuilder(
           survey={survey}
           owner={{ survey: true }}
@@ -81,8 +84,9 @@
           addLabel="Set a condition"
           onchange={(c, typing) => c && edit(i, { when: c as Condition }, typing)}
         )
-        .kv-trigger-action {
+        .kv-trigger-action class="kv:flex kv:flex-wrap kv:gap-1 kv:items-center kv:text-[0.85rem]" {
           select(
+            class={controlClass}
             aria-label="Action"
             value={t.action.type}
             onchange={(e) => edit(i, { action: actionOf(e.currentTarget.value as TriggerAction["type"]) })}
@@ -93,12 +97,13 @@
           }
           if t.action.type === "setValue" {
             @const a = t.action
-            select aria-label="Question to set" value={a.question} onchange={(e) => edit(i, { action: { ...a, question: e.currentTarget.value } })} {
+            select class={controlClass} aria-label="Question to set" value={a.question} onchange={(e) => edit(i, { action: { ...a, question: e.currentTarget.value } })} {
               each settable as s (s.id) {
                 option value={s.id} '{s.label}'
               }
             }
             input(
+              class={controlClass}
               aria-label="Value"
               placeholder="Value"
               value={valueText(a.value)}
@@ -106,42 +111,33 @@
             )
           } else if t.action.type === "copyValue" {
             @const a = t.action
-            select aria-label="Copy from" value={a.from} onchange={(e) => edit(i, { action: { ...a, from: e.currentTarget.value } })} {
+            select class={controlClass} aria-label="Copy from" value={a.from} onchange={(e) => edit(i, { action: { ...a, from: e.currentTarget.value } })} {
               each sources as s (s.id) {
                 option value={s.id} '{s.label}'
               }
             }
             span 'to'
-            select aria-label="Copy to" value={a.to} onchange={(e) => edit(i, { action: { ...a, to: e.currentTarget.value } })} {
+            select class={controlClass} aria-label="Copy to" value={a.to} onchange={(e) => edit(i, { action: { ...a, to: e.currentTarget.value } })} {
               each settable as s (s.id) {
                 option value={s.id} '{s.label}'
               }
             }
           } else if t.action.type === "skipToPage" {
             @const a = t.action
-            select aria-label="Page" value={a.page} onchange={(e) => edit(i, { action: { ...a, page: e.currentTarget.value } })} {
+            select class={controlClass} aria-label="Page" value={a.page} onchange={(e) => edit(i, { action: { ...a, page: e.currentTarget.value } })} {
               each pages as p (p) {
                 option value={p} '{p}'
               }
             }
           }
-          button type=button aria-label="Remove trigger {i + 1}" onclick={() => set(triggers.filter((_, j) => j !== i))} '×'
+          button class={controlClass} type=button aria-label="Remove trigger {i + 1}" onclick={() => set(triggers.filter((_, j) => j !== i))} '×'
         }
       }
     }
     if sources.length {
-      button type=button onclick={add} 'Add a trigger'
+      button class="{controlClass} kv:[justify-self:start]" type=button onclick={add} 'Add a trigger'
     } else {
-      p.kv-trigger-none 'Add a question first: triggers run when answers change.'
+      p.kv-trigger-none class="kv:m-0 kv:text-ui-subtle kv:italic kv:text-[0.85rem]" 'Add a question first: triggers run when answers change.'
     }
   }
 </template>
-
-<style>
-  .kv-triggers { display: grid; gap: 0.5rem; }
-  .kv-trigger { border: 1px solid var(--kv-ui-border, #e5e7eb); border-radius: 0.375rem; padding: 0.4rem; display: grid; gap: 0.35rem; }
-  .kv-trigger-action { display: flex; flex-wrap: wrap; gap: 0.25rem; align-items: center; font-size: 0.85rem; }
-  .kv-trigger-action select, .kv-trigger-action input, .kv-triggers button { font: inherit; font-size: 0.85rem; min-width: 0; }
-  .kv-triggers > button { justify-self: start; }
-  .kv-trigger-none { margin: 0; color: var(--kv-ui-subtle, #9ca3af); font-style: italic; font-size: 0.85rem; }
-</style>

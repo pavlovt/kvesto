@@ -168,28 +168,38 @@
   }
   const inputTypes = ["text", "email", "number", "date", "url", "tel"];
   const cellTypes = ["text", "number", "dropdown", "boolean"];
+
+  // Tailwind classes for the panel's own elements (prefixed `kv:`; see editor.css).
+  const labelClass = "kv:grid kv:grid-cols-[6.5rem_1fr] kv:gap-[0.4rem] kv:items-center kv:text-[0.9rem]";
+  const checkClass = "kv:grid kv:grid-cols-[auto_1fr] kv:gap-[0.4rem] kv:items-center kv:text-[0.9rem]";
+  const fieldClass = "kv:font-inherit kv:text-[0.9rem] kv:py-1 kv:px-[0.4rem] kv:min-w-0";
+  const buttonClass = "kv:font-inherit kv:text-[0.85rem] kv:cursor-pointer kv:[justify-self:start]";
+  const h3Class = "kv:text-[1rem] kv:[margin:0.25rem_0]";
+  const h4Class = "kv:text-[0.9rem] kv:[margin:0.5rem_0_0]";
+  const hintClass = "kv:text-ui-muted kv:text-[0.85rem]";
+  const errorClass = "kv:text-ui-danger kv:text-[0.85rem] kv:m-0";
 </script>
 
 <template lang="braceml">
-  .kv-props {
+  .kv-props class="kv:grid kv:gap-[0.45rem] kv:[align-content:start]" {
     if !el {
-      h3 'Survey'
-      label {
+      h3 class={h3Class} 'Survey'
+      label class={labelClass} {
         span 'Title'
-        input value={tx(view.survey.title)} oninput={(e) => setSurvey("title", e.currentTarget.value)}
+        input class={fieldClass} value={tx(view.survey.title)} oninput={(e) => setSurvey("title", e.currentTarget.value)}
       }
-      label {
+      label class={labelClass} {
         span 'Description'
-        textarea rows=2 value={tx(view.survey.description)} oninput={(e) => setSurvey("description", e.currentTarget.value)}
+        textarea class={fieldClass} rows=2 value={tx(view.survey.description)} oninput={(e) => setSurvey("description", e.currentTarget.value)}
       }
-      h3 'Pages'
+      h3 class={h3Class} 'Pages'
       each view.survey.pages as page, pi (page.id) {
-        label {
+        label class={labelClass} {
           span '{page.id}'
-          input value={tx(page.title)} placeholder="Page title" oninput={(e) => setPage(page.id, "title", e.currentTarget.value)}
+          input class={fieldClass} value={tx(page.title)} placeholder="Page title" oninput={(e) => setPage(page.id, "title", e.currentTarget.value)}
         }
         if pi > 0 {
-          .kv-props-logic {
+          .kv-props-logic class="kv:pl-[6.9rem]" {
             ConditionBuilder(
               survey={view.survey}
               owner={{ page: page.id }}
@@ -201,153 +211,155 @@
           }
         }
       }
-      h3 'Quiz'
-      label.kv-props-check {
+      h3 class={h3Class} 'Quiz'
+      label.kv-props-check class={checkClass} {
         input type=checkbox checked={Boolean(quiz)} onchange={(e) => setQuiz(e.currentTarget.checked ? {} : undefined)}
         span 'Score answers (a quiz or an assessment)'
       }
       if quiz {
-        label {
+        label class={labelClass} {
           span 'Pass mark (%)'
-          input type=number min=0 max=100 value={quiz.passMark !== undefined ? Math.round(quiz.passMark * 100) : ""} oninput={(e) => setQuiz({ ...quiz, passMark: num(e.currentTarget.value) === undefined ? undefined : num(e.currentTarget.value)! / 100 })}
+          input class={fieldClass} type=number min=0 max=100 value={quiz.passMark !== undefined ? Math.round(quiz.passMark * 100) : ""} oninput={(e) => setQuiz({ ...quiz, passMark: num(e.currentTarget.value) === undefined ? undefined : num(e.currentTarget.value)! / 100 })}
         }
-        label {
+        label class={labelClass} {
           span 'Time limit (s)'
-          input type=number min=1 value={quiz.timeLimit ?? ""} oninput={(e) => setQuiz({ ...quiz, timeLimit: num(e.currentTarget.value) })}
+          input class={fieldClass} type=number min=1 value={quiz.timeLimit ?? ""} oninput={(e) => setQuiz({ ...quiz, timeLimit: num(e.currentTarget.value) })}
         }
-        label.kv-props-check {
+        label.kv-props-check class={checkClass} {
           input type=checkbox checked={Boolean(quiz.showCorrect)} onchange={(e) => setQuiz({ ...quiz, showCorrect: e.currentTarget.checked || undefined })}
           span 'Show correct answers after submitting'
         }
-        label.kv-props-check {
+        label.kv-props-check class={checkClass} {
           input type=checkbox checked={quiz.releaseScores === "manual"} onchange={(e) => setQuiz({ ...quiz, releaseScores: e.currentTarget.checked ? "manual" : undefined })}
           span 'Release scores by hand, after review'
         }
       }
-      h3 'Availability'
-      label {
+      h3 class={h3Class} 'Availability'
+      label class={labelClass} {
         span 'Opens at'
-        input type=datetime-local value={localTime(surveySettings.opensAt)} onchange={(e) => setSetting("opensAt", isoTime(e.currentTarget.value))}
+        input class={fieldClass} type=datetime-local value={localTime(surveySettings.opensAt)} onchange={(e) => setSetting("opensAt", isoTime(e.currentTarget.value))}
       }
-      label {
+      label class={labelClass} {
         span 'Closes at'
-        input type=datetime-local value={localTime(surveySettings.closesAt)} onchange={(e) => setSetting("closesAt", isoTime(e.currentTarget.value))}
+        input class={fieldClass} type=datetime-local value={localTime(surveySettings.closesAt)} onchange={(e) => setSetting("closesAt", isoTime(e.currentTarget.value))}
       }
-      label {
+      label class={labelClass} {
         span 'Maximum responses'
-        input type=number min=1 value={surveySettings.maxResponses ?? ""} oninput={(e) => setSetting("maxResponses", num(e.currentTarget.value))}
+        input class={fieldClass} type=number min=1 value={surveySettings.maxResponses ?? ""} oninput={(e) => setSetting("maxResponses", num(e.currentTarget.value))}
       }
-      label {
+      label class={labelClass} {
         span 'One response per'
-        select value={surveySettings.oneResponsePer ?? ""} onchange={(e) => setSetting("oneResponsePer", e.currentTarget.value || undefined)} {
+        select class={fieldClass} value={surveySettings.oneResponsePer ?? ""} onchange={(e) => setSetting("oneResponsePer", e.currentTarget.value || undefined)} {
           option value="" 'No limit'
           option value=browser 'Browser'
           option value=respondent 'Signed-in respondent'
         }
       }
-      label.kv-props-check {
+      label.kv-props-check class={checkClass} {
         input type=checkbox checked={Boolean(surveySettings.requireRespondent)} onchange={(e) => setSetting("requireRespondent", e.currentTarget.checked || undefined)}
         span 'Only signed-in respondents'
       }
-      label.kv-props-check {
+      label.kv-props-check class={checkClass} {
         input type=checkbox checked={Boolean(surveySettings.anonymous)} onchange={(e) => setSetting("anonymous", e.currentTarget.checked || undefined)}
         span 'Anonymous: keep no respondent id'
       }
       if surveySettings.anonymous {
-        label {
+        label class={labelClass} {
           span 'Hidden fields kept when anonymous'
           input(
+            class={fieldClass}
             placeholder="source, campaign"
             value={(surveySettings.anonymousHidden ?? []).join(", ")}
             onchange={(e) => setSetting("anonymousHidden", nameList(e.currentTarget.value))}
           )
         }
       }
-      label {
+      label class={labelClass} {
         span 'Closed message'
-        textarea rows=2 value={tx(surveySettings.closedMessage)} placeholder="This survey is closed." oninput={(e) => setSetting("closedMessage", e.currentTarget.value ? textValue(surveySettings.closedMessage, e.currentTarget.value) : undefined)}
+        textarea class={fieldClass} rows=2 value={tx(surveySettings.closedMessage)} placeholder="This survey is closed." oninput={(e) => setSetting("closedMessage", e.currentTarget.value ? textValue(surveySettings.closedMessage, e.currentTarget.value) : undefined)}
       }
-      h3 'Privacy and spam'
-      label {
+      h3 class={h3Class} 'Privacy and spam'
+      label class={labelClass} {
         span 'Delete responses after (days)'
-        input type=number min=1 max=36500 value={surveySettings.retentionDays ?? ""} oninput={(e) => setSetting("retentionDays", num(e.currentTarget.value))}
+        input class={fieldClass} type=number min=1 max=36500 value={surveySettings.retentionDays ?? ""} oninput={(e) => setSetting("retentionDays", num(e.currentTarget.value))}
       }
-      label.kv-props-check {
+      label.kv-props-check class={checkClass} {
         input type=checkbox checked={Boolean(antiSpam.honeypot)} onchange={(e) => setAntiSpam("honeypot", e.currentTarget.checked || undefined)}
         span 'Honeypot: refuse responses that fill in a hidden field'
       }
-      label.kv-props-check {
+      label.kv-props-check class={checkClass} {
         input type=checkbox checked={Boolean(antiSpam.challenge)} onchange={(e) => setAntiSpam("challenge", e.currentTarget.checked || undefined)}
         span 'Require a CAPTCHA (checked by the server)'
       }
-      label {
+      label class={labelClass} {
         span 'Minimum seconds to answer'
-        input type=number min=1 max=3600 value={antiSpam.minSeconds ?? ""} oninput={(e) => setAntiSpam("minSeconds", num(e.currentTarget.value))}
+        input class={fieldClass} type=number min=1 max=3600 value={antiSpam.minSeconds ?? ""} oninput={(e) => setAntiSpam("minSeconds", num(e.currentTarget.value))}
       }
-      label {
+      label class={labelClass} {
         span 'Refuse duplicate answers within (seconds)'
-        input type=number min=1 max=86400 value={antiSpam.duplicateWindow ?? ""} oninput={(e) => setAntiSpam("duplicateWindow", num(e.currentTarget.value))}
+        input class={fieldClass} type=number min=1 max=86400 value={antiSpam.duplicateWindow ?? ""} oninput={(e) => setAntiSpam("duplicateWindow", num(e.currentTarget.value))}
       }
-      h3 'Hidden fields'
-      p.kv-props-hint 'Values your site passes in (a campaign, a user id), usable in conditions and text. Separate them with commas.'
+      h3 class={h3Class} 'Hidden fields'
+      p.kv-props-hint class={hintClass} 'Values your site passes in (a campaign, a user id), usable in conditions and text. Separate them with commas.'
       input.kv-props-hidden(
+        class={fieldClass}
         aria-label="Hidden fields"
         placeholder="source, userId"
         value={((view.survey as Loose).hiddenFields ?? []).join(", ")}
         onchange={(e) => setHiddenFields(e.currentTarget.value)}
       )
-      h3 'Variables'
-      p.kv-props-hint 'Named values worked out from answers. Use them in expressions and text as {"{name}"}.'
+      h3 class={h3Class} 'Variables'
+      p.kv-props-hint class={hintClass} 'Named values worked out from answers. Use them in expressions and text as {"{name}"}.'
       each variables as v, vi (vi) {
-        .kv-props-variable {
-          input aria-label="Variable name" value={v.name} oninput={(e) => editVariable(vi, { name: e.currentTarget.value })}
-          input.kv-props-expr aria-label="Variable expression" spellcheck=false value={v.expr} oninput={(e) => editVariable(vi, { expr: e.currentTarget.value })}
-          button type=button aria-label="Remove variable {v.name}" onclick={() => setVariables(variables.filter((_, j) => j !== vi))} '×'
+        .kv-props-variable class="kv:grid kv:grid-cols-[6rem_1fr_auto] kv:gap-1 kv:items-center kv:mb-[0.3rem]" {
+          input class={fieldClass} aria-label="Variable name" value={v.name} oninput={(e) => editVariable(vi, { name: e.currentTarget.value })}
+          input.kv-props-expr class={fieldClass} aria-label="Variable expression" spellcheck=false value={v.expr} oninput={(e) => editVariable(vi, { expr: e.currentTarget.value })}
+          button class={buttonClass} type=button aria-label="Remove variable {v.name}" onclick={() => setVariables(variables.filter((_, j) => j !== vi))} '×'
           if expressionError(v.expr) {
-            p.kv-props-error '{expressionError(v.expr)}'
+            p.kv-props-error class="{errorClass} kv:col-span-full" '{expressionError(v.expr)}'
           }
         }
       }
-      button type=button onclick={addVariable} 'Add a variable'
-      h3 'Triggers'
-      p.kv-props-hint 'Actions that run when a condition becomes true.'
+      button class={buttonClass} type=button onclick={addVariable} 'Add a variable'
+      h3 class={h3Class} 'Triggers'
+      p.kv-props-hint class={hintClass} 'Actions that run when a condition becomes true.'
       TriggerList(
         survey={view.survey}
         triggers={((view.survey as Loose).triggers ?? []) as Trigger[]}
         onchange={(next, typing) => doc.updateSurvey({ triggers: next } as Loose, typing ? { mergeKey: "survey.triggers" } : {})}
       )
-      p.kv-props-hint 'Select a question or panel in the outline or the preview to edit it.'
+      p.kv-props-hint class={hintClass} 'Select a question or panel in the outline or the preview to edit it.'
     } else {
-      h3 '{el.type === "panel" ? (el.repeat ? "Repeating panel" : "Panel") : el.type === "content" ? "Content" : el.type === "image" ? "Image" : `Question · ${el.type}`}'
-      label {
+      h3 class={h3Class} '{el.type === "panel" ? (el.repeat ? "Repeating panel" : "Panel") : el.type === "content" ? "Content" : el.type === "image" ? "Image" : `Question · ${el.type}`}'
+      label class={labelClass} {
         span 'Id'
-        input.kv-props-id value={idDraft} oninput={(e) => (idDraft = e.currentTarget.value)} onchange={rename}
+        input.kv-props-id class={fieldClass} value={idDraft} oninput={(e) => (idDraft = e.currentTarget.value)} onchange={rename}
       }
       if idError {
-        p.kv-props-error '{idError}'
+        p.kv-props-error class={errorClass} '{idError}'
       }
       if el.type === "content" || el.type === "image" {
         if el.type === "content" {
-          label {
+          label class={labelClass} {
             span 'Text'
-            textarea.kv-props-markdown rows=6 value={tx(el.markdown)} oninput={(e) => set("markdown", e.currentTarget.value)}
+            textarea.kv-props-markdown class={fieldClass} rows=6 value={tx(el.markdown)} oninput={(e) => set("markdown", e.currentTarget.value)}
           }
-          p.kv-props-hint 'Markdown: **bold**, *italic*, [link](https://…), - lists, 1. lists. Answers: {"{questionId}"}.'
+          p.kv-props-hint class={hintClass} 'Markdown: **bold**, *italic*, [link](https://…), - lists, 1. lists. Answers: {"{questionId}"}.'
         } else {
-          label {
+          label class={labelClass} {
             span 'Image URL'
-            input value={el.src ?? ""} oninput={(e) => set("src", e.currentTarget.value)}
+            input class={fieldClass} value={el.src ?? ""} oninput={(e) => set("src", e.currentTarget.value)}
           }
-          label {
+          label class={labelClass} {
             span 'Alt text'
-            input value={tx(el.alt)} placeholder="Describe the image" oninput={(e) => doc.updateElement(el.id, { alt: textValue(el.alt, e.currentTarget.value) }, { mergeKey: `${el.id}.alt` })}
+            input class={fieldClass} value={tx(el.alt)} placeholder="Describe the image" oninput={(e) => doc.updateElement(el.id, { alt: textValue(el.alt, e.currentTarget.value) }, { mergeKey: `${el.id}.alt` })}
           }
-          label {
+          label class={labelClass} {
             span 'Width'
-            input type=number min=1 value={el.width ?? ""} oninput={(e) => set("width", num(e.currentTarget.value))}
+            input class={fieldClass} type=number min=1 value={el.width ?? ""} oninput={(e) => set("width", num(e.currentTarget.value))}
           }
         }
-        h4 'Logic'
+        h4 class={h4Class} 'Logic'
         ConditionBuilder(
           survey={view.survey}
           owner={{ element: el.id }}
@@ -357,23 +369,23 @@
           onchange={(c, typing) => setCondition("visibleIf", c, typing)}
         )
       } else {
-      label {
+      label class={labelClass} {
         span 'Title'
-        input value={tx(el.title)} oninput={(e) => (el.type === "panel" ? set("title", e.currentTarget.value) : setTitle(e.currentTarget.value))}
+        input class={fieldClass} value={tx(el.title)} oninput={(e) => (el.type === "panel" ? set("title", e.currentTarget.value) : setTitle(e.currentTarget.value))}
       }
       if pipeSources.length {
-        select.kv-props-pipe aria-label="Insert an earlier answer into the title" onchange={(e) => insertAnswer(e.currentTarget)} {
+        select.kv-props-pipe class={fieldClass} aria-label="Insert an earlier answer into the title" onchange={(e) => insertAnswer(e.currentTarget)} {
           option value="" 'Insert an answer…'
           each pipeSources as s (s.id) {
             option value={s.id} '{s.label}{s.scope ? " (same item)" : ""}'
           }
         }
       }
-      label {
+      label class={labelClass} {
         span 'Description'
-        textarea rows=2 value={tx(el.description)} oninput={(e) => set("description", e.currentTarget.value)}
+        textarea class={fieldClass} rows=2 value={tx(el.description)} oninput={(e) => set("description", e.currentTarget.value)}
       }
-      h4 'Logic'
+      h4 class={h4Class} 'Logic'
       ConditionBuilder(
         survey={view.survey}
         owner={{ element: el.id }}
@@ -393,17 +405,17 @@
         )
       }
       if el.type !== "panel" {
-        label.kv-props-check {
+        label.kv-props-check class={checkClass} {
           input type=checkbox checked={Boolean(el.required)} onchange={(e) => set("required", e.currentTarget.checked || undefined)}
           span 'Required'
         }
       }
       if el.type !== "panel" && el.type !== "computed" {
-        label.kv-props-check {
+        label.kv-props-check class={checkClass} {
           input type=checkbox checked={Boolean(el.readOnly)} onchange={(e) => set("readOnly", e.currentTarget.checked || undefined)}
           span 'Read-only'
         }
-        label.kv-props-check {
+        label.kv-props-check class={checkClass} {
           input type=checkbox checked={Boolean(el.pii)} onchange={(e) => set("pii", e.currentTarget.checked || undefined)}
           span 'Personal data (masked for people without access)'
         }
@@ -423,40 +435,40 @@
           addLabel="Clear the answer when…"
           onchange={(c, typing) => setCondition("resetIf", c, typing)}
         )
-        label {
+        label class={labelClass} {
           span 'Default (expression)'
-          input.kv-props-expr spellcheck=false value={el.defaultExpr ?? ""} placeholder={"e.g. {price} * 2"} oninput={(e) => set("defaultExpr", e.currentTarget.value)}
+          input.kv-props-expr class={fieldClass} spellcheck=false value={el.defaultExpr ?? ""} placeholder={"e.g. {price} * 2"} oninput={(e) => set("defaultExpr", e.currentTarget.value)}
         }
         if el.defaultExpr && expressionError(el.defaultExpr) {
-          p.kv-props-error '{expressionError(el.defaultExpr)}'
+          p.kv-props-error class={errorClass} '{expressionError(el.defaultExpr)}'
         }
       }
       if el.type === "computed" {
-        label {
+        label class={labelClass} {
           span 'Expression'
-          input.kv-props-expr spellcheck=false value={el.expr ?? ""} oninput={(e) => set("expr", e.currentTarget.value)}
+          input.kv-props-expr class={fieldClass} spellcheck=false value={el.expr ?? ""} oninput={(e) => set("expr", e.currentTarget.value)}
         }
         if expressionError(el.expr ?? "") {
-          p.kv-props-error '{expressionError(el.expr ?? "")}'
+          p.kv-props-error class={errorClass} '{expressionError(el.expr ?? "")}'
         }
-        label {
+        label class={labelClass} {
           span 'Decimals'
-          input type=number min=0 max=10 value={el.decimals ?? ""} oninput={(e) => set("decimals", num(e.currentTarget.value))}
+          input class={fieldClass} type=number min=0 max=10 value={el.decimals ?? ""} oninput={(e) => set("decimals", num(e.currentTarget.value))}
         }
-        label {
+        label class={labelClass} {
           span 'Prefix'
-          input value={tx(el.prefix)} oninput={(e) => set("prefix", e.currentTarget.value)}
+          input class={fieldClass} value={tx(el.prefix)} oninput={(e) => set("prefix", e.currentTarget.value)}
         }
-        label {
+        label class={labelClass} {
           span 'Suffix'
-          input value={tx(el.suffix)} oninput={(e) => set("suffix", e.currentTarget.value)}
+          input class={fieldClass} value={tx(el.suffix)} oninput={(e) => set("suffix", e.currentTarget.value)}
         }
       }
 
       if el.type === "text" {
-        label {
+        label class={labelClass} {
           span 'Input type'
-          select value={el.inputType ?? "text"} onchange={(e) => set("inputType", e.currentTarget.value === "text" ? undefined : e.currentTarget.value)} {
+          select class={fieldClass} value={el.inputType ?? "text"} onchange={(e) => set("inputType", e.currentTarget.value === "text" ? undefined : e.currentTarget.value)} {
             each inputTypes as t (t) {
               option value={t} '{t}'
             }
@@ -464,118 +476,118 @@
         }
       }
       if el.type === "text" || el.type === "comment" {
-        label {
+        label class={labelClass} {
           span 'Placeholder'
-          input value={tx(el.placeholder)} oninput={(e) => set("placeholder", e.currentTarget.value)}
+          input class={fieldClass} value={tx(el.placeholder)} oninput={(e) => set("placeholder", e.currentTarget.value)}
         }
       }
       if el.type === "comment" {
-        label {
+        label class={labelClass} {
           span 'Rows'
-          input type=number min=1 value={el.rows ?? ""} oninput={(e) => set("rows", num(e.currentTarget.value))}
+          input class={fieldClass} type=number min=1 value={el.rows ?? ""} oninput={(e) => set("rows", num(e.currentTarget.value))}
         }
       }
       if el.type === "rating" {
-        label {
+        label class={labelClass} {
           span 'Min'
-          input type=number value={el.min ?? 1} oninput={(e) => set("min", num(e.currentTarget.value))}
+          input class={fieldClass} type=number value={el.min ?? 1} oninput={(e) => set("min", num(e.currentTarget.value))}
         }
-        label {
+        label class={labelClass} {
           span 'Max'
-          input type=number value={el.max ?? 5} oninput={(e) => set("max", num(e.currentTarget.value))}
+          input class={fieldClass} type=number value={el.max ?? 5} oninput={(e) => set("max", num(e.currentTarget.value))}
         }
       }
       if el.type === "boolean" {
-        label {
+        label class={labelClass} {
           span 'Yes label'
-          input value={tx(el.labelTrue)} placeholder="Yes" oninput={(e) => set("labelTrue", e.currentTarget.value)}
+          input class={fieldClass} value={tx(el.labelTrue)} placeholder="Yes" oninput={(e) => set("labelTrue", e.currentTarget.value)}
         }
-        label {
+        label class={labelClass} {
           span 'No label'
-          input value={tx(el.labelFalse)} placeholder="No" oninput={(e) => set("labelFalse", e.currentTarget.value)}
+          input class={fieldClass} value={tx(el.labelFalse)} placeholder="No" oninput={(e) => set("labelFalse", e.currentTarget.value)}
         }
       }
       if "choices" in el && el.type !== "grid" {
-        h4 'Choices'
+        h4 class={h4Class} 'Choices'
         ChoiceList defaultLocale={dl} items={el.choices as Choice[]} min={el.type === "ranking" ? 2 : 1} images={el.type === "image-choice"} onchange={(items) => set("choices", items)}
       }
       if el.type === "dropdown" {
-        label.kv-props-check {
+        label.kv-props-check class={checkClass} {
           input type=checkbox checked={Boolean(el.searchable)} onchange={(e) => set("searchable", e.currentTarget.checked || undefined)}
           span 'Searchable'
         }
       }
       if el.type === "image-choice" {
-        label.kv-props-check {
+        label.kv-props-check class={checkClass} {
           input type=checkbox checked={Boolean(el.multiple)} onchange={(e) => set("multiple", e.currentTarget.checked || undefined)}
           span 'Several pictures'
         }
       }
       if el.type === "tags" {
-        label.kv-props-check {
+        label.kv-props-check class={checkClass} {
           input type=checkbox checked={Boolean(el.allowCustom)} onchange={(e) => set("allowCustom", e.currentTarget.checked || undefined)}
           span 'Allow own entries'
         }
-        label {
+        label class={labelClass} {
           span 'Most entries'
-          input type=number min=1 value={el.maxTags ?? ""} oninput={(e) => set("maxTags", num(e.currentTarget.value))}
+          input class={fieldClass} type=number min=1 value={el.maxTags ?? ""} oninput={(e) => set("maxTags", num(e.currentTarget.value))}
         }
       }
       if el.type === "multi-text" {
-        h4 'Fields'
+        h4 class={h4Class} 'Fields'
         ChoiceList defaultLocale={dl} items={el.items as Choice[]} noun="field" onchange={(items) => set("items", items)}
       }
       if el.type === "slider" {
-        label {
+        label class={labelClass} {
           span 'Min'
-          input type=number value={el.min ?? 0} oninput={(e) => set("min", num(e.currentTarget.value))}
+          input class={fieldClass} type=number value={el.min ?? 0} oninput={(e) => set("min", num(e.currentTarget.value))}
         }
-        label {
+        label class={labelClass} {
           span 'Max'
-          input type=number value={el.max ?? 100} oninput={(e) => set("max", num(e.currentTarget.value))}
+          input class={fieldClass} type=number value={el.max ?? 100} oninput={(e) => set("max", num(e.currentTarget.value))}
         }
-        label {
+        label class={labelClass} {
           span 'Step'
-          input type=number min=0 value={el.step ?? 1} oninput={(e) => set("step", num(e.currentTarget.value))}
+          input class={fieldClass} type=number min=0 value={el.step ?? 1} oninput={(e) => set("step", num(e.currentTarget.value))}
         }
-        label {
+        label class={labelClass} {
           span 'Unit'
-          input value={tx(el.unit)} placeholder="%" oninput={(e) => set("unit", e.currentTarget.value)}
+          input class={fieldClass} value={tx(el.unit)} placeholder="%" oninput={(e) => set("unit", e.currentTarget.value)}
         }
       }
       if el.type === "matrix" || el.type === "grid" {
-        h4 'Rows'
+        h4 class={h4Class} 'Rows'
         ChoiceList defaultLocale={dl} items={el.rows as Choice[]} noun="row" onchange={(items) => set("rows", items)}
       }
       if el.type === "matrix" {
-        h4 'Columns'
+        h4 class={h4Class} 'Columns'
         ChoiceList defaultLocale={dl} items={el.columns as Choice[]} noun="column" onchange={(items) => set("columns", items)}
-        label.kv-props-check {
+        label.kv-props-check class={checkClass} {
           input type=checkbox checked={Boolean(el.multiple)} onchange={(e) => set("multiple", e.currentTarget.checked || undefined)}
           span 'Several answers per row'
         }
       }
       if el.type === "grid" {
-        h4 'Columns'
+        h4 class={h4Class} 'Columns'
         each el.columns as col, ci (ci) {
-          .kv-props-column {
-            label {
+          .kv-props-column class="kv:border kv:border-ui-border kv:rounded-md kv:p-[0.4rem] kv:grid kv:gap-[0.3rem]" {
+            label class={labelClass} {
               span 'Label'
-              input value={col.label} oninput={(e) => editColumn(ci, { label: e.currentTarget.value })}
+              input class={fieldClass} value={col.label} oninput={(e) => editColumn(ci, { label: e.currentTarget.value })}
             }
-            label {
+            label class={labelClass} {
               span 'Value'
-              input value={col.value} oninput={(e) => editColumn(ci, { value: e.currentTarget.value })}
+              input class={fieldClass} value={col.value} oninput={(e) => editColumn(ci, { value: e.currentTarget.value })}
             }
-            label {
+            label class={labelClass} {
               span 'Cell'
-              select value={col.cellType} onchange={(e) => editColumn(ci, { cellType: e.currentTarget.value })} {
+              select class={fieldClass} value={col.cellType} onchange={(e) => editColumn(ci, { cellType: e.currentTarget.value })} {
                 each cellTypes as t (t) {
                   option value={t} '{t}'
                 }
               }
             }
-            label.kv-props-check {
+            label.kv-props-check class={checkClass} {
               input type=checkbox checked={Boolean(col.required)} onchange={(e) => editColumn(ci, { required: e.currentTarget.checked })}
               span 'Required in each row'
             }
@@ -590,34 +602,36 @@
               )
             }
             button(
+              class={buttonClass}
               type=button
               disabled={el.columns.length <= 1}
               onclick={() => set("columns", (el!.columns as Loose[]).filter((_, j) => j !== ci))}
             ) 'Remove column'
           }
         }
-        button type=button onclick={addColumn} 'Add column'
+        button class={buttonClass} type=button onclick={addColumn} 'Add column'
       }
       if el.type === "file" {
-        label {
+        label class={labelClass} {
           span 'Accept'
           input(
+            class={fieldClass}
             value={(el.accept ?? []).join(", ")}
             placeholder="image/*, .pdf"
             oninput={(e) => set("accept", e.currentTarget.value.split(",").map((s) => s.trim()).filter(Boolean))}
           )
         }
-        label {
+        label class={labelClass} {
           span 'Max size (bytes)'
-          input type=number min=1 value={el.maxSize ?? ""} oninput={(e) => set("maxSize", num(e.currentTarget.value))}
+          input class={fieldClass} type=number min=1 value={el.maxSize ?? ""} oninput={(e) => set("maxSize", num(e.currentTarget.value))}
         }
-        label {
+        label class={labelClass} {
           span 'Max files'
-          input type=number min=1 value={el.maxFiles ?? 1} oninput={(e) => set("maxFiles", num(e.currentTarget.value))}
+          input class={fieldClass} type=number min=1 value={el.maxFiles ?? 1} oninput={(e) => set("maxFiles", num(e.currentTarget.value))}
         }
       }
       if el.type === "panel" {
-        label.kv-props-check {
+        label.kv-props-check class={checkClass} {
           input(
             type=checkbox
             checked={Boolean(el.repeat)}
@@ -627,72 +641,54 @@
           span 'Repeat (respondents add items)'
         }
         if el.repeat {
-          label {
+          label class={labelClass} {
             span 'Min items'
-            input type=number min=0 value={el.repeat.min ?? ""} oninput={(e) => setRepeat("min", num(e.currentTarget.value))}
+            input class={fieldClass} type=number min=0 value={el.repeat.min ?? ""} oninput={(e) => setRepeat("min", num(e.currentTarget.value))}
           }
-          label {
+          label class={labelClass} {
             span 'Max items'
-            input type=number min=1 value={el.repeat.max ?? ""} oninput={(e) => setRepeat("max", num(e.currentTarget.value))}
+            input class={fieldClass} type=number min=1 value={el.repeat.max ?? ""} oninput={(e) => setRepeat("max", num(e.currentTarget.value))}
           }
-          label {
+          label class={labelClass} {
             span 'Item title'
-            input value={tx(el.repeat.itemTitle)} placeholder={"Item {n}"} oninput={(e) => setRepeat("itemTitle", e.currentTarget.value)}
+            input class={fieldClass} value={tx(el.repeat.itemTitle)} placeholder={"Item {n}"} oninput={(e) => setRepeat("itemTitle", e.currentTarget.value)}
           }
-          label {
+          label class={labelClass} {
             span 'Add button'
-            input value={tx(el.repeat.addLabel)} placeholder="Add" oninput={(e) => setRepeat("addLabel", e.currentTarget.value)}
+            input class={fieldClass} value={tx(el.repeat.addLabel)} placeholder="Add" oninput={(e) => setRepeat("addLabel", e.currentTarget.value)}
           }
         }
       }
       if quiz && el.type !== "panel" && el.type !== "computed" {
-        h4 'Quiz'
-        label {
+        h4 class={h4Class} 'Quiz'
+        label class={labelClass} {
           span 'Correct answer'
-          input.kv-props-correct placeholder={listTypes.includes(el.type) ? "a, b" : "value"} value={answerText(el.correctAnswer)} onchange={(e) => setCorrect(e.currentTarget.value)}
+          input.kv-props-correct class={fieldClass} placeholder={listTypes.includes(el.type) ? "a, b" : "value"} value={answerText(el.correctAnswer)} onchange={(e) => setCorrect(e.currentTarget.value)}
         }
-        label {
+        label class={labelClass} {
           span 'Points'
-          input type=number min=0 value={el.points ?? ""} placeholder="1" oninput={(e) => set("points", num(e.currentTarget.value))}
+          input class={fieldClass} type=number min=0 value={el.points ?? ""} placeholder="1" oninput={(e) => set("points", num(e.currentTarget.value))}
         }
         if listTypes.includes(el.type) || el.type === "matrix" || el.type === "image-choice" {
-          label.kv-props-check {
+          label.kv-props-check class={checkClass} {
             input type=checkbox checked={Boolean(el.partialCredit)} onchange={(e) => set("partialCredit", e.currentTarget.checked || undefined)}
             span 'Partial credit'
           }
         }
-        label {
+        label class={labelClass} {
           span 'If right'
-          input value={el.feedback?.correct ?? ""} oninput={(e) => setFeedback("correct", e.currentTarget.value)}
+          input class={fieldClass} value={el.feedback?.correct ?? ""} oninput={(e) => setFeedback("correct", e.currentTarget.value)}
         }
-        label {
+        label class={labelClass} {
           span 'If wrong'
-          input value={el.feedback?.wrong ?? ""} oninput={(e) => setFeedback("wrong", e.currentTarget.value)}
+          input class={fieldClass} value={el.feedback?.wrong ?? ""} oninput={(e) => setFeedback("wrong", e.currentTarget.value)}
         }
       }
       if el.type !== "panel" {
-        h4 'Rules'
+        h4 class={h4Class} 'Rules'
         ValidatorList question={el as Question} items={(el.validators ?? []) as Validator[]} onchange={(items) => set("validators", items)}
       }
       }
     }
   }
 </template>
-
-<style>
-  .kv-props { display: grid; gap: 0.45rem; align-content: start; }
-  .kv-props h3 { font-size: 1rem; margin: 0.25rem 0; }
-  .kv-props h4 { font-size: 0.9rem; margin: 0.5rem 0 0; }
-  .kv-props label { display: grid; grid-template-columns: 6.5rem 1fr; gap: 0.4rem; align-items: center; font-size: 0.9rem; }
-  .kv-props label.kv-props-check { grid-template-columns: auto 1fr; }
-  .kv-props input:not([type="checkbox"]), .kv-props textarea, .kv-props select { font: inherit; font-size: 0.9rem; padding: 0.25rem 0.4rem; min-width: 0; }
-  .kv-props-id { font-family: ui-monospace, monospace; }
-  .kv-props-column { border: 1px solid var(--kv-ui-border, #e5e7eb); border-radius: 0.375rem; padding: 0.4rem; display: grid; gap: 0.3rem; }
-  .kv-props button { font: inherit; font-size: 0.85rem; cursor: pointer; justify-self: start; }
-  .kv-props-logic { padding-left: 6.9rem; }
-  .kv-props-hint { color: var(--kv-ui-muted, #6b7280); font-size: 0.85rem; }
-  .kv-props-error { color: var(--kv-ui-danger, #b91c1c); font-size: 0.85rem; margin: 0; }
-  .kv-props-expr, .kv-props-markdown { font-family: ui-monospace, monospace; }
-  .kv-props-variable { display: grid; grid-template-columns: 6rem 1fr auto; gap: 0.25rem; align-items: center; margin-bottom: 0.3rem; }
-  .kv-props-variable .kv-props-error { grid-column: 1 / -1; }
-</style>

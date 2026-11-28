@@ -118,27 +118,38 @@
   }
 
   const broken = (source: string, translation: string | undefined) => translation !== undefined && !samePlaceholders(source, translation);
+
+  // Tailwind classes used more than once (prefixed `kv:`; see editor.css).
+  const controlClass = "kv:font-inherit kv:text-[0.85rem]";
+  const buttonClass = `${controlClass} kv:cursor-pointer`;
+  const barClass = "kv:flex kv:flex-wrap kv:gap-2 kv:[align-items:end]";
+  const cellClass = "kv:border-b kv:border-b-ui-border kv:py-[0.3rem] kv:px-[0.4rem] kv:text-left kv:align-top";
+  const translationClass = (missing: boolean, review: boolean) =>
+    `${controlClass} kv:w-full kv:box-border kv:resize-y` +
+    (missing ? " kv:bg-ui-warn-soft" : "") +
+    (review ? " kv:border-ui-review" : missing ? " kv:border-ui-warn" : "");
 </script>
 
 <template lang="braceml">
-  .kv-translations {
-    .kv-translations-head {
-      label {
+  .kv-translations class="kv:grid kv:gap-[0.6rem] kv:text-[0.9rem]" {
+    .kv-translations-head class={barClass} {
+      label class="kv:grid kv:gap-[0.15rem]" {
         span 'Default language'
-        input.kv-translations-code value={defaultLocale} readonly aria-readonly=true
+        input.kv-translations-code class={`${controlClass} kv:w-24`} value={defaultLocale} readonly aria-readonly=true
       }
       if others.length {
-        label {
+        label class="kv:grid kv:gap-[0.15rem]" {
           span 'Translate into'
-          select value={locale} onchange={(e) => (picked = e.currentTarget.value)} {
+          select class={controlClass} value={locale} onchange={(e) => (picked = e.currentTarget.value)} {
             each others as l (l) {
               option value={l} '{l}'
             }
           }
         }
       }
-      .kv-translations-add {
+      .kv-translations-add class={barClass} {
         input(
+          class={controlClass}
           list="kv-locale-codes"
           placeholder="de, fr, pt-BR…"
           aria-label="Language to add"
@@ -151,44 +162,45 @@
             option value={l}
           }
         }
-        button type=button onclick={addNewLocale} 'Add language'
+        button class={buttonClass} type=button onclick={addNewLocale} 'Add language'
       }
     }
     if notice {
-      p.kv-translations-notice role=status '{notice}'
+      p.kv-translations-notice class="kv:m-0 kv:text-ui-accent-text" role=status '{notice}'
     }
     if !locale {
-      p.kv-translations-empty 'Add a language to start translating. Texts you leave empty fall back to the default language.'
+      p.kv-translations-empty class="kv:m-0 kv:text-ui-muted" 'Add a language to start translating. Texts you leave empty fall back to the default language.'
     } else {
-      .kv-translations-actions {
-        span.kv-translations-stats '{missing} missing · {toReview} to review'
+      .kv-translations-actions class={barClass} {
+        span.kv-translations-stats class="kv:m-0 kv:text-ui-muted" '{missing} missing · {toReview} to review'
         if translate {
-          button.kv-translations-ai type=button disabled={busy || missing === 0} onclick={machineTranslate} '{busy ? "Translating…" : "Translate missing with AI"}'
+          button.kv-translations-ai class={buttonClass} type=button disabled={busy || missing === 0} onclick={machineTranslate} '{busy ? "Translating…" : "Translate missing with AI"}'
         }
         if toReview {
-          button type=button onclick={() => apply(markReviewed(survey, locale))} 'Mark all reviewed'
+          button class={buttonClass} type=button onclick={() => apply(markReviewed(survey, locale))} 'Mark all reviewed'
         }
         each formats as f (f.format) {
-          button type=button onclick={() => download(f.format)} 'Export {f.label}'
+          button class={buttonClass} type=button onclick={() => download(f.format)} 'Export {f.label}'
         }
         label.kv-translations-import {
           span 'Import…'
-          input type=file accept=".csv,.xlf,.xliff,.xml,.json" onchange={(e) => upload(e.currentTarget)}
+          input class="kv:font-inherit kv:text-[0.8rem]" type=file accept=".csv,.xlf,.xliff,.xml,.json" onchange={(e) => upload(e.currentTarget)}
         }
       }
-      table.kv-translations-table {
+      table.kv-translations-table class="kv:border-collapse kv:w-full" {
         thead > tr {
-          th scope=col 'Text'
-          th scope=col '{defaultLocale}'
-          th scope=col '{locale}'
+          th class={cellClass} scope=col 'Text'
+          th class={cellClass} scope=col '{defaultLocale}'
+          th class={cellClass} scope=col '{locale}'
         }
         tbody {
           each rows as row (row.key) {
             tr class:kv-translations-missing={row.translation === undefined && row.source !== ""} class:kv-translations-review={row.needsReview} {
-              td.kv-translations-key '{row.key}'
-              td '{row.source}'
-              td {
+              td.kv-translations-key class={`${cellClass} kv:[font-family:ui-monospace,monospace] kv:text-[0.75rem] kv:text-ui-muted kv:break-all`} '{row.key}'
+              td class={cellClass} '{row.source}'
+              td class={cellClass} {
                 textarea(
+                  class={translationClass(row.translation === undefined && row.source !== '', Boolean(row.needsReview))}
                   rows=1
                   aria-label="{row.key} in {locale}"
                   value={row.translation ?? ""}
@@ -196,13 +208,13 @@
                   oninput={(e) => edit(row.key, e.currentTarget.value)}
                 )
                 if row.needsReview {
-                  .kv-translations-flag {
+                  .kv-translations-flag class="kv:flex kv:gap-[0.4rem] kv:items-center kv:text-[0.78rem] kv:text-ui-review-text" {
                     span 'Machine translation, not checked yet'
-                    button type=button onclick={() => apply(markReviewed(survey, locale, [row.key]))} 'Looks right'
+                    button class={buttonClass} type=button onclick={() => apply(markReviewed(survey, locale, [row.key]))} 'Looks right'
                   }
                 }
                 if broken(row.source, row.translation) {
-                  span.kv-translations-broken 'Placeholders differ from the original'
+                  span.kv-translations-broken class="kv:block kv:text-[0.78rem] kv:text-ui-danger" 'Placeholders differ from the original'
                 }
               }
             }
@@ -212,23 +224,3 @@
     }
   }
 </template>
-
-<style>
-  .kv-translations { display: grid; gap: 0.6rem; font-size: 0.9rem; }
-  .kv-translations-head, .kv-translations-actions, .kv-translations-add { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: end; }
-  .kv-translations-head label { display: grid; gap: 0.15rem; }
-  .kv-translations-code { width: 6rem; }
-  .kv-translations input, .kv-translations select, .kv-translations button, .kv-translations textarea { font: inherit; font-size: 0.85rem; }
-  .kv-translations button { cursor: pointer; }
-  .kv-translations-notice { margin: 0; color: var(--kv-ui-accent-text, #1e40af); }
-  .kv-translations-empty, .kv-translations-stats { margin: 0; color: var(--kv-ui-muted, #6b7280); }
-  .kv-translations-import input { font-size: 0.8rem; }
-  .kv-translations-table { border-collapse: collapse; width: 100%; }
-  .kv-translations-table th, .kv-translations-table td { border-bottom: 1px solid var(--kv-ui-border, #e5e7eb); padding: 0.3rem 0.4rem; text-align: left; vertical-align: top; }
-  .kv-translations-table textarea { width: 100%; box-sizing: border-box; resize: vertical; }
-  .kv-translations-key { font-family: ui-monospace, monospace; font-size: 0.75rem; color: var(--kv-ui-muted, #6b7280); word-break: break-all; }
-  .kv-translations-missing textarea { border-color: var(--kv-ui-warn, #f59e0b); background: var(--kv-ui-warn-soft, #fffbeb); }
-  .kv-translations-review textarea { border-color: var(--kv-ui-review, #a78bfa); }
-  .kv-translations-flag { display: flex; gap: 0.4rem; align-items: center; font-size: 0.78rem; color: var(--kv-ui-review-text, #6d28d9); }
-  .kv-translations-broken { display: block; font-size: 0.78rem; color: var(--kv-ui-danger, #b91c1c); }
-</style>

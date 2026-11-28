@@ -52,84 +52,79 @@
     set([...items, starter]);
     adding = "";
   }
+
+  // Tailwind classes used more than once (prefixed `kv:`; see editor.css).
+  const labelClass = "kv:grid kv:grid-cols-[6.5rem_1fr] kv:gap-[0.3rem] kv:items-center kv:text-[0.85rem]";
+  const fieldClass = "kv:font-inherit kv:text-[0.85rem] kv:py-[0.2rem] kv:px-[0.35rem] kv:min-w-0";
+  const controlClass = "kv:font-inherit kv:text-[0.85rem] kv:cursor-pointer";
 </script>
 
 <template lang="braceml">
-  .kv-validators {
+  .kv-validators class="kv:grid kv:gap-[0.4rem]" {
     each items as v, i (i) {
-      .kv-validator {
-        .kv-validator-head {
+      .kv-validator class="kv:border kv:border-ui-border kv:rounded-md kv:p-[0.4rem] kv:grid kv:gap-[0.3rem]" {
+        .kv-validator-head class="kv:flex kv:justify-between kv:items-center" {
           strong '{v.type}'
-          button type=button aria-label="Remove {v.type} rule" onclick={() => set(items.filter((_, j) => j !== i))} '×'
+          button class={controlClass} type=button aria-label="Remove {v.type} rule" onclick={() => set(items.filter((_, j) => j !== i))} '×'
         }
         if v.type === "pattern" {
-          label {
+          label class={labelClass} {
             span 'Pattern'
-            input value={v.pattern} oninput={(e) => edit(i, { pattern: e.currentTarget.value })}
+            input class={fieldClass} value={v.pattern} oninput={(e) => edit(i, { pattern: e.currentTarget.value })}
           }
-          label {
+          label class={labelClass} {
             span 'Flags'
-            input value={v.flags ?? ""} placeholder="i, m, s, u" oninput={(e) => edit(i, { flags: e.currentTarget.value })}
+            input class={fieldClass} value={v.flags ?? ""} placeholder="i, m, s, u" oninput={(e) => edit(i, { flags: e.currentTarget.value })}
           }
         } else if v.type === "length" || v.type === "count" || v.type === "range" {
-          label {
+          label class={labelClass} {
             span 'Min'
             input(
+              class={fieldClass}
               type={v.type === "range" && dates ? "date" : "number"}
               value={v.min ?? ""}
               oninput={(e) => edit(i, { min: v.type === "range" ? bound(e.currentTarget.value) : num(e.currentTarget.value) })}
             )
           }
-          label {
+          label class={labelClass} {
             span 'Max'
             input(
+              class={fieldClass}
               type={v.type === "range" && dates ? "date" : "number"}
               value={v.max ?? ""}
               oninput={(e) => edit(i, { max: v.type === "range" ? bound(e.currentTarget.value) : num(e.currentTarget.value) })}
             )
           }
         } else if v.type === "expression" {
-          label {
+          label class={labelClass} {
             span 'Expression'
-            input.kv-validator-expr spellcheck=false value={v.expr} oninput={(e) => edit(i, { expr: e.currentTarget.value })}
+            input.kv-validator-expr class={`${fieldClass} kv:[font-family:ui-monospace,monospace]!`} spellcheck=false value={v.expr} oninput={(e) => edit(i, { expr: e.currentTarget.value })}
           }
           if expressionError(v.expr) {
-            p.kv-validator-error role=alert '{expressionError(v.expr)}'
+            p.kv-validator-error class="kv:m-0 kv:text-ui-danger kv:text-[0.8rem]" role=alert '{expressionError(v.expr)}'
           }
         } else if v.type === "custom" {
-          label {
+          label class={labelClass} {
             span 'Function name'
-            input value={v.name} oninput={(e) => edit(i, { name: e.currentTarget.value })}
+            input class={fieldClass} value={v.name} oninput={(e) => edit(i, { name: e.currentTarget.value })}
           }
         }
-        label {
+        label class={labelClass} {
           span 'Message'
-          input value={v.message ?? ""} placeholder="Default message" oninput={(e) => edit(i, { message: e.currentTarget.value })}
+          input class={fieldClass} value={v.message ?? ""} placeholder="Default message" oninput={(e) => edit(i, { message: e.currentTarget.value })}
         }
       }
     }
     if available.length {
-      .kv-validator-add {
-        select value={adding} onchange={(e) => (adding = e.currentTarget.value as ValidatorType | "")} aria-label="Rule to add" {
+      .kv-validator-add class="kv:flex kv:gap-[0.3rem]" {
+        select class={controlClass} value={adding} onchange={(e) => (adding = e.currentTarget.value as ValidatorType | "")} aria-label="Rule to add" {
           option value="" 'Add a rule…'
           each available as t (t) {
             option value={t} '{t}'
           }
         }
-        button type=button disabled={!adding} onclick={add} 'Add'
+        button class={controlClass} type=button disabled={!adding} onclick={add} 'Add'
       }
     }
   }
 </template>
-
-<style>
-  .kv-validators { display: grid; gap: 0.4rem; }
-  .kv-validator { border: 1px solid var(--kv-ui-border, #e5e7eb); border-radius: 0.375rem; padding: 0.4rem; display: grid; gap: 0.3rem; }
-  .kv-validator-head { display: flex; justify-content: space-between; align-items: center; }
-  .kv-validator label { display: grid; grid-template-columns: 6.5rem 1fr; gap: 0.3rem; align-items: center; font-size: 0.85rem; }
-  .kv-validator input { font: inherit; font-size: 0.85rem; padding: 0.2rem 0.35rem; min-width: 0; }
-  .kv-validator-add { display: flex; gap: 0.3rem; }
-  .kv-validator-expr { font-family: ui-monospace, monospace !important; }
-  .kv-validator-error { margin: 0; color: var(--kv-ui-danger, #b91c1c); font-size: 0.8rem; }
-  .kv-validators button, .kv-validators select { font: inherit; font-size: 0.85rem; cursor: pointer; }
-</style>

@@ -29,56 +29,47 @@
   const asHex = (v: string | undefined, fallback: string) => (v && /^#[0-9a-f]{6}$/i.test(v) ? v : /^#[0-9a-f]{6}$/i.test(fallback) ? fallback : "#000000");
   const css = $derived(themeToCss((Object.keys(theme).length ? theme : "light") as Theme));
   const json = $derived(JSON.stringify(settings.theme ?? "light", null, 2));
+
+  // Tailwind classes used more than once (prefixed `kv:`; see editor.css).
+  const labelClass = "kv:grid kv:grid-cols-[9rem_1fr] kv:gap-[0.4rem] kv:items-center";
+  const controlClass = "kv:font-inherit kv:text-[0.85rem] kv:min-w-0";
 </script>
 
 <template lang="braceml">
-  .kv-theme {
-    p.kv-theme-hint 'The look of the survey for respondents. The preview shows it as you change it.'
-    label {
+  .kv-theme class="kv:grid kv:gap-2 kv:text-[0.9rem] kv:[align-content:start]" {
+    p.kv-theme-hint class="kv:m-0 kv:text-ui-muted" 'The look of the survey for respondents. The preview shows it as you change it.'
+    label class={labelClass} {
       span 'Preset'
-      select value={preset} onchange={(e) => save({ ...theme, preset: e.currentTarget.value })} {
+      select class={controlClass} value={preset} onchange={(e) => save({ ...theme, preset: e.currentTarget.value })} {
         each THEME_PRESETS as p (p) {
           option value={p} '{p}'
         }
       }
     }
-    .kv-theme-vars {
+    .kv-theme-vars class="kv:grid kv:gap-[0.3rem]" {
       each THEME_VARIABLES as v (v.name) {
-        label {
+        label class={labelClass} {
           span '{v.name}'
           if v.kind === "color" {
-            .kv-theme-color {
-              input type=color aria-label="{v.name} colour" value={asHex(theme[v.name], v.default)} oninput={(e) => setVar(v.name, e.currentTarget.value)}
-              input aria-label={v.name} placeholder={v.default} value={theme[v.name] ?? ""} oninput={(e) => setVar(v.name, e.currentTarget.value)}
+            .kv-theme-color class="kv:flex kv:gap-[0.3rem]" {
+              input class="{controlClass} kv:w-[2.2rem] kv:p-0 kv:[border:0] kv:bg-transparent" type=color aria-label="{v.name} colour" value={asHex(theme[v.name], v.default)} oninput={(e) => setVar(v.name, e.currentTarget.value)}
+              input class={controlClass} aria-label={v.name} placeholder={v.default} value={theme[v.name] ?? ""} oninput={(e) => setVar(v.name, e.currentTarget.value)}
             }
           } else {
-            input aria-label={v.name} placeholder={v.default} value={theme[v.name] ?? ""} oninput={(e) => setVar(v.name, e.currentTarget.value)}
+            input class={controlClass} aria-label={v.name} placeholder={v.default} value={theme[v.name] ?? ""} oninput={(e) => setVar(v.name, e.currentTarget.value)}
           }
         }
       }
     }
-    button type=button onclick={() => save({})} 'Reset to the default look'
-    h3 'Export'
-    label {
+    button class={`${controlClass} kv:[justify-self:start] kv:cursor-pointer`} type=button onclick={() => save({})} 'Reset to the default look'
+    h3 class="kv:[margin:0.5rem_0_0] kv:text-[0.95rem]" 'Export'
+    label class={labelClass} {
       span 'CSS'
-      textarea.kv-theme-export readonly rows=6 value={css}
+      textarea.kv-theme-export class={controlClass} readonly rows=6 value={css}
     }
-    label {
+    label class={labelClass} {
       span 'JSON (settings.theme)'
-      textarea.kv-theme-export readonly rows=4 value={json}
+      textarea.kv-theme-export class={controlClass} readonly rows=4 value={json}
     }
   }
 </template>
-
-<style>
-  .kv-theme { display: grid; gap: 0.5rem; font-size: 0.9rem; align-content: start; }
-  .kv-theme label { display: grid; grid-template-columns: 9rem 1fr; gap: 0.4rem; align-items: center; }
-  .kv-theme-vars { display: grid; gap: 0.3rem; }
-  .kv-theme-color { display: flex; gap: 0.3rem; }
-  .kv-theme-color input[type="color"] { width: 2.2rem; padding: 0; border: 0; background: none; }
-  .kv-theme input, .kv-theme select, .kv-theme textarea, .kv-theme button { font: inherit; font-size: 0.85rem; min-width: 0; }
-  .kv-theme button { justify-self: start; cursor: pointer; }
-  .kv-theme-export { font-family: ui-monospace, monospace; font-size: 0.8rem; }
-  .kv-theme-hint { margin: 0; color: var(--kv-ui-muted, #6b7280); }
-  .kv-theme h3 { margin: 0.5rem 0 0; font-size: 0.95rem; }
-</style>

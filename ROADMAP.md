@@ -1258,6 +1258,8 @@ Decided:
 | M39 · Users, roles, scoped tokens and SSO | Done (0.3.0). Core parts: no user or workspace tables, no SAML adapter. The dashboard's "API tokens" section (with its `api` option) creates and revokes tokens |
 | M40 · Audit log | Done (0.3.0). The dashboard's "Audit log" section filters, pages and downloads the CSV |
 | M41 · Security test suite | Done (0.3.0). The ZAP scan runs in CI only (not checked locally); fails only on FAIL-level findings |
-| M42 – M82 | Planned |
+| M42 – M79 | Planned |
+| M80 · Editor package on Tailwind | Done (not released yet). Computed styles match 0.3.0 in 18 editor states at five widths, light and dark. The utilities hold under a host's Preflight or element reset; elements the editor leaves to browser defaults (palette buttons, selects, the preview's form) still follow such a reset, so the editor app keeps loading Tailwind without Preflight |
+| M81 – M82 | Planned |
 
 Update this table as milestones land, with the release they shipped in.

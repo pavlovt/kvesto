@@ -151,16 +151,34 @@
       status = `Save failed: ${(e as Error).message}`;
     }
   }
+
+  // Tailwind classes used more than once (prefixed `kv:`; see editor.css).
+  const pane = "kv:bg-ui-surface kv:border kv:border-ui-border kv:rounded-lg kv:p-4 kv:min-w-0";
+  const sidePane = `${pane} kv:sticky kv:top-2 kv:max-h-[calc(100vh-1rem)] kv:overflow-auto`;
+  const heading = "kv:text-[1.05rem] kv:mt-0 kv:mx-0 kv:mb-3";
+  const bar = "kv:flex kv:flex-wrap kv:gap-[0.4rem] kv:items-center";
+  const barButton = "kv:font-inherit kv:text-[0.85rem] kv:py-[0.3rem] kv:px-[0.6rem] kv:cursor-pointer";
+  const muted = "kv:text-ui-muted kv:text-[0.9rem]";
+  const error = "kv:text-ui-danger kv:whitespace-pre-wrap kv:overflow-auto kv:m-0";
+  const tabClass = (on: boolean) =>
+    `${barButton} kv:border kv:first:rounded-[0.375rem_0_0_0.375rem] kv:last:rounded-[0_0.375rem_0.375rem_0] kv:last:[border-left:0] ` +
+    (on ? "kv:bg-ui-accent-soft kv:border-ui-accent-line" : "kv:bg-ui-surface kv:border-ui-border-strong");
+  const designCols = (withPreview: boolean) =>
+    (withPreview
+      ? "kv:grid-cols-[minmax(14rem,1fr)_minmax(0,2fr)_minmax(16rem,1.2fr)]"
+      : "kv:grid-cols-[minmax(14rem,1fr)_minmax(16rem,1.5fr)]") +
+    " kv:grid kv:gap-4 kv:[align-items:start] kv:narrow:grid-cols-[minmax(14rem,1fr)_minmax(16rem,1.4fr)] kv:narrower:grid-cols-[1fr]";
 </script>
 
 <template lang="braceml">
   snippet toolbar() {
-    .kv-editor-toolbar {
-      .kv-editor-tabs role=tablist {
+    .kv-editor-toolbar class={bar} {
+      .kv-editor-tabs class="kv:flex kv:mr-2" role=tablist {
         button(
           type=button
           role=tab
           aria-selected={tab === "design"}
+          class={tabClass(tab === 'design')}
           class:kv-editor-tab-on={tab === "design"}
           onclick={() => (tab = "design")}
         ) 'Design'
@@ -168,6 +186,7 @@
           type=button
           role=tab
           aria-selected={tab === "json"}
+          class={tabClass(tab === 'json')}
           class:kv-editor-tab-on={tab === "json"}
           onclick={() => (tab = "json")}
         ) 'JSON'
@@ -175,6 +194,7 @@
           type=button
           role=tab
           aria-selected={tab === "translations"}
+          class={tabClass(tab === 'translations')}
           class:kv-editor-tab-on={tab === "translations"}
           onclick={() => (tab = "translations")}
         ) 'Translations'
@@ -182,6 +202,7 @@
           type=button
           role=tab
           aria-selected={tab === "theme"}
+          class={tabClass(tab === 'theme')}
           class:kv-editor-tab-on={tab === "theme"}
           onclick={() => (tab = "theme")}
         ) 'Theme'
@@ -193,25 +214,33 @@
       }
       button.kv-editor-undo(
         type=button
+        class={barButton}
         onclick={() => doc.undo()}
         disabled={!docState.canUndo}
         title={docState.undoLabel ? `Undo ${docState.undoLabel}` : "Undo"}
       ) 'Undo'
       button.kv-editor-redo(
         type=button
+        class={barButton}
         onclick={() => doc.redo()}
         disabled={!docState.canRedo}
         title={docState.redoLabel ? `Redo ${docState.redoLabel}` : "Redo"}
       ) 'Redo'
       if storage {
-        button.kv-editor-primary type=button onclick={save} disabled={!parsed.survey} 'Save'
+        button.kv-editor-primary(
+          type=button
+          class="{barButton} kv:ml-auto kv:bg-ui-accent kv:text-ui-on-accent kv:[border:0] kv:rounded-md"
+          onclick={save}
+          disabled={!parsed.survey}
+        ) 'Save'
       }
     }
-    .kv-editor-palette {
-      span.kv-editor-muted 'Add:'
+    .kv-editor-palette class={bar} {
+      span.kv-editor-muted class={muted} 'Add:'
       each paletteItems as item (item.kind) {
         button(
           type=button
+          class="{barButton} kv:touch-none"
           title={tab === "design" ? "Click to add, or drag into the outline" : "Click to add"}
           onpointerdown={(e) => tab === "design" && !sourceError && drag.press(e, drag.addSource(item.kind, item.label))}
           onclick={() => add(item.kind)}
@@ -222,18 +251,18 @@
 
   snippet problems() {
     if sourceError {
-      pre.kv-editor-error '{sourceError}'
+      pre.kv-editor-error class={error} '{sourceError}'
     } else if parsed.error {
-      pre.kv-editor-error '{parsed.error}'
+      pre.kv-editor-error class={error} '{parsed.error}'
     }
     if status {
-      p.kv-editor-muted '{status}'
+      p.kv-editor-muted class={muted} '{status}'
     }
   }
 
   snippet livePreview() {
     if parsed.survey {
-      label.kv-editor-layout {
+      label.kv-editor-layout class="kv:flex kv:gap-[0.35rem] kv:items-center kv:text-[0.85rem] kv:mb-2" {
         input type=checkbox checked={previewByQuestion} onchange={(e) => (previewByQuestion = e.currentTarget.checked)}
         span 'One question at a time'
       }
@@ -244,148 +273,85 @@
         layout={previewByQuestion ? "question" : "page"}
       )
     } else {
-      p.kv-editor-muted 'The preview appears when the survey is valid.'
+      p.kv-editor-muted class={muted} 'The preview appears when the survey is valid.'
     }
   }
 
   /* svelte-ignore a11y_no_static_element_interactions */
-  .kv-editor class:kv-editor-dragging={drag.mode === "pointer"} data-kv-ui-theme={uiTheme} onkeydown={onKeydown} {
+  .kv-editor(
+    class="kv:grid kv:gap-3 kv:bg-ui-bg kv:text-ui-fg kv:[color-scheme:var(--kv-ui-scheme,only_light)] {drag.mode === 'pointer' ? 'kv:select-none kv:cursor-grabbing! kv:[&_*]:cursor-grabbing! kv:[&_*]:select-none' : ''}"
+    class:kv-editor-dragging={drag.mode === "pointer"}
+    data-kv-ui-theme={uiTheme}
+    onkeydown={onKeydown}
+  ) {
     @render toolbar()
     @render problems()
     if tab === "design" {
-      .kv-editor-design class:kv-editor-design--no-preview={!preview} {
-        section.kv-editor-pane.kv-editor-outline-pane {
-          h2 'Outline'
+      .kv-editor-design class={designCols(preview)} class:kv-editor-design--no-preview={!preview} {
+        section.kv-editor-pane.kv-editor-outline-pane class={sidePane} {
+          h2 class={heading} 'Outline'
           Outline doc={doc} docState={docState} drag={drag}
         }
         if preview {
-          section.kv-editor-pane {
-            h2 'Preview'
+          section.kv-editor-pane class={pane} {
+            h2 class={heading} 'Preview'
             @render livePreview()
           }
         }
-        section.kv-editor-pane.kv-editor-props-pane {
-          h2 'Properties'
+        section.kv-editor-pane.kv-editor-props-pane class={sidePane} {
+          h2 class={heading} 'Properties'
           PropertyPanel doc={doc} docState={docState}
         }
       }
     } else if tab === "theme" {
-      .kv-editor-design class:kv-editor-design--no-preview={!preview} {
-        section.kv-editor-pane {
-          h2 'Survey theme'
+      .kv-editor-design class={designCols(preview)} class:kv-editor-design--no-preview={!preview} {
+        section.kv-editor-pane class={pane} {
+          h2 class={heading} 'Survey theme'
           ThemePanel doc={doc} docState={docState}
           if publicUrl {
-            h2 'Share and embed'
+            h2 class={heading} 'Share and embed'
             SharePanel surveyId={docState.survey.id} publicUrl={publicUrl}
           }
         }
         if preview {
-          section.kv-editor-pane {
-            h2 'Preview'
+          section.kv-editor-pane class={pane} {
+            h2 class={heading} 'Preview'
             @render livePreview()
           }
         }
       }
     } else if tab === "translations" {
-      section.kv-editor-pane.kv-editor-translations {
+      section.kv-editor-pane.kv-editor-translations class={pane} {
         TranslationPanel doc={doc} docState={docState} translate={translate}
       }
     } else {
-      .kv-editor-source class:kv-editor-source--single={!preview} {
-        section.kv-editor-pane {
-          textarea.kv-editor-json value={source} oninput={onSourceInput} spellcheck=false aria-label="Survey JSON"
+      .kv-editor-source(
+        class="kv:grid kv:gap-4 kv:narrower:grid-cols-[1fr] {preview ? 'kv:grid-cols-[1fr_1fr]' : 'kv:grid-cols-[1fr]'}"
+        class:kv-editor-source--single={!preview}
+      ) {
+        section.kv-editor-pane class={pane} {
+          textarea.kv-editor-json(
+            class="kv:w-full kv:box-border kv:min-h-[60vh] kv:[font-family:ui-monospace,monospace] kv:text-[0.85rem]"
+            value={source}
+            oninput={onSourceInput}
+            spellcheck=false
+            aria-label="Survey JSON"
+          )
         }
         if preview {
-          section.kv-editor-pane {
-            h2 'Live preview'
+          section.kv-editor-pane class={pane} {
+            h2 class={heading} 'Live preview'
             @render livePreview()
           }
         }
       }
     }
     if drag.ghost && drag.source {
-      .kv-editor-ghost aria-hidden=true style="left: {drag.ghost.x + 12}px; top: {drag.ghost.y + 8}px" '{drag.source.label}'
+      .kv-editor-ghost(
+        class="kv:fixed kv:z-[1000] kv:pointer-events-none kv:bg-ui-text kv:text-ui-on-accent kv:text-[0.8rem] kv:py-[0.2rem] kv:px-2 kv:rounded-[0.3rem] kv:[box-shadow:0_2px_6px_rgb(0_0_0/0.2)]"
+        aria-hidden=true
+        style="left: {drag.ghost.x + 12}px; top: {drag.ghost.y + 8}px"
+      ) '{drag.source.label}'
     }
   }
 </template>
-
-<style>
-  .kv-editor { display: grid; gap: 0.75rem; }
-  .kv-editor-design { display: grid; grid-template-columns: minmax(14rem, 1fr) minmax(0, 2fr) minmax(16rem, 1.2fr); gap: 1rem; align-items: start; }
-  .kv-editor-design--no-preview { grid-template-columns: minmax(14rem, 1fr) minmax(16rem, 1.5fr); }
-  .kv-editor-source { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-  .kv-editor-source--single { grid-template-columns: 1fr; }
-  @media (max-width: 1100px) { .kv-editor-design { grid-template-columns: minmax(14rem, 1fr) minmax(16rem, 1.4fr); } }
-  @media (max-width: 900px) { .kv-editor-design, .kv-editor-source { grid-template-columns: 1fr; } }
-  .kv-editor-pane { background: var(--kv-ui-surface, white); border: 1px solid var(--kv-ui-border, #e5e7eb); border-radius: 0.5rem; padding: 1rem; min-width: 0; }
-  .kv-editor-pane h2 { font-size: 1.05rem; margin: 0 0 0.75rem; }
-  .kv-editor-props-pane, .kv-editor-outline-pane { position: sticky; top: 0.5rem; max-height: calc(100vh - 1rem); overflow: auto; }
-  .kv-editor-toolbar, .kv-editor-palette { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
-  .kv-editor-toolbar button, .kv-editor-palette button { font: inherit; font-size: 0.85rem; padding: 0.3rem 0.6rem; cursor: pointer; }
-  .kv-editor-tabs { display: flex; margin-right: 0.5rem; }
-  .kv-editor-tabs button { border: 1px solid var(--kv-ui-border-strong, #d1d5db); background: var(--kv-ui-surface, white); }
-  .kv-editor-tabs button:first-child { border-radius: 0.375rem 0 0 0.375rem; }
-  .kv-editor-tabs button:last-child { border-radius: 0 0.375rem 0.375rem 0; border-left: 0; }
-  .kv-editor-tabs .kv-editor-tab-on { background: var(--kv-ui-accent-soft, #eff6ff); border-color: var(--kv-ui-accent-line, #93c5fd); }
-  .kv-editor-toolbar .kv-editor-primary { margin-left: auto; background: var(--kv-ui-accent, #2563eb); color: var(--kv-ui-on-accent, white); border: 0; border-radius: 0.375rem; }
-  .kv-editor-json { width: 100%; box-sizing: border-box; min-height: 60vh; font-family: ui-monospace, monospace; font-size: 0.85rem; }
-  .kv-editor-dragging, .kv-editor-dragging * { cursor: grabbing !important; user-select: none; }
-  .kv-editor-palette button { touch-action: none; }
-  .kv-editor-ghost { position: fixed; z-index: 1000; pointer-events: none; background: var(--kv-ui-text, #1f2937); color: var(--kv-ui-on-accent, white); font-size: 0.8rem; padding: 0.2rem 0.5rem; border-radius: 0.3rem; box-shadow: 0 2px 6px rgb(0 0 0 / 0.2); }
-  .kv-editor-muted { color: var(--kv-ui-muted, #6b7280); font-size: 0.9rem; }
-  .kv-editor-layout { display: flex; gap: 0.35rem; align-items: center; font-size: 0.85rem; margin-bottom: 0.5rem; }
-  .kv-editor-error { color: var(--kv-ui-danger, #b91c1c); white-space: pre-wrap; overflow: auto; margin: 0; }
-  /* Light by default (the colours above); dark when asked, or with "auto" when the device prefers it.
-     "only light" stops a browser's forced dark mode from repainting the light theme. */
-  .kv-editor { background: var(--kv-ui-bg, transparent); color: var(--kv-ui-fg, inherit); color-scheme: var(--kv-ui-scheme, only light); }
-  .kv-editor[data-kv-ui-theme="dark"] {
-    --kv-ui-bg: #0f172a;
-    --kv-ui-fg: #e5e7eb;
-    --kv-ui-surface: #1e293b;
-    --kv-ui-accent: #60a5fa;
-    --kv-ui-on-accent: #0b1220;
-    --kv-ui-accent-text: #93c5fd;
-    --kv-ui-accent-soft: #1e3a5f;
-    --kv-ui-accent-line: #3b82f6;
-    --kv-ui-border: #334155;
-    --kv-ui-border-strong: #475569;
-    --kv-ui-text: #f1f5f9;
-    --kv-ui-text-2: #cbd5e1;
-    --kv-ui-muted: #94a3b8;
-    --kv-ui-subtle: #64748b;
-    --kv-ui-hover: #273449;
-    --kv-ui-danger: #f87171;
-    --kv-ui-danger-line: #b91c1c;
-    --kv-ui-warn: #f59e0b;
-    --kv-ui-warn-soft: #3b2f12;
-    --kv-ui-review: #8b5cf6;
-    --kv-ui-review-text: #c4b5fd;
-    --kv-ui-scheme: dark;
-  }
-  @media (prefers-color-scheme: dark) {
-    .kv-editor[data-kv-ui-theme="auto"] {
-      --kv-ui-bg: #0f172a;
-      --kv-ui-fg: #e5e7eb;
-      --kv-ui-surface: #1e293b;
-      --kv-ui-accent: #60a5fa;
-      --kv-ui-on-accent: #0b1220;
-      --kv-ui-accent-text: #93c5fd;
-      --kv-ui-accent-soft: #1e3a5f;
-      --kv-ui-accent-line: #3b82f6;
-      --kv-ui-border: #334155;
-      --kv-ui-border-strong: #475569;
-      --kv-ui-text: #f1f5f9;
-      --kv-ui-text-2: #cbd5e1;
-      --kv-ui-muted: #94a3b8;
-      --kv-ui-subtle: #64748b;
-      --kv-ui-hover: #273449;
-      --kv-ui-danger: #f87171;
-      --kv-ui-danger-line: #b91c1c;
-      --kv-ui-warn: #f59e0b;
-      --kv-ui-warn-soft: #3b2f12;
-      --kv-ui-review: #8b5cf6;
-      --kv-ui-review-text: #c4b5fd;
-      --kv-ui-scheme: dark;
-    }
-  }
-</style>

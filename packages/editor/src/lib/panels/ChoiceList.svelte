@@ -36,33 +36,41 @@
     const label = `${noun[0]!.toUpperCase()}${noun.slice(1)} ${n}`;
     onchange([...items, { value: `${noun}${n}`, label, ...(images ? { imageUrl: "https://example.com/image.png" } : {}) }]);
   }
+
+  // Tailwind classes used more than once (prefixed `kv:`; see editor.css).
+  const field = "kv:font-inherit kv:text-[0.85rem] kv:py-[0.2rem] kv:px-[0.35rem] kv:min-w-0";
+  const rowButton = "kv:font-inherit kv:text-[0.8rem] kv:cursor-pointer";
 </script>
 
 <template lang="braceml">
-  .kv-choices {
+  .kv-choices class="kv:grid kv:gap-[0.3rem]" {
     each items as item, i (i) {
-      .kv-choice-row {
+      .kv-choice-row class="kv:grid kv:grid-cols-[1fr_6rem_auto_auto_auto] kv:gap-1" {
         input.kv-choice-label(
+          class={field}
           value={textOf(item.label, defaultLocale, defaultLocale)}
           aria-label="{noun} {i + 1} label"
           oninput={(e) => edit(i, { label: (withText(item.label, defaultLocale, e.currentTarget.value, defaultLocale) ?? "") as string })}
         )
         input.kv-choice-value(
+          class={field}
           value={item.value}
           aria-label="{noun} {i + 1} value"
           oninput={(e) => edit(i, { value: e.currentTarget.value })}
         )
-        button type=button title="Move up" aria-label="Move {noun} {i + 1} up" disabled={i === 0} onclick={() => move(i, -1)} '↑'
+        button type=button class={rowButton} title="Move up" aria-label="Move {noun} {i + 1} up" disabled={i === 0} onclick={() => move(i, -1)} '↑'
         button(
           type=button
+          class={rowButton}
           title="Move down"
           aria-label="Move {noun} {i + 1} down"
           disabled={i === items.length - 1}
           onclick={() => move(i, 1)}
         ) '↓'
-        button type=button title="Remove" aria-label="Remove {noun} {i + 1}" disabled={items.length <= min} onclick={() => remove(i)} '×'
+        button type=button class={rowButton} title="Remove" aria-label="Remove {noun} {i + 1}" disabled={items.length <= min} onclick={() => remove(i)} '×'
         if images {
           input.kv-choice-image(
+            class="{field} kv:col-span-full"
             value={item.imageUrl ?? ""}
             placeholder="Image URL"
             aria-label="{noun} {i + 1} image URL"
@@ -71,16 +79,6 @@
         }
       }
     }
-    button.kv-choice-add type=button onclick={add} 'Add {noun}'
+    button.kv-choice-add type=button class="{rowButton} kv:[justify-self:start]" onclick={add} 'Add {noun}'
   }
 </template>
-
-<style>
-  .kv-choices { display: grid; gap: 0.3rem; }
-  .kv-choice-row { display: grid; grid-template-columns: 1fr 6rem auto auto auto; gap: 0.25rem; }
-  .kv-choice-row input { font: inherit; font-size: 0.85rem; padding: 0.2rem 0.35rem; min-width: 0; }
-  .kv-choice-value { font-family: ui-monospace, monospace; }
-  .kv-choice-image { grid-column: 1 / -1; }
-  .kv-choice-row button, .kv-choice-add { font: inherit; font-size: 0.8rem; cursor: pointer; }
-  .kv-choice-add { justify-self: start; }
-</style>

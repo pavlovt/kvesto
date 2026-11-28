@@ -23,25 +23,22 @@
 </script>
 
 <template lang="braceml">
-  .kv-share {
-    p.kv-share-hint 'Copy one of these into your site. The survey has to be saved on the server first.'
+  .kv-share class="kv:grid kv:gap-2 kv:text-[0.9rem]" {
+    p.kv-share-hint class="kv:m-0 kv:text-ui-muted" 'Copy one of these into your site. The survey has to be saved on the server first.'
     each snippets as s (s.label) {
-      .kv-share-item {
-        .kv-share-head {
+      .kv-share-item class="kv:grid kv:gap-[0.2rem]" {
+        .kv-share-head class="kv:flex kv:justify-between kv:items-center" {
           strong '{s.label}'
-          button type=button onclick={() => copy(s.label, s.code)} '{copied === s.label ? "Copied" : "Copy"}'
+          button type=button class="kv:font-inherit kv:text-[0.8rem] kv:cursor-pointer" onclick={() => copy(s.label, s.code)} '{copied === s.label ? "Copied" : "Copy"}'
         }
-        textarea.kv-share-code readonly rows={lines(s.code)} aria-label="{s.label} snippet" value={s.code}
+        textarea.kv-share-code(
+          class="kv:[font-family:ui-monospace,monospace] kv:text-[0.8rem] kv:w-full kv:box-border kv:resize-y"
+          readonly
+          rows={lines(s.code)}
+          aria-label="{s.label} snippet"
+          value={s.code}
+        )
       }
     }
   }
 </template>
-
-<style>
-  .kv-share { display: grid; gap: 0.5rem; font-size: 0.9rem; }
-  .kv-share-hint { margin: 0; color: var(--kv-ui-muted, #6b7280); }
-  .kv-share-item { display: grid; gap: 0.2rem; }
-  .kv-share-head { display: flex; justify-content: space-between; align-items: center; }
-  .kv-share-head button { font: inherit; font-size: 0.8rem; cursor: pointer; }
-  .kv-share-code { font-family: ui-monospace, monospace; font-size: 0.8rem; width: 100%; box-sizing: border-box; resize: vertical; }
-</style>

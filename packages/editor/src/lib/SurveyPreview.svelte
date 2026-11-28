@@ -58,13 +58,6 @@
   .kv-preview class:kv-preview--selectable={Boolean(onselect)} bind:this={target} onclick={onclick}
   if result {
     h3 'Response (preview only, not saved)'
-    pre.kv-preview-result '{result}'
+    pre.kv-preview-result class="kv:overflow-auto" '{result}'
   }
 </template>
-
-<style>
-  .kv-preview-result { overflow: auto; }
-  .kv-preview--selectable :global([data-question]:hover),
-  .kv-preview--selectable :global([data-panel]:hover) { outline: 1px dashed var(--kv-ui-accent-line, #93c5fd); outline-offset: 4px; }
-  .kv-preview :global(.kv-editor-selected) { outline: 2px solid var(--kv-ui-accent, #2563eb); outline-offset: 4px; border-radius: 0.25rem; }
-</style>

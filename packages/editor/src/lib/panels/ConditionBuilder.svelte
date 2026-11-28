@@ -90,21 +90,27 @@
       .filter((v) => !(typeof v === "number" && Number.isNaN(v)));
   const quoted = (ids: string[]) => ids.map((id) => `"${id}"`).join(", ");
   const parseNumber = (text: string): number | undefined => (text.trim() === "" || Number.isNaN(Number(text)) ? undefined : Number(text));
+
+  // Tailwind classes used more than once (prefixed `kv:`; see editor.css).
+  const fieldClass = "kv:font-inherit kv:text-[0.85rem] kv:py-[0.15rem] kv:px-[0.3rem] kv:min-w-0 kv:max-w-full";
+  const buttonClass = "kv:font-inherit kv:text-[0.85rem] kv:cursor-pointer";
+  const rowClass = "kv:flex kv:flex-wrap kv:gap-1 kv:items-center";
+  const errorClass = "kv:m-0 kv:text-ui-danger";
 </script>
 
 <template lang="braceml">
   snippet valueField(c: Comparison, s: ConditionSource, path: ConditionPath) {
     @const kind = valueKind(s, c.op)
     if kind === "choice" {
-      select.kv-cond-value aria-label="Value" value={String(c.value ?? "")} onchange={(e) => setValue(path, c, e.currentTarget.value)} {
+      select.kv-cond-value class={fieldClass} aria-label="Value" value={String(c.value ?? "")} onchange={(e) => setValue(path, c, e.currentTarget.value)} {
         each choicesOf(s) as o (o.value) {
           option value={o.value} '{o.label}'
         }
       }
     } else if kind === "choices" {
-      .kv-cond-choices role=group aria-label="Values" {
+      .kv-cond-choices class="kv:flex kv:flex-wrap kv:gap-y-[0.15rem] kv:gap-x-[0.6rem]" role=group aria-label="Values" {
         each choicesOf(s) as o (o.value) {
-          label {
+          label class="kv:flex kv:gap-1 kv:items-center" {
             input(
               type=checkbox
               checked={list(c).includes(o.value)}
@@ -115,23 +121,25 @@
         }
       }
     } else if kind === "boolean" {
-      select.kv-cond-value aria-label="Value" value={c.value === false ? "false" : "true"} onchange={(e) => setValue(path, c, e.currentTarget.value === "true")} {
+      select.kv-cond-value class={fieldClass} aria-label="Value" value={c.value === false ? "false" : "true"} onchange={(e) => setValue(path, c, e.currentTarget.value === "true")} {
         option value="true" '{s.question.labelTrue ?? "Yes"}'
         option value="false" '{s.question.labelFalse ?? "No"}'
       }
     } else if kind === "number" {
       input.kv-cond-value(
+        class={fieldClass}
         type=number
         aria-label="Value"
         value={typeof c.value === "number" ? c.value : ""}
         oninput={(e) => setValue(path, c, parseNumber(e.currentTarget.value) ?? c.value, true)}
       )
     } else if kind === "date" {
-      input.kv-cond-value type=date aria-label="Value" value={String(c.value ?? "")} oninput={(e) => setValue(path, c, e.currentTarget.value, true)}
+      input.kv-cond-value class={fieldClass} type=date aria-label="Value" value={String(c.value ?? "")} oninput={(e) => setValue(path, c, e.currentTarget.value, true)}
     } else if kind === "text" {
-      input.kv-cond-value aria-label="Value" value={String(c.value ?? "")} oninput={(e) => setValue(path, c, e.currentTarget.value, true)}
+      input.kv-cond-value class={fieldClass} aria-label="Value" value={String(c.value ?? "")} oninput={(e) => setValue(path, c, e.currentTarget.value, true)}
     } else if kind === "numbers" || kind === "texts" {
       input.kv-cond-value(
+        class={fieldClass}
         aria-label="Values, separated by commas"
         placeholder="a, b, c"
         value={list(c).join(", ")}
@@ -142,17 +150,18 @@
 
   snippet node(c: Condition, path: ConditionPath) {
     if "not" in c {
-      .kv-cond-not {
-        .kv-cond-head {
+      .kv-cond-not class="kv:[border-left:3px_solid_var(--kv-ui-danger-line,#fca5a5)] kv:[padding:0.2rem_0_0.2rem_0.5rem] kv:grid kv:gap-[0.3rem]" {
+        .kv-cond-head class={rowClass} {
           strong 'Not'
-          button type=button title="Remove the not" onclick={() => put(path, c.not)} 'Remove not'
+          button class={buttonClass} type=button title="Remove the not" onclick={() => put(path, c.not)} 'Remove not'
         }
         @render node(c.not, [...path, "not"])
       }
     } else if isGroup(c) {
-      .kv-cond-group {
-        .kv-cond-head {
+      .kv-cond-group class="kv:[border-left:3px_solid_var(--kv-ui-accent-line,#bfdbfe)] kv:[padding:0.2rem_0_0.2rem_0.5rem] kv:grid kv:gap-[0.3rem]" {
+        .kv-cond-head class={rowClass} {
           select(
+            class={fieldClass}
             aria-label="Group type"
             value={"all" in c ? "all" : "any"}
             onchange={(e) => put(path, switchGroup(c, e.currentTarget.value as "all" | "any"))}
@@ -160,38 +169,39 @@
             option value="all" 'All of these are true'
             option value="any" 'Any of these is true'
           }
-          button type=button title="Negate this group" onclick={() => put(path, toggleNot(c))} 'Not'
-          button type=button title="Remove this group" aria-label="Remove group" onclick={() => put(path, undefined)} '×'
+          button class={buttonClass} type=button title="Negate this group" onclick={() => put(path, toggleNot(c))} 'Not'
+          button class={buttonClass} type=button title="Remove this group" aria-label="Remove group" onclick={() => put(path, undefined)} '×'
         }
         each groupItems(c) as child, i (i) {
           @render node(child, [...path, i])
         }
-        .kv-cond-actions {
-          button type=button onclick={() => addRule(path, c)} 'Add rule'
-          button type=button onclick={() => addGroup(path, c)} 'Add group'
-          button type=button onclick={() => addExpression(path, c)} 'Add expression'
+        .kv-cond-actions class={rowClass} {
+          button class={buttonClass} type=button onclick={() => addRule(path, c)} 'Add rule'
+          button class={buttonClass} type=button onclick={() => addGroup(path, c)} 'Add group'
+          button class={buttonClass} type=button onclick={() => addExpression(path, c)} 'Add expression'
         }
       }
     } else if "expr" in c {
       @const error = expressionError(c.expr)
-      .kv-cond-rule.kv-cond-expr class:kv-cond-rule--bad={!!error} {
+      .kv-cond-rule.kv-cond-expr class={rowClass} class:kv-cond-rule--bad={!!error} {
         input.kv-cond-expr-input(
+          class={`${fieldClass} kv:flex-[1_1_14rem] kv:[font-family:ui-monospace,monospace]!`}
           aria-label="Expression"
           spellcheck=false
           placeholder={"{age} >= 18 and {role} = 'dev'"}
           value={c.expr}
           oninput={(e) => put(path, { expr: e.currentTarget.value }, true)}
         )
-        button type=button title="Negate this expression" onclick={() => put(path, toggleNot(c))} 'Not'
-        button type=button title="Remove this expression" aria-label="Remove expression" onclick={() => put(path, undefined)} '×'
+        button class={buttonClass} type=button title="Negate this expression" onclick={() => put(path, toggleNot(c))} 'Not'
+        button class={buttonClass} type=button title="Remove this expression" aria-label="Remove expression" onclick={() => put(path, undefined)} '×'
         if error {
-          p.kv-cond-error role=alert '{error}'
+          p.kv-cond-error class="{errorClass} kv:basis-full" role=alert '{error}'
         }
       }
     } else {
       @const s = sourceOf(c)
-      .kv-cond-rule class:kv-cond-rule--bad={!s} {
-        select.kv-cond-question aria-label="Question" value={s ? s.id : ""} onchange={(e) => pickQuestion(path, c, e.currentTarget.value)} {
+      .kv-cond-rule class={rowClass} class:kv-cond-rule--bad={!s} {
+        select.kv-cond-question class={`${fieldClass} ${s ? '' : 'kv:[border-color:var(--kv-ui-danger,#dc2626)]'}`} aria-label="Question" value={s ? s.id : ""} onchange={(e) => pickQuestion(path, c, e.currentTarget.value)} {
           if !s {
             option value="" disabled '{c.question} (can’t be used here)'
           }
@@ -200,7 +210,7 @@
           }
         }
         if s && s.type === "matrix" {
-          select.kv-cond-row aria-label="Row" value={c.row ?? ""} onchange={(e) => put(path, { ...c, row: e.currentTarget.value })} {
+          select.kv-cond-row class={fieldClass} aria-label="Row" value={c.row ?? ""} onchange={(e) => put(path, { ...c, row: e.currentTarget.value })} {
             each s.question.rows ?? [] as r (r.value) {
               option value={r.value} '{r.label}'
             }
@@ -208,6 +218,7 @@
         }
         if s {
           select.kv-cond-op(
+            class={fieldClass}
             aria-label="Operator"
             value={c.op}
             onchange={(e) => put(path, withOperator(s, c, e.currentTarget.value as ConditionOperator))}
@@ -218,59 +229,39 @@
           }
           @render valueField(c, s, path)
         }
-        button type=button title="Negate this rule" onclick={() => put(path, toggleNot(c))} 'Not'
-        button type=button title="Remove this rule" aria-label="Remove rule" onclick={() => put(path, undefined)} '×'
+        button class={buttonClass} type=button title="Negate this rule" onclick={() => put(path, toggleNot(c))} 'Not'
+        button class={buttonClass} type=button title="Remove this rule" aria-label="Remove rule" onclick={() => put(path, undefined)} '×'
       }
     }
   }
 
-  .kv-cond {
+  .kv-cond class="kv:grid kv:gap-[0.35rem] kv:text-[0.85rem]" {
     if !condition {
       if sources.length {
-        .kv-cond-actions {
-          button.kv-cond-start type=button onclick={start} '{addLabel}'
-          button type=button onclick={() => onchange(expressionFor(sources.at(-1)), false)} 'Write an expression'
+        .kv-cond-actions class={rowClass} {
+          button.kv-cond-start class={`${buttonClass} kv:[justify-self:start]`} type=button onclick={start} '{addLabel}'
+          button class={buttonClass} type=button onclick={() => onchange(expressionFor(sources.at(-1)), false)} 'Write an expression'
         }
       } else {
-        p.kv-cond-none 'No earlier questions to base a condition on.'
+        p.kv-cond-none class="kv:m-0 kv:text-ui-subtle kv:italic" 'No earlier questions to base a condition on.'
       }
     } else {
-      p.kv-cond-summary {
+      p.kv-cond-summary class="kv:m-0 kv:text-ui-text-2" {
         strong '{prefix}'
         ' {describeCondition(survey, condition)}'
       }
       if bad.length {
-        p.kv-cond-error 'Uses {quoted(bad)}, which isn’t an earlier question here. Pick another question.'
+        p.kv-cond-error class={errorClass} 'Uses {quoted(bad)}, which isn’t an earlier question here. Pick another question.'
       }
       @render node(condition, [])
-      .kv-cond-actions {
+      .kv-cond-actions class={rowClass} {
         if !isGroup(condition) {
-          button type=button disabled={!sources.length} onclick={() => addRule([], condition!)} 'Add rule'
-          button type=button disabled={!sources.length} onclick={() => addGroup([], condition!)} 'Add group'
-          button type=button onclick={() => addExpression([], condition!)} 'Add expression'
+          button class={buttonClass} type=button disabled={!sources.length} onclick={() => addRule([], condition!)} 'Add rule'
+          button class={buttonClass} type=button disabled={!sources.length} onclick={() => addGroup([], condition!)} 'Add group'
+          button class={buttonClass} type=button onclick={() => addExpression([], condition!)} 'Add expression'
         }
-        button.kv-cond-clear type=button onclick={() => onchange(undefined, false)} 'Remove condition'
+        button.kv-cond-clear class={`${buttonClass} kv:[justify-self:start]`} type=button onclick={() => onchange(undefined, false)} 'Remove condition'
       }
     }
   }
 </template>
-
-<style>
-  .kv-cond { display: grid; gap: 0.35rem; font-size: 0.85rem; }
-  .kv-cond-summary { margin: 0; color: var(--kv-ui-text-2, #374151); }
-  .kv-cond-none { margin: 0; color: var(--kv-ui-subtle, #9ca3af); font-style: italic; }
-  .kv-cond-error { margin: 0; color: var(--kv-ui-danger, #b91c1c); }
-  .kv-cond-rule { display: flex; flex-wrap: wrap; gap: 0.25rem; align-items: center; }
-  .kv-cond-rule--bad .kv-cond-question { border-color: var(--kv-ui-danger, #dc2626); }
-  .kv-cond-group, .kv-cond-not { border-left: 3px solid var(--kv-ui-accent-line, #bfdbfe); padding: 0.2rem 0 0.2rem 0.5rem; display: grid; gap: 0.3rem; }
-  .kv-cond-not { border-left-color: var(--kv-ui-danger-line, #fca5a5); }
-  .kv-cond-head, .kv-cond-actions { display: flex; flex-wrap: wrap; gap: 0.25rem; align-items: center; }
-  .kv-cond-choices { display: flex; flex-wrap: wrap; gap: 0.15rem 0.6rem; }
-  .kv-cond-choices label { display: flex; gap: 0.25rem; align-items: center; }
-  .kv-cond select, .kv-cond input:not([type="checkbox"]), .kv-cond button { font: inherit; font-size: 0.85rem; }
-  .kv-cond select, .kv-cond input:not([type="checkbox"]) { padding: 0.15rem 0.3rem; min-width: 0; max-width: 100%; }
-  .kv-cond button { cursor: pointer; }
-  .kv-cond-start, .kv-cond-clear { justify-self: start; }
-  .kv-cond-expr-input { flex: 1 1 14rem; font-family: ui-monospace, monospace !important; }
-  .kv-cond-expr .kv-cond-error { flex-basis: 100%; }
-</style>
