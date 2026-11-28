@@ -27,6 +27,7 @@
         // the editor demo is a separate app, deployed next to the docs
         a href="{base}/demo/" data-sveltekit-reload class="text-sm text-muted-foreground hover:text-foreground" 'Editor demo'
         a href={repo} class="text-sm text-muted-foreground hover:text-foreground" 'GitHub'
+        a href=https://pavlovt.github.io/ class="text-sm text-muted-foreground hover:text-foreground" 'pavlovt.github.io'
 
         button(
           type=button
