@@ -32,7 +32,7 @@ drive your own UI in React, Vue or Svelte instead of using the bundled renderer.
 This package re-exports [`@kvesto/schema`](https://www.npmjs.com/package/@kvesto/schema). For a single install with a
 `<script>` bundle, use [`kvesto`](https://www.npmjs.com/package/kvesto).
 
-See the [main README](https://github.com/pavlovt/kvesto#readme) for the survey JSON format, question types and logic.
+See the [documentation](https://pavlovt.github.io/kvesto/survey-json/) for the survey JSON format, question types and logic.
 
 ## License
 

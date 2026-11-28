@@ -8,5 +8,7 @@ export default {
   preprocess: [braceml(), vitePreprocess()],
   kit: {
     adapter: adapter({ fallback: "index.html" }),
+    // The docs site deploys this app to GitHub Pages under /kvesto/demo; locally it runs at the root.
+    paths: { base: /** @type {"" | `/${string}`} */ (process.env.BASE_PATH ?? "") },
   },
 };

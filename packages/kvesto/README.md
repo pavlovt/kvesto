@@ -49,7 +49,7 @@ The bundle exposes the whole core API as `window.Kvesto`, including the storage 
 | [`@kvesto/schema`](https://www.npmjs.com/package/@kvesto/schema) | The versioned survey JSON format as Zod schemas |
 | [`@kvesto/server`](https://www.npmjs.com/package/@kvesto/server) | Optional REST API (Hono + Drizzle, SQLite by default) with OpenAPI docs |
 
-Full documentation: https://github.com/pavlovt/kvesto
+Full documentation: https://pavlovt.github.io/kvesto/
 
 ## License
 
