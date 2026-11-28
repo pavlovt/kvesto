@@ -1,11 +1,23 @@
-:root {
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-  color: #111827;
-  background: #f9fafb;
+/* Tailwind without Preflight: the dashboard package's components still rely on browser defaults. */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+/* Colours of the page around the dashboard (bg-shell, text-shell-muted, ...). */
+@theme {
+  --color-shell: #f9fafb;
+  --color-shell-text: #111827;
+  --color-shell-bar: white;
+  --color-shell-line: #e5e7eb;
+  --color-shell-muted: #6b7280;
 }
-body { margin: 0; }
-.topbar { display: flex; gap: 1rem; align-items: baseline; padding: 0.75rem 1.25rem; background: white; border-bottom: 1px solid #e5e7eb; }
-main { padding: 1.25rem; }
-.muted { color: #6b7280; font-size: 0.9rem; }
-pre { overflow: auto; }
-.brand { color: inherit; text-decoration: none; }
+
+@layer base {
+  :root {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: var(--color-shell-text);
+    background: var(--color-shell);
+  }
+  body { margin: 0; }
+  pre { overflow: auto; }
+}

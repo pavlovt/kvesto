@@ -10,6 +10,12 @@
   and gets a test in `packages/server/test/api.test.ts`.
 - Svelte markup in `apps/*` is written in **BraceML** inside `<template lang="braceml">`, never as raw HTML.
   Type-check it with `pnpm typecheck` (the script compiles BraceML first, because plain svelte-check can't read it).
+- Style the apps (`apps/*`) with Tailwind CSS v4 utilities, not new CSS rules. In BraceML, put utilities in a
+  `class="…"` attribute (`header class="flex gap-4 px-5 md:p-8"`), because the `.class` shorthand can't hold `:`,
+  `/`, `[` or `.`. Colours and sizes that the default theme doesn't have become `@theme` tokens in the app's
+  `app.css`. The editor and dashboard apps load Tailwind without Preflight, because the packages they embed still
+  rely on browser defaults. The packages (`packages/*`) and `@kvesto/core/styles.css` are still plain CSS until
+  their milestones in `ROADMAP.md` (M80–M82) move them; don't mix the two in one component before then.
 
 ## BraceML reference
 

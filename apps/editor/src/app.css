@@ -1,34 +1,45 @@
-:root {
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-  color: #111827;
-  background: #f9fafb;
-  /* "only light" stops a browser's forced dark mode from repainting the page. */
-  color-scheme: only light;
-  --shell-bar: white;
-  --shell-line: #e5e7eb;
-  --shell-muted: #6b7280;
+/* Tailwind without Preflight: the editor package's components still rely on browser defaults. */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+/* Colours of the page around the editor (bg-shell, text-shell-muted, ...). */
+@theme {
+  --color-shell: #f9fafb;
+  --color-shell-text: #111827;
+  --color-shell-bar: white;
+  --color-shell-line: #e5e7eb;
+  --color-shell-muted: #6b7280;
 }
+
+@layer base {
+  :root {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    color: var(--color-shell-text);
+    background: var(--color-shell);
+    /* "only light" stops a browser's forced dark mode from repainting the page. */
+    color-scheme: only light;
+  }
+  body { margin: 0; }
+  pre { overflow: auto; }
+}
+
 /* The page around the editor follows the editor's own Light / Dark / Auto choice. */
 :root:has(.kv-editor[data-kv-ui-theme="dark"]) {
-  color: #e5e7eb;
-  background: #0f172a;
   color-scheme: dark;
-  --shell-bar: #1e293b;
-  --shell-line: #334155;
-  --shell-muted: #94a3b8;
+  --color-shell: #0f172a;
+  --color-shell-text: #e5e7eb;
+  --color-shell-bar: #1e293b;
+  --color-shell-line: #334155;
+  --color-shell-muted: #94a3b8;
 }
 @media (prefers-color-scheme: dark) {
   :root:has(.kv-editor[data-kv-ui-theme="auto"]) {
-    color: #e5e7eb;
-    background: #0f172a;
     color-scheme: dark;
-    --shell-bar: #1e293b;
-    --shell-line: #334155;
-    --shell-muted: #94a3b8;
+    --color-shell: #0f172a;
+    --color-shell-text: #e5e7eb;
+    --color-shell-bar: #1e293b;
+    --color-shell-line: #334155;
+    --color-shell-muted: #94a3b8;
   }
 }
-body { margin: 0; }
-.topbar { display: flex; gap: 1rem; align-items: baseline; padding: 0.75rem 1.25rem; background: var(--shell-bar); border-bottom: 1px solid var(--shell-line); }
-main { padding: 1.25rem; }
-.muted { color: var(--shell-muted); font-size: 0.9rem; }
-pre { overflow: auto; }

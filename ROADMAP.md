@@ -23,6 +23,8 @@ to embed. Only ideas are taken; no code is copied from any other project.
 - **Server parity.** Anything the runner validates, the server validates too, through the same core functions
   (`validateAnswers` today). Every new route uses `createRoute` and gets a test in `packages/server/test/api.test.ts`.
 - **Svelte markup is BraceML.** New editor and dashboard UI follows `AGENTS.md`.
+- **Styling is Tailwind CSS.** The apps use Tailwind v4 utilities. The packages move from plain CSS to Tailwind in
+  Phase 17 (M80–M82); until a package's milestone lands, new styles in it follow that package's existing CSS.
 - **Done means:** tests for the new behaviour, `pnpm build && pnpm typecheck && pnpm test` green, the README or
   package README updated, and the editor's question palette and the dashboard handling the feature (or a note in the
   milestone saying why not yet).
@@ -951,7 +953,7 @@ non-inline types. Regex validators are length-limited (M3). The milestones below
 ### M70 · UI kits and a Svelte wrapper
 
 - **Scope:** renderer themes that output Tailwind and shadcn/ui markup, and `@kvesto/svelte` next to the React and
-  Vue wrappers from M26.
+  Vue wrappers from M26. The Tailwind theme may already be covered by M82.
 - **Depends on:** M23, M26.
 - **Packages:** new packages.
 - **Schema impact:** none.
@@ -1135,6 +1137,58 @@ arrives.
 - **Done when:** for each flag, a response that triggers it and one that does not, and a recompute that changes the
   speeder flags when the median moves.
 
+## Phase 17 · Tailwind CSS everywhere
+
+The apps (`apps/editor`, `apps/dashboard`, `apps/docs`) already use Tailwind v4. These milestones move the remaining
+plain CSS over, one package at a time. Rules that apply to all three:
+
+- The packages are embedded in other people's pages, so they ship **compiled** CSS: users don't need Tailwind, and
+  a host that does use Tailwind doesn't have to scan Kvesto's files.
+- Every utility gets the `kv` prefix (`kv:flex`), and Preflight is left out, so Kvesto never resets or restyles
+  the host page. Anything Preflight would have done for Kvesto's own elements is written as base styles scoped
+  under the component's root class.
+- The `--kv-*` custom properties stay the public theming API, with the same names and meanings. Tailwind reads
+  them through `@theme inline` tokens, so changing a `--kv-*` variable still restyles everything.
+- Each one changes styles only. Markup changes are limited to adding classes, and the rendered result has to look
+  the same.
+
+### M80 · Editor package on Tailwind
+
+- **Scope:** replace the scoped `<style>` blocks in `@kvesto/editor` (`SurveyEditor.svelte`, `SurveyPreview.svelte`,
+  `panels/*`, about 210 lines) with prefixed utilities, keeping the Light / Dark / Auto UI themes. Build the CSS into
+  the package (for the Svelte export and the `standalone` bundle) and drop the app's no-Preflight workaround if it
+  is no longer needed.
+- **Depends on:** nothing.
+- **Packages:** editor, apps/editor.
+- **Schema impact:** none.
+- **Effort:** M.
+- **Done when:** no `<style>` blocks left in the package; computed styles in the editor app match the previous
+  release in both UI themes; a test page with Tailwind's Preflight and one without both render the editor
+  unchanged, and the editor's CSS doesn't change any element outside `.kv-editor`.
+
+### M81 · Dashboard package on Tailwind
+
+- **Scope:** the same for `@kvesto/dashboard` (`Dashboard.svelte`, `SurveyList`, `SurveyResults`, `ResponseTable`,
+  `ApiTokens`, `AuditLog`, about 170 lines), reusing M80's build setup.
+- **Depends on:** M80.
+- **Packages:** dashboard, apps/dashboard.
+- **Schema impact:** none.
+- **Effort:** S–M.
+- **Done when:** the same checks as M80, for the dashboard.
+
+### M82 · Core form styles on Tailwind
+
+- **Scope:** rewrite `@kvesto/core/styles.css` (the form respondents see, about 180 lines) with Tailwind, still
+  published as the same `styles.css` file with the same `kv-` class names, so `render.ts` and the React and Vue
+  wrappers don't change. The theme presets (auto, compact, contrast) and the old `--kv-accent` / `--kv-error`
+  aliases keep working. Fold the Tailwind renderer theme planned in M70 into this, or note in M70 what is left.
+- **Depends on:** M80 (build setup); best after M23's theme presets settle.
+- **Packages:** core.
+- **Schema impact:** none.
+- **Effort:** M.
+- **Done when:** the fixtures render with the same computed styles as before in every theme preset, a host page
+  that overrides `--kv-*` variables still restyles the form, and there are no axe violations.
+
 ---
 
 ## Open decisions
@@ -1204,6 +1258,6 @@ Decided:
 | M39 · Users, roles, scoped tokens and SSO | Done (0.3.0). Core parts: no user or workspace tables, no SAML adapter. The dashboard's "API tokens" section (with its `api` option) creates and revokes tokens |
 | M40 · Audit log | Done (0.3.0). The dashboard's "Audit log" section filters, pages and downloads the CSV |
 | M41 · Security test suite | Done (0.3.0). The ZAP scan runs in CI only (not checked locally); fails only on FAIL-level findings |
-| M42 – M79 | Planned |
+| M42 – M82 | Planned |
 
 Update this table as milestones land, with the release they shipped in.

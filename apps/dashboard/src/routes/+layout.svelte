@@ -7,11 +7,11 @@
 
 <template lang="braceml">
   svelte:head > title 'Kvesto Dashboard'
-  header.topbar {
-    a.brand href="/" > strong 'Kvesto Dashboard'
-    span.muted 'Reading from {storageLabel}'
+  header class="flex items-baseline gap-4 border-b border-shell-line bg-shell-bar px-5 py-3" {
+    a href="/" class="text-inherit no-underline" > strong 'Kvesto Dashboard'
+    span class="text-[0.9rem] text-shell-muted" 'Reading from {storageLabel}'
   }
-  main {
+  main class="p-5" {
     @render children()
   }
 </template>

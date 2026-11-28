@@ -8,11 +8,11 @@
 
 <template lang="braceml">
   svelte:head > title 'Kvesto Editor'
-  header.topbar {
+  header class="flex items-baseline gap-4 border-b border-shell-line bg-shell-bar px-5 py-3" {
     strong 'Kvesto Editor'
-    span.muted 'Saving to {storageLabel}'
+    span class="text-[0.9rem] text-shell-muted" 'Saving to {storageLabel}'
   }
-  main {
+  main class="p-5" {
     @render children()
   }
 </template>
